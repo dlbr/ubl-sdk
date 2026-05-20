@@ -8,20 +8,22 @@ Sistem koristi **Database-per-tenant** pristup na samom Edge-u:
 
 1.  **Centralni Registar (Cloudflare D1):** Čuva spisak klijenata i optimizovanu zastavicu `ima_aktivne_fakture` koja omogućava da Cron job budi samo one klijente koji zaista imaju dokumente na čekanju.
 2.  **Klijentska Baza (Durable Objects + Native SQLite):** Svaki klijent (firma) ima svoju izolovanu SQLite bazu podataka unutar Durable Object instance. Ovde se čuvaju API ključevi, webhook konfiguracije i statusi faktura.
-3.  **Hono Ruter:** Upravlja HTTP zahtevima i obezbeđuje sigurnosnu izolaciju klijenata preko `X-Klijent-ID` zaglavlja.
+3.  **Pico Ruter:** Naš ultra-lagani, custom ruter upravlja HTTP zahtevima i obezbeđuje sigurnosnu izolaciju klijenata.
 
 ## Tehnički Stack
 
-- **Framework:** [Hono](https://hono.dev/)
+- **Ruter:** Custom Edge Router (0 dependencies)
 - **Runtime:** Cloudflare Workers
 - **Skladište:** 
   - Centralno: Cloudflare D1 (SQLite)
   - Tenant-level: Durable Objects with native SQLite storage
 - **Jezik:** TypeScript (Stroga tipizacija)
 
-## API Reference
+## Autentifikacija i Sigurnost
 
-Svi zahtevi moraju sadržati `X-Klijent-ID` zaglavlje radi identifikacije tenanta.
+Sistem podržava dva načina identifikacije:
+1.  **Browser Sesije:** Preko kriptografski potpisanih `__Host-sef_bridge_session` kolačića.
+2.  **API Pristup:** Preko `X-Klijent-ID` zaglavlja (za ERP integracije i testiranje).
 
 ### 1. Konfiguracija Klijenta
 Postavlja API ključ za SEF i opcioni webhook za notifikacije.

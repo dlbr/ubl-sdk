@@ -2,15 +2,7 @@ import { Pico, type PicoContext } from './router';
 import { validateJson, type ValidatedContext } from './validator';
 import { SefInvoiceSchema, SefWebhookSchema } from '../shared/types/sef';
 
-export interface Env {
-  REGISTAR_DB: D1Database;
-  KLIJENT_BAZA_OBJECT: DurableObjectNamespace<import('./KlijentBazaObject').KlijentBaza>;
-  ADMIN_API_KEY?: string;
-  SEF_API_URL: string;
-  SEF_PPPPDV_URL: string;
-  SESSION_SECRET: string;
-}
-
+export type Env = globalThis.Env;
 export { KlijentBaza } from './KlijentBazaObject';
 
 export const app = Pico<Env>();
