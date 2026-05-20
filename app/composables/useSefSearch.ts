@@ -22,7 +22,7 @@ export const useSefSearch = () => {
     error.value = null
 
     try {
-      const data = await $fetch<any>(`${API_BASE}/api/onboarding/search?q=${encodeURIComponent(trimmed)}`)
+      const data = await $fetch(`${API_BASE}/api/onboarding/search?q=${encodeURIComponent(trimmed)}`) as any
       
       if (data.uspeh) {
         results.value = data.rezultati

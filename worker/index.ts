@@ -311,13 +311,27 @@ function parseCsvLine(line: string): string[] | null {
   return result.length >= 3 ? result : null;
 }
 
+// @ts-ignore
+import nuxtHandler from '../.output/server/index.mjs';
+
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext) {
     if (req.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
-    const res = await app.fetch(req, env, ctx);
-    return applyCors(res);
+
+    const url = new URL(req.url);
+    
+    // Ako je zahtev za API, pokušavamo sa Pico ruterom
+    if (url.pathname.startsWith('/api')) {
+      const res = await app.fetch(req, env, ctx);
+      if (res.status !== 404) {
+        return applyCors(res);
+      }
+    }
+
+    // Za sve ostalo (Frontend rute, statički fajlovi), delegiramo Nuxt-u
+    return nuxtHandler.fetch(req, env, ctx);
   },
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {

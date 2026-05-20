@@ -12,17 +12,19 @@ const syncLoading = ref(false)
 const webhookUrl = ref('')
 const showCopyStatus = ref(false)
 
-// Inicijalizacija webhook URL-a ako postoji
+// Inicijalizacija webhook URL-a - OKLOP: Koristimo watch sa once: true
+// da sprečimo resetovanje unosa korisnika tokom reaktivnih osvežavanja (sync-a)
 watch(statsData, (newData) => {
   if (newData?.webhook_url) {
     webhookUrl.value = newData.webhook_url
   }
-}, { immediate: true })
+}, { once: true })
 
 const handleSync = async () => {
   syncLoading.value = true
   try {
     await triggerSync()
+    // Osvežavamo podatke bez resetovanja korisničkog unosa u formi
     await Promise.all([
       refreshStats(), 
       refreshLogs(),
@@ -34,62 +36,59 @@ const handleSync = async () => {
 }
 
 const handleWebhookUpdate = async () => {
+  if (!webhookUrl.value) return
   await updateWebhook(webhookUrl.value)
   alert('Webhook uspešno ažuriran!')
 }
 
-const copyId = () => {
-  navigator.clipboard.writeText(klijentId.value || '')
+const copyId = async () => {
+  if (!klijentId.value) return
+  await navigator.clipboard.writeText(klijentId.value)
   showCopyStatus.value = true
-  setTimeout(() => showCopyStatus.value = false, 2000)
-}
-
-const getStatusColor = (status: string) => {
-  const colors: Record<string, string> = {
-    'Approved': 'bg-green-100 text-green-800',
-    'Paid': 'bg-blue-100 text-blue-800',
-    'Rejected': 'bg-red-100 text-red-800',
-    'Pending': 'bg-yellow-100 text-yellow-800',
-    'Viewed': 'bg-purple-100 text-purple-800',
-    'Stale': 'bg-gray-100 text-gray-800'
-  }
-  return colors[status] || 'bg-gray-100 text-gray-800'
+  setTimeout(() => { showCopyStatus.value = false }, 2000)
 }
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 font-sans">
+  <div class="min-h-screen bg-gray-50/50 font-sans text-gray-900">
     <!-- Navigacija -->
-    <nav class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-      <div class="flex items-center gap-2">
-        <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold">S</div>
-        <span class="text-xl font-bold text-gray-900 tracking-tight">SEF Bridge <span class="text-blue-600">v1</span></span>
-      </div>
-      <div class="flex items-center gap-4">
-        <span class="text-sm text-gray-500 hidden sm:inline">Tenant: {{ klijentId }}</span>
-        <button @click="logout" class="text-sm font-medium text-red-600 hover:text-red-700 transition">Odjavi se</button>
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
+            <span class="text-white font-black text-xl">S</span>
+          </div>
+          <span class="font-bold text-lg tracking-tight">SEF Bridge <span class="text-blue-600 text-xs uppercase ml-1 px-1.5 py-0.5 bg-blue-50 rounded">v2.0</span></span>
+        </div>
+        <div class="flex items-center gap-4">
+          <button @click="logout" class="text-sm font-semibold text-gray-500 hover:text-red-600 transition flex items-center gap-2">
+            Odjavi se 
+            <span class="text-lg leading-none">×</span>
+          </button>
+        </div>
       </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto p-6 space-y-8">
-      <!-- Hero / Header -->
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Header -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         <div>
-          <h1 class="text-2xl font-bold text-gray-900">Operativni Dashboard</h1>
-          <p class="text-gray-500">Nadzor sinhronizacije i zdravlje API konekcije u realnom vremenu.</p>
+          <h1 class="text-3xl font-black text-gray-900 tracking-tight">Kontrolna Tabla</h1>
+          <p class="text-gray-500 mt-1 font-medium">Pregled operacija i sinhronizacije za vaš PIB.</p>
         </div>
         <button 
           @click="handleSync" 
           :disabled="syncLoading"
-          class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition shadow-sm"
+          class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition shadow-lg shadow-blue-200 gap-2 text-sm"
         >
-          <span v-if="syncLoading" class="mr-2 animate-spin">◌</span>
-          Pokreni Ručni Sync
+          <span v-if="syncLoading" class="animate-spin">🔄</span>
+          <span v-else>⚡</span>
+          {{ syncLoading ? 'Sinhronizacija...' : 'Osveži sa SEF-a' }}
         </button>
       </div>
 
       <!-- Stats Grid -->
-      <div v-if="!statsPending" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div v-if="!statsPending" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div v-for="stat in statsData?.stats" :key="stat.status" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
           <p class="text-sm text-gray-500 font-medium uppercase tracking-wider">{{ stat.status }}</p>
           <p class="text-3xl font-bold text-gray-900 mt-1">{{ stat.broj }}</p>
@@ -101,7 +100,7 @@ const getStatusColor = (status: string) => {
           </p>
         </div>
       </div>
-      <div v-else class="grid grid-cols-4 gap-4">
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div v-for="i in 4" :key="i" class="h-24 bg-gray-200 animate-pulse rounded-xl"></div>
       </div>
 
@@ -113,83 +112,90 @@ const getStatusColor = (status: string) => {
 
           <!-- Logovi Table -->
           <div class="space-y-4">
-          <div class="flex justify-between items-center">
-            <h2 class="text-lg font-bold text-gray-900 font-sans">Zadnje greške na SEF API-ju</h2>
-            <button @click="() => refreshLogs()" class="text-sm text-blue-600 font-medium hover:underline">Osveži</button>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-            <table class="w-full text-left">
-              <thead class="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">SEF ID</th>
-                  <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Greška</th>
-                  <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Vreme</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <tr v-if="logsPending" v-for="i in 3" :key="i">
-                  <td colspan="3" class="px-6 py-4 h-12 bg-gray-50/50 animate-pulse"></td>
-                </tr>
-                <tr v-else-if="!logsData?.logs?.length">
-                  <td colspan="3" class="px-6 py-8 text-center text-gray-400 italic">Nema zabeleženih grešaka u bazi. Sistem je zdrav.</td>
-                </tr>
-                <tr v-for="log in logsData?.logs" :key="log.id" class="hover:bg-gray-50 transition">
-                  <td class="px-6 py-4 font-mono text-sm text-blue-600">{{ log.sef_id }}</td>
-                  <td class="px-6 py-4 text-sm text-gray-700">{{ log.error_message }}</td>
-                  <td class="px-6 py-4 text-xs text-gray-400">{{ new Date(log.kreirano_u).toLocaleString('sr-RS') }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="flex justify-between items-center">
+              <h2 class="text-base font-bold text-gray-900">Zadnje greške na SEF API-ju</h2>
+              <button @click="() => refreshLogs()" class="text-xs text-blue-600 font-semibold hover:underline">Osveži logove</button>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <table class="w-full text-left border-collapse">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">SEF ID / Internal ID</th>
+                    <th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Greška</th>
+                    <th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Vreme (sr-RS)</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 bg-white">
+                  <tr v-if="logsPending" v-for="i in 3" :key="'loading-' + i">
+                    <td colspan="3" class="px-6 py-4 h-12 bg-gray-50/50 animate-pulse"></td>
+                  </tr>
+                  <tr v-else-if="!logsData?.logs?.length">
+                    <td colspan="3" class="px-6 py-8 text-center text-sm text-gray-400 italic">Nema zabeleženih grešaka u bazi. Sistem je zdrav.</td>
+                  </tr>
+                  <tr v-for="(log, indeks) in logsData?.logs" :key="`log-${log.sef_id || log.internal_id || indeks}`" class="hover:bg-gray-50 transition">
+                    <td class="px-6 py-4 font-mono text-xs text-blue-600 font-semibold max-w-[180px] truncate">
+                      {{ log.sef_id || log.internal_id || 'N/A' }}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-700 font-medium">
+                      {{ log.error_message }}
+                    </td>
+                    <td class="px-6 py-4 text-xs text-gray-400 font-mono">
+                      {{ log.kreirano_u ? new Date(log.kreirano_u).toLocaleString('sr-RS') : 'N/A' }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
-        <!-- Integration Settings -->
         <div class="space-y-6">
           <h2 class="text-lg font-bold text-gray-900">ERP Integracija</h2>
           
-          <!-- API Key Box -->
-          <div class="bg-white border border-gray-200 p-6 rounded-xl shadow-sm space-y-4">
+          <div class="bg-white border border-gray-200 p-6 rounded-xl shadow-sm space-y-3">
             <div>
-              <label class="text-xs font-bold text-gray-500 uppercase tracking-widest">X-Klijent-ID (Vaš API Token)</label>
+              <label class="text-xs font-bold text-gray-400 uppercase tracking-widest block">Vaš Autentifikacioni Ključ</label>
               <div class="mt-2 flex items-center gap-2">
-                <code class="flex-1 bg-gray-100 p-2 rounded text-xs font-mono break-all border border-gray-200">{{ klijentId }}</code>
-                <button @click="copyId" class="p-2 hover:bg-gray-100 rounded transition border border-gray-200">
-                  <span v-if="!showCopyStatus">📋</span>
+                <code class="flex-1 bg-gray-50 p-2.5 rounded text-xs font-mono break-all border border-gray-200 text-gray-600">
+                  {{ klijentId }}
+                </code>
+                <button @click="copyId" class="p-2 hover:bg-gray-100 rounded transition border border-gray-200 bg-white shadow-sm flex items-center justify-center min-w-[40px]">
+                  <span v-if="!showCopyStatus" class="text-sm">📋</span>
                   <span v-else class="text-green-600 text-xs font-bold">OK</span>
                 </button>
               </div>
             </div>
           </div>
 
-          <!-- Webhook Box -->
           <div class="bg-white border border-gray-200 p-6 rounded-xl shadow-sm space-y-4">
             <div>
-              <label class="text-xs font-bold text-gray-500 uppercase tracking-widest">Webhook URL</label>
+              <label class="text-xs font-bold text-gray-400 uppercase tracking-widest block">Klijentski Webhook URL</label>
               <p class="text-xs text-gray-400 mt-1 italic">Slaćemo notifikacije na ovaj URL pri svakoj promeni statusa na SEF-u.</p>
               <input 
                 v-model="webhookUrl" 
                 type="url" 
                 placeholder="https://vas-erp.rs/webhook"
-                class="mt-2 w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                class="mt-2 w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white"
               />
             </div>
             <button 
               @click="handleWebhookUpdate"
-              class="w-full py-2 bg-gray-900 text-white rounded-lg text-sm font-semibold hover:bg-black transition"
+              class="w-full py-2.5 bg-gray-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-sm"
             >
-              Sačuvaj Webhook
+              Sačuvaj Webhook URL
             </button>
           </div>
           
           <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl">
             <h3 class="text-sm font-bold text-blue-800">Dokumentacija</h3>
-            <p class="text-xs text-blue-700 mt-1">Sve fakture šaljite na <code>/api/fakture/batch</code> endpoint. Pogledajte kompletnu specifikaciju u README fajlu.</p>
+            <p class="text-xs text-blue-700 mt-1 leading-relaxed">
+              Sve fakture šaljite na <code>/api/fakture/batch</code> endpoint. Pogledajte kompletnu specifikaciju u README fajlu.
+            </p>
           </div>
         </div>
       </div>
 
-      <!-- Webhook Setup Section -->
-      <div class="mt-12 pb-12">
+      <div class="mt-12 pb-12 border-t border-gray-200 pt-8">
         <h2 class="text-lg font-bold text-gray-900 mb-4 px-1">Podešavanje Državnih Webhook-ova</h2>
         <SefWebhookSetup :klijent-id="klijentId || ''" />
       </div>
@@ -198,8 +204,7 @@ const getStatusColor = (status: string) => {
 </template>
 
 <style scoped>
-/* Nuxt 4 Tailwind v4 ready styles */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap');
 
 .font-sans { font-family: 'Inter', sans-serif; }
 .font-mono { font-family: 'JetBrains Mono', monospace; }

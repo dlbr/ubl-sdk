@@ -9,7 +9,8 @@ export interface SefStats {
 
 export interface SefLog {
   id: number;
-  sef_id: string;
+  sef_id?: string | null;
+  internal_id?: string | null;
   error_message: string;
   kreirano_u: string;
 }
