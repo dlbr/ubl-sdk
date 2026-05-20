@@ -1,93 +1,84 @@
-# SEF Bridge - Cloudflare Edge Micro-SaaS
+# SEF Bridge v2.0 - Cloudflare Edge Micro-SaaS
 
-Ovaj projekat predstavlja ultra-skalabilnu, multi-tenant backend infrastrukturu za automatizovanu sinhronizaciju B2B faktura sa državnim SEF API-jem (Sistem e-Faktura Republike Srbije).
+Ovaj projekat predstavlja ultra-skalabilnu, **Unified Edge** infrastrukturu za automatizovanu sinhronizaciju B2B faktura sa državnim SEF API-jem (Sistem e-Faktura Republike Srbije). 
 
-## Arhitektura
+Sistem objedinjuje **Nuxt 3 frontend** i **Durable Object backend** u jedan jedinstveni Cloudflare Worker, eliminišući mrežne latencije i kompleksnost višestrukih servisa.
 
-Sistem koristi **Database-per-tenant** pristup na samom Edge-u:
+## Ključne Karakteristike v2.0
 
-1.  **Centralni Registar (Cloudflare D1):** Čuva spisak klijenata i optimizovanu zastavicu `ima_aktivne_fakture` koja omogućava da Cron job budi samo one klijente koji zaista imaju dokumente na čekanju.
-2.  **Klijentska Baza (Durable Objects + Native SQLite):** Svaki klijent (firma) ima svoju izolovanu SQLite bazu podataka unutar Durable Object instance. Ovde se čuvaju API ključevi, webhook konfiguracije i statusi faktura.
-3.  **Pico Ruter:** Naš ultra-lagani, custom ruter upravlja HTTP zahtevima i obezbeđuje sigurnosnu izolaciju klijenata.
+- **Unified Worker Architecture:** Frontend (Nuxt/Nitro) i Backend (Durable Objects) dele isti proces i memorijski prostor na ivici.
+- **Database-per-tenant Ledger:** Svaki klijent poseduje izolovanu SQLite bazu podataka unutar Durable Object instance.
+- **Forensic UBL Validation:** Strogo tipizirano parsiranje UBL 2.1 XML-a sa automatskim ispravljanjem anomalija državnog API-ja.
+- **Smart Retry Engine:** Diferencijalno rukovanje greškama (503 Service Unavailable se tretira kao prolazna greška sa automatskim re-sinhronizacijom).
+- **Hardened Auth Armor:** Kriptografski potpisane sesije sa punom UTF-8 podrškom i `__Host-` bezbednosnim oklopom.
 
 ## Tehnički Stack
 
-- **Ruter:** Custom Edge Router (0 dependencies)
-- **Runtime:** Cloudflare Workers
+- **Frontend:** Nuxt 3 (SSR/SPA hibrid), Tailwind CSS, Lucide Icons.
+- **Ruter:** Custom ultra-lagani `Router` (0 dependencies) za API rute.
 - **Skladište:** 
-  - Centralno: Cloudflare D1 (SQLite)
-  - Tenant-level: Durable Objects with native SQLite storage
-- **Jezik:** TypeScript (Stroga tipizacija)
+  - **D1 (SQLite):** Centralni registar kompanija (FTS5 pretraga) i indeks klijenata.
+  - **Durable Objects (SQLite):** Izolovani ledger za svakog tenanta.
+- **Runtime:** Cloudflare Workers (zadržana Node.js kompatibilnost za Buffer podršku).
 
 ## Autentifikacija i Sigurnost
 
-Sistem podržava dva načina identifikacije:
-1.  **Browser Sesije:** Preko kriptografski potpisanih `__Host-sef_bridge_session` kolačića.
-2.  **API Pristup:** Preko `X-Klijent-ID` zaglavlja (za ERP integracije i testiranje).
+1.  **Dashboard Pristup:** Isključivo preko `__Host-sef_bridge_session` kolačića.
+2.  **API/ERP Integracija:** Preko `X-Klijent-ID` zaglavlja.
+3.  **Admin Pristup:** Zaštićen `ADMIN_API_KEY` tajnom (Bearer Auth).
 
-### 1. Konfiguracija Klijenta
-Postavlja API ključ za SEF i opcioni webhook za notifikacije.
+## API Reference (Primeri)
+
+### 1. Onboarding Pretraga
+Munjevita pretraga zvaničnog SEF registra (podržava PIB ili naziv firme).
 ```bash
-POST /api/config
-Content-Type: application/json
-X-Klijent-ID: klijent_001
+GET /api/onboarding/search?q=naziv_ili_pib
+```
+
+### 2. Slanje Batch Faktura (ERP)
+Asinhrono slanje velikog broja faktura. Sistem odmah vraća `202 Accepted` i nastavlja procesiranje u pozadini.
+```bash
+POST /api/fakture/batch
+X-Klijent-ID: klijent_123456789
 
 {
-  "sef_api_key": "vaš_privatni_sef_ključ",
-  "webhook_url": "https://vaš-sistem.rs/callback"
+  "fakture": [
+    { "ID": "INV-001", "broj_fakture": "F-01", "iznos": 1500.00 },
+    ...
+  ]
 }
 ```
 
-### 2. Unos Nove Fakture
-Dodaje fakturu u red za čekanje. Automatski aktivira klijenta u centralnom registru.
+### 3. Populacija Registra (Admin)
+Masovni uvoz svih kompanija registrovanih na SEF portalu u centralnu D1 bazu.
 ```bash
-POST /api/fakture
-Content-Type: application/json
-X-Klijent-ID: klijent_001
+POST /api/admin/populate-companies
+Authorization: Bearer <ADMIN_API_KEY>
 
-{
-  "sef_id": "123456",
-  "broj_fakture": "2026-0001",
-  "iznos": 15000.50,
-  "poziv_na_broj": "97-12345",
-  "naziv_firme": "Test DOO"
-}
+{ "sef_api_key": "<VAŠ_SEF_PORTAL_KLJUČ>" }
 ```
 
-### 3. Ručna Sinhronizacija
-Trigeruje proveru statusa faktura za određenog klijenta odmah.
-```bash
-POST /api/fakture/sync
-X-Klijent-ID: klijent_001
-```
+## Deployment & Održavanje
 
-## Automatizacija (Cron)
-
-Sistem je dizajniran da se pokreće automatski (npr. svakih 30 minuta) putem Cloudflare Triggers. Cron proces vrši:
-1.  Batch selekciju aktivnih klijenata iz D1.
-2.  Paralelno pozivanje `/sync-sef` rute unutar Durable Objects.
-3.  Automatsko gašenje zastavice u D1 ako klijent više nema `Pending` faktura.
-
-## Deployment
-
-Projekat se postavlja koristeći Wrangler CLI:
+### Produkciona lansiranje:
 
 ```bash
-# 1. Instalacija zavisnosti
-npm install
+# 1. Postavljanje produkcionih tajni
+npx wrangler secret put SESSION_SECRET
+npx wrangler secret put ADMIN_API_KEY
 
-# 2. Kreiranje D1 baze
-npx wrangler d1 create sef_centralni_registar
-
-# 3. Izvršavanje migracija
-npx wrangler d1 execute sef_centralni_registar --remote --file=./schema.sql
-
-# 4. Deploy na Cloudflare
-npx wrangler deploy
+# 2. Build i Deploy (Unified Worker)
+npm run build && npx wrangler deploy
 ```
 
-## Bezbednost
+### Automatizacija:
+Sistem koristi Cloudflare **Alarms** unutar Durable Object-a za garantovano procesiranje redova čekanja i **Cron Triggers** za masovnu sinhronizaciju (default: svaku noć u 02h).
 
-- **Podaci:** Podaci klijenata su fizički izolovani u zasebnim SQLite fajlovima.
-- **API Ključevi:** Čuvaju se isključivo unutar Durable Object-a klijenta, nisu dostupni globalno.
-- **Mreža:** Komunikacija sa SEF-om se vrši direktno sa Cloudflare Edge infrastrukture.
+## Bezbednosni Mandat
+
+- **Izolacija:** Podaci klijenata su fizički razdvojeni. Greška na jednom klijentu ne može uticati na integritet podataka drugog klijenta.
+- **Credential Protection:** SEF API ključevi nikada ne napuštaju enkriptovani storage klijenta.
+- **Compliance:** Sistem je usklađen sa UBL 2.1 standardom i specifikacijama Ministarstva finansija RS.
+
+---
+*SEF Bridge v2.0 - Razvijeno za maksimalnu otpornost na Edge-u.*
