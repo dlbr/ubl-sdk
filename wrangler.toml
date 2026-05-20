@@ -1,0 +1,23 @@
+name = "sef-bridge"
+main = "worker/index.ts"
+compatibility_date = "2026-05-15"
+
+[[d1_databases]]
+binding = "REGISTAR_DB"
+database_name = "sef_centralni_registar"
+database_id = "189e8330-f1b4-4172-a9b0-27271acb7847"
+
+[durable_objects]
+bindings = [
+  { name = "KLIJENT_BAZA_OBJECT", class_name = "KlijentBaza" }
+]
+
+[[migrations]]
+tag = "v1_init_ledger"
+new_sqlite_classes = ["KlijentBaza"]
+
+[observability]
+enabled = true
+
+[triggers]
+crons = ["0 2 * * *"]
