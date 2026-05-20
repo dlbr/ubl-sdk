@@ -1,5 +1,5 @@
-// Tipovi za tvoj Pico ruter
-export type PicoContext<Env = any> = {
+// Tipovi za tvoj Router
+export type RouterContext<Env = any> = {
   req: Request
   env: Env
   ctx: ExecutionContext
@@ -7,7 +7,7 @@ export type PicoContext<Env = any> = {
   validJson?: any
 }
 
-export type Handler<Env = any> = (c: PicoContext<Env>) => Response | Promise<Response>
+export type Handler<Env = any> = (c: RouterContext<Env>) => Response | Promise<Response>
 
 type Route = {
   pattern: URLPattern
@@ -15,14 +15,14 @@ type Route = {
   handler: Handler
 }
 
-export type PicoType<Env = any> = {
+export type RouterType<Env = any> = {
   fetch: (req: Request, env: Env, ctx: ExecutionContext) => Promise<Response>
   request: (path: string, init?: RequestInit, env?: Env, ctx?: ExecutionContext) => Promise<Response>
-  on: (method: string, path: string, handler: Handler<Env>) => PicoType<Env>
+  on: (method: string, path: string, handler: Handler<Env>) => RouterType<Env>
   [key: string]: any // Za dinamičke metode poput app.get, app.post...
 }
 
-export const Pico = <Env = any>(): PicoType<Env> => {
+export const Router = <Env = any>(): RouterType<Env> => {
   const routes: Route[] = []
 
   // Osnovni objekat sa metodama
@@ -61,7 +61,7 @@ export const Pico = <Env = any>(): PicoType<Env> => {
   }
 
   // Proxy koji ispravno delegira metode bez prevremenog izvršavanja
-  const receiverProxy = new Proxy(core as unknown as PicoType<Env>, {
+  const receiverProxy = new Proxy(core as unknown as RouterType<Env>, {
     get: (target, prop: string) => {
       // Ako se traži fetch, on ili request, vrati ih vezane za originalni objekat
       if (prop === 'fetch' || prop === 'on' || prop === 'request') {

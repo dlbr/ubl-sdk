@@ -9,11 +9,5 @@ export default defineNuxtConfig({
   },
   devtools: { enabled: false },
   modules: ['@nuxtjs/tailwindcss'],
-  css: ['~/assets/css/main.css'],
-  runtimeConfig: {
-    public: {
-      // In production, we'll use the relative path since we're in the same worker
-      sefApiBase: '' 
-    }
-  }
+  css: ['~/assets/css/main.css']
 })

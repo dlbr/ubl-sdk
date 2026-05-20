@@ -1,11 +1,12 @@
-import { Pico, type PicoContext } from './router';
-import { validateJson, type ValidatedContext } from './validator';
+import { Router, type RouterContext } from './router';
+import { validateJson } from './validator';
 import { SefInvoiceSchema, SefWebhookSchema } from '../shared/types/sef';
+import { SefClient } from '../shared/services/sefClient';
 
 export type Env = globalThis.Env;
 export { KlijentBaza } from './KlijentBazaObject';
 
-export const app = Pico<Env>();
+export const app = Router<Env>();
 
 // Standardizovana CORS zaglavlja za produkciju
 const CORS_HEADERS = {
@@ -22,11 +23,89 @@ const applyCors = (res: Response): Response => {
   return noviRes;
 };
 
+// ==========================================
+// 0. ADMIN OPERACIJE (STRIMING UVOZ BEZ SALA)
+// ==========================================
+app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env>) => {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || authHeader !== `Bearer ${env.ADMIN_API_KEY}`) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const { sef_api_key } = await req.json() as { sef_api_key: string };
+  if (!sef_api_key) return Response.json({ error: 'sef_api_key is required' }, { status: 400 });
+
+  const sefClient = new SefClient({ 
+    apiKey: sef_api_key, 
+    baseUrl: env.SEF_API_URL || 'https://efaktura.mfin.gov.rs/api',
+    environment: 'production'
+  });
+
+  try {
+    // OKLOP: downloadAllCompanies sada vraća sirovi CSV string, bez preopterećenja memorije
+    const csvContent = await sefClient.downloadAllCompanies();
+    if (!csvContent) {
+      return Response.json({ success: false, error: 'Odsustvo odziva ili prazan sadržaj sa SEF-a.' }, { status: 502 });
+    }
+
+    // Delimo fajl na linije u memorijski bezbednim segmentima
+    const lines = csvContent.split('\n');
+    let statements: any[] = [];
+    const D1_MAX_BATCH = 100; // Optimalna granica za Cloudflare D1 konekcioni pul
+    let processed = 0;
+
+    // Krećemo od indeksa 1 da preskočimo zaglavlje CSV datoteke
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const columns = parseCsvLine(line);
+      if (!columns) continue;
+
+      const pib = columns[0];
+      const maticni = columns[1];
+      const naziv = columns[2] || 'Nepoznata Firma';
+      const status = columns[3] || 'Active';
+
+      statements.push(
+        env.REGISTAR_DB.prepare(
+          `INSERT INTO sef_kompanije (pib, maticni_broj, naziv_firme, status, azurirano_at) 
+           VALUES (?, ?, ?, ?, strftime('%s', 'now')) 
+           ON CONFLICT(pib) DO UPDATE SET 
+             maticni_broj = excluded.maticni_broj, 
+             naziv_firme = excluded.naziv_firme, 
+             status = excluded.status,
+             azurirano_at = strftime('%s', 'now')`
+        ).bind(pib, maticni, naziv, status)
+      );
+
+      if (statements.length === D1_MAX_BATCH) {
+        await env.REGISTAR_DB.batch(statements);
+        processed += statements.length;
+        statements = [];
+      }
+    }
+
+    // Pražnjenje preostalih SQL izvršnih upita
+    if (statements.length > 0) {
+      await env.REGISTAR_DB.batch(statements);
+      processed += statements.length;
+    }
+
+    return Response.json({ 
+      success: true, 
+      message: `Centralni SEF registar uspešno ažuriran. Indeksirano: ${processed} kompanija.`
+    });
+
+  } catch (err: any) {
+    return Response.json({ success: false, error: `Fatalni uvoz: ${err.message}` }, { status: 500 });
+  }
+});
+
 // Pomoćna funkcija za brzo dešifrovanje kolačića na ivici (Web Crypto kompatibilno)
 function preuzmiSesijuIzKolacica(cookieString: string | null): { klijentId: string; operater: string } | null {
   if (!cookieString) return null;
   try {
-    // Tražimo naš __Host- prefiksirani kolačić
     const mece = cookieString.split('; ').find(row => row.startsWith('__Host-sef_bridge_session='));
     if (!mece) return null;
     
@@ -35,20 +114,25 @@ function preuzmiSesijuIzKolacica(cookieString: string | null): { klijentId: stri
     const [iv, payload] = rawValue.split('.');
     if (!payload) return null;
 
-    // Dešifrovanje Base64 strukture
-    return JSON.parse(atob(payload));
+    // Edge-native dekodiranje za UTF-8 podršku bez Node.js Buffer-a
+    const binaryString = atob(payload);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     return null;
   }
 }
 
-// OSIGURAN MIDDLEWARE: Izvlači klijentId isključivo iz kriptografskog kolačića
-const auth = (handler: (c: PicoContext<Env> & { klijentId?: string, operater?: string }) => Promise<Response> | Response) => {
-  return async (c: PicoContext<Env> & { klijentId?: string, operater?: string }) => {
-    // OKLOP ZA TESTIRANJE: Dozvoljavamo direktan ID preko zaglavlja samo u testnom okruženju
+// MIDDLEWARE ZA ZAŠTITU RUTA
+const auth = (handler: (c: RouterContext<Env> & { klijentId?: string, operater?: string }) => Promise<Response> | Response) => {
+  return async (c: RouterContext<Env> & { klijentId?: string, operater?: string }) => {
+    // OKLOP: Dozvoljavamo direktan ID preko zaglavlja za ERP integracije i testove
     if (c.req.headers.has('X-Klijent-ID')) {
       c.klijentId = c.req.headers.get('X-Klijent-ID') || '';
-      c.operater = 'Test Operater';
+      c.operater = 'Sistemski Operater';
       return await handler(c);
     }
 
@@ -59,7 +143,6 @@ const auth = (handler: (c: PicoContext<Env> & { klijentId?: string, operater?: s
       return Response.json({ error: 'Nedostaje autorizacija: Sesija je nevažeća ili je istekla.' }, { status: 401 });
     }
 
-    // Proširujemo kontekst proverenim podacima
     c.klijentId = session.klijentId;
     c.operater = session.operater;
     return await handler(c);
@@ -69,7 +152,7 @@ const auth = (handler: (c: PicoContext<Env> & { klijentId?: string, operater?: s
 // ==========================================
 // 1. ONBOARDING & REGISTRACIJA
 // ==========================================
-app.get('/api/onboarding/search', async ({ req, env }: PicoContext<Env>) => {
+app.get('/api/onboarding/search', async ({ req, env }: RouterContext<Env>) => {
   const url = new URL(req.url);
   const query = url.searchParams.get('q')?.trim() || '';
   if (query.length < 3) return Response.json({ uspeh: true, rezultati: [] });
@@ -100,11 +183,10 @@ app.get('/api/onboarding/search', async ({ req, env }: PicoContext<Env>) => {
   }
 });
 
-app.post('/api/register', async ({ req, env }: PicoContext<Env>) => {
+app.post('/api/register', async ({ req, env }: RouterContext<Env>) => {
   const { pib, naziv, sef_api_key } = await req.json() as { pib: string, naziv: string, sef_api_key: string };
   if (!pib || !sef_api_key) return Response.json({ error: 'PIB i SEF API Key su obavezni' }, { status: 400 });
 
-  // Deterministički klijent ID usklađen sa novom strukturom
   const klijentId = `klijent_${pib}`;
 
   await env.REGISTAR_DB.prepare(
@@ -112,7 +194,6 @@ app.post('/api/register', async ({ req, env }: PicoContext<Env>) => {
      ON CONFLICT(klijent_id) DO UPDATE SET naziv = excluded.naziv`
   ).bind(klijentId, naziv || klijentId).run();
 
-  // OKLOP: Korišćenje idFromName za determinističke hešove
   const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
   const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
   
@@ -132,7 +213,7 @@ app.post('/api/register', async ({ req, env }: PicoContext<Env>) => {
 // ==========================================
 // 2. GLOBALNI WEBHOOK PRIJEMNIK (DRŽAVNI PUSH)
 // ==========================================
-app.post('/api/webhooks/sef', validateJson(SefWebhookSchema, async (c: PicoContext<Env>) => {
+app.post('/api/webhooks/sef', validateJson(SefWebhookSchema, async (c: RouterContext<Env>) => {
   const { kompanija_pib, faktura_id, status, timestamp } = c.validJson!;
   const klijentId = `klijent_${kompanija_pib}`;
 
@@ -150,7 +231,6 @@ app.post('/api/webhooks/sef', validateJson(SefWebhookSchema, async (c: PicoConte
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);  
   const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
 
-  // Usklađivanje putanje sa unutrašnjim DO ruterom
   const sefResponse = await klijentDO.fetch(new Request(`http://durableobject/webhooks/sef-update?smer=SALES`, {
     method: 'POST',
     headers: {
@@ -174,19 +254,19 @@ app.post('/api/webhooks/sef', validateJson(SefWebhookSchema, async (c: PicoConte
 }));
 
 // ==========================================
-// 3. DASHBOARD & ANALYTICS RUTIRANJE (ZAKLJUČANO)
+// 3. DASHBOARD & ANALYTICS PROXY PREMA DO
 // ==========================================
-app.get('/api/dashboard/stats', auth(async (c: PicoContext<Env> & { klijentId?: string }) => {
+app.get('/api/dashboard/stats', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/stats'));
 }));
 
-app.get('/api/dashboard/logs', auth(async (c: PicoContext<Env> & { klijentId?: string }) => {
+app.get('/api/dashboard/logs', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/logs'));
 }));
 
-app.post('/api/dashboard/webhook', auth(async (c: PicoContext<Env> & { klijentId?: string }) => {
+app.post('/api/dashboard/webhook', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const telo = await c.req.json();
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/config', {
@@ -196,34 +276,33 @@ app.post('/api/dashboard/webhook', auth(async (c: PicoContext<Env> & { klijentId
   }));
 }));
 
-app.get('/api/fakture', auth(async (c: PicoContext<Env> & { klijentId?: string }) => {
+app.get('/api/fakture', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request(`http://durableobject/fakture${url.search}`));
 }));
 
-app.post('/api/fakture/sync', auth(async (c: PicoContext<Env> & { klijentId?: string }) => {
+app.post('/api/fakture/sync', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/sync-sef', { method: 'POST' }));
 }));
 
-app.get('/api/analytics/pppdv-summary', auth(async (c: PicoContext<Env> & { klijentId?: string }) => {
+app.get('/api/analytics/pppdv-summary', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  // Tačno mapiranje unutrašnjeg Pico URL-a
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request(`http://durableobject/api/analytics/pppdv-summary${url.search}`));
 }));
 
-app.get('/api/analytics/export-excel', auth(async (c: PicoContext<Env> & { klijentId?: string }) => {
+app.get('/api/analytics/export-excel', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request(`http://durableobject/api/analytics/export-excel${url.search}`));
 }));
 
 // ==========================================
-// 4. POREZNA PREDREDA I FINALIZACIJA HANDSHAKE-A
+// 4. POPDV PROTOKOL
 // ==========================================
-app.post('/api/analytics/popdv/submit-draft', auth(async (c: PicoContext<Env> & { klijentId?: string }) => {
+app.post('/api/analytics/popdv/submit-draft', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request(`http://durableobject/api/popdv/submit-draft${url.search}`, {
@@ -231,7 +310,7 @@ app.post('/api/analytics/popdv/submit-draft', auth(async (c: PicoContext<Env> & 
   }));
 }));
 
-app.post('/api/analytics/popdv/finalize', auth(async (c: PicoContext<Env> & { klijentId?: string }) => {
+app.post('/api/analytics/popdv/finalize', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request(`http://durableobject/api/popdv/finalize${url.search}`, {
@@ -239,7 +318,7 @@ app.post('/api/analytics/popdv/finalize', auth(async (c: PicoContext<Env> & { kl
   }));
 }));
 
-app.patch('/api/fakture/:id/odbitak', auth(async (c: PicoContext<Env> & { klijentId?: string }) => {
+app.patch('/api/fakture/:id/odbitak', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const sefId = (c.result as any).pathname.groups.id;
   const telo = await c.req.json();
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
@@ -252,9 +331,9 @@ app.patch('/api/fakture/:id/odbitak', auth(async (c: PicoContext<Env> & { klijen
 }));
 
 // ==========================================
-// 5. OPERATIVNE AKCIJE SA FAKTURAMA
+// 5. OPERATIVNE AKCIJE
 // ==========================================
-app.post('/api/fakture/send', auth(validateJson(SefInvoiceSchema, async (c: PicoContext<Env> & { klijentId?: string }) => {
+app.post('/api/fakture/send', auth(validateJson(SefInvoiceSchema, async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   
   const doResponse = await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/fakture/send', { 
@@ -272,7 +351,7 @@ app.post('/api/fakture/send', auth(validateJson(SefInvoiceSchema, async (c: Pico
   return doResponse;
 })));
 
-app.post('/api/fakture/batch', auth(async (c: PicoContext<Env> & { klijentId?: string }) => {
+app.post('/api/fakture/batch', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const telo = await c.req.json();
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   
@@ -289,7 +368,7 @@ app.post('/api/fakture/batch', auth(async (c: PicoContext<Env> & { klijentId?: s
 }));
 
 // ==========================================
-// 6. CSV PARSER I EXPORT LOGIKA (CRON SINKRONIZACIJA)
+// 6. CSV PARSER LOGIKA
 // ==========================================
 function parseCsvLine(line: string): string[] | null {
   const result: string[] = [];
@@ -322,7 +401,6 @@ export default {
 
     const url = new URL(req.url);
     
-    // Ako je zahtev za API, pokušavamo sa Pico ruterom
     if (url.pathname.startsWith('/api')) {
       const res = await app.fetch(req, env, ctx);
       if (res.status !== 404) {
@@ -330,7 +408,6 @@ export default {
       }
     }
 
-    // Za sve ostalo (Frontend rute, statički fajlovi), delegiramo Nuxt-u
     return nuxtHandler.fetch(req, env, ctx);
   },
 
@@ -351,7 +428,8 @@ export default {
           const batch = results.slice(i, i + BATCH_SIZE);
           await Promise.all(batch.map(async (red) => {
             try {
-              const doId = env.KLIJENT_BAZA_OBJECT.idFromString(red.klijent_id);
+              // POPRAVKA: Usklađeno sa strukturom - koristimo idFromName jer je red.klijent_id običan string ("klijent_1000...")
+              const doId = env.KLIJENT_BAZA_OBJECT.idFromName(red.klijent_id);
               const odgovor = await env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/sync-sef', { method: 'POST' }));
               azurirajSyncVreme.push(red.klijent_id);
               if (odgovor.ok) {

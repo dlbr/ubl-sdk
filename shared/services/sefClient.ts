@@ -35,7 +35,6 @@ export class SefClient {
 
   constructor(config: SefClientConfig) {
     this.apiKey = config.apiKey;
-    // Čistimo baseUrl od potencijalnih pratećih koso-crtica radi stabilnosti spojeva putanja
     this.baseUrl = (config.baseUrl || '').replace(/\/+$/, '');
   }
 
@@ -47,7 +46,6 @@ export class SefClient {
       'ApiKey': this.apiKey,
       'Content-Type': contentType,
       'Accept': contentType === 'application/xml' ? 'application/xml' : 'application/json',
-      // Postavljamo jasan User-Agent kako državni WAF ne bi prepoznao Worker kao maliciozni bot
       'User-Agent': 'SEF-Bridge-Edge-Tank/2.0 (Cloudflare Worker Runtime)',
       'Connection': 'keep-alive'
     };
@@ -91,7 +89,7 @@ export class SefClient {
             errorDetails = errJson.Message || errJson.message || errorText;
           }
         } catch {
-          // Ostaje sirovi errorText ako nije validan JSON
+          // Ostaje sirovi errorText
         }
 
         return {
@@ -145,7 +143,6 @@ export class SefClient {
 
   /**
    * Fetches purchase invoice changes for a given range (v3 endpoint).
-   * OSIGURANO OD KRAHA: Normalizuje hirove državnih v3 ključeva u predvidljiv format.
    */
   async getPurchaseInvoiceChanges(dateFrom: string, dateTo: string, page: number = 1): Promise<SefChangesResponse | null> {
     const endpoint = `${this.baseUrl}/purchase-invoice/v3/changes?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}&page=${page}`;
@@ -162,9 +159,6 @@ export class SefClient {
       }
 
       const rawData = await response.json() as any;
-
-      // OKLOP: Državni API v3 nekada pakuje niz u 'PurchaseInvoices', nekada u 'invoices', a nekada vraća direktan niz.
-      // Normalizujemo strukturu da Durable Object nikada ne bi bacio 'is not iterable' fatalnu grešku.
       const normalizedInvoices = rawData.PurchaseInvoices || rawData.invoices || (Array.isArray(rawData) ? rawData : []);
       const hasMore = typeof rawData.HasMoreCardInvoices === 'boolean' ? rawData.HasMoreCardInvoices : false;
 
@@ -201,6 +195,39 @@ export class SefClient {
       return await response.text();
     } catch (err) {
       console.error(`[SEF Mreža] Izuzetak pri preuzimanju XML-a fakture ${purchaseInvoiceId}:`, err);
+      return null;
+    }
+  }
+
+  /**
+   * Downloads the complete registry of companies from SEF Public API.
+   * HARDENED FOR EDGE: Vraća sirovi CSV tekst umesto alokacije teških JSON objekata.
+   */
+  async downloadAllCompanies(): Promise<string | null> {
+    // ISPRAVLJENO: Državni endpoint za download svih kompanija često zahteva direktnu javnu stazu
+    // u zavisnosti od okruženja (koristi se /publicApi/downloadAllCompanies)
+    const endpoint = `${this.baseUrl}/publicApi/downloadAllCompanies?includeAllStatuses=false`;
+
+    try {
+      const response = await this.fetchWithTimeout(endpoint, {
+        method: 'GET',
+        headers: {
+          'ApiKey': this.apiKey,
+          'Accept': 'text/csv, application/octet-stream',
+          'User-Agent': 'SEF-Bridge-Edge-Tank/2.0'
+        }
+      }, 60000); // 60 sekundi je bezbedan limit za preuzimanje velikog CSV-a
+
+      if (!response.ok) {
+        console.error(`[SEF Mreža] Neuspešno preuzimanje registra kompanija. Status: ${response.status}`);
+        return null;
+      }
+      
+      // OKLOP: Vraćamo tekst (CSV) koji tvoj index.ts ruter već zna da strimuje liniju po liniju,
+      // čime potrošnju memorije držimo zakucanu na minimalnih nekoliko megabajta.
+      return await response.text();
+    } catch (err) {
+      console.error('[SEF Mreža] Fatalna greška pri preuzimanju centralnog registra kompanija:', err);
       return null;
     }
   }

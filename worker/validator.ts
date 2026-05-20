@@ -1,8 +1,8 @@
 import * as v from 'valibot';
-import type { Handler, PicoContext } from './router';
+import type { Handler, RouterContext } from './router';
 
 // Ekstenzija konteksta koja garantuje strogo tipiziran payload unutar same rute
-export type ValidatedContext<Env, TSchema extends v.BaseSchema<any, any, any>> = PicoContext<Env> & {
+export type ValidatedContext<Env, TSchema extends v.BaseSchema<any, any, any>> = RouterContext<Env> & {
   validJson: v.InferOutput<TSchema>;
 };
 
@@ -10,7 +10,7 @@ export function validateJson<Env, TSchema extends v.BaseSchema<any, any, any>>(
   schema: TSchema,
   handler: (c: ValidatedContext<Env, TSchema>) => Response | Promise<Response>
 ): Handler<Env> {
-  return async (ctx: PicoContext<Env>): Promise<Response> => {
+  return async (ctx: RouterContext<Env>): Promise<Response> => {
     // 1. Defanzivna provera: Provera Content-Type zaglavlja
     const contentType = ctx.req.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
@@ -42,7 +42,7 @@ export function validateJson<Env, TSchema extends v.BaseSchema<any, any, any>>(
       }
 
       // 4. ISPRAVLJENO: Mutiramo postojeći ctx umesto destukturiranja ({ ...ctx })
-      // Na ovaj način čuvamo sve getter-e, setter-e i `this` kontekst unutar Pico ruter metoda.
+      // Na ovaj način čuvamo sve getter-e, setter-e i `this` kontekst unutar Router metoda.
       const validatedCtx = ctx as ValidatedContext<Env, TSchema>;
       validatedCtx.validJson = result.output;
 

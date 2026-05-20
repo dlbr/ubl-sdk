@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  // 2. Poziv unutrašnjeg endpointa sa garantovanim rutingom kroz Pico ruter
+  // 2. Poziv unutrašnjeg endpointa sa garantovanim rutingom kroz Router
   // Koristimo fiksni interni domen 'http://durableobject' kako bismo osigurali čistu izolaciju
   const internalUrl = 'http://durableobject/api/config/webhook-instructions';
   

@@ -7,7 +7,7 @@ import { SefExcelBuilder } from "../shared/services/excelBuilder";
 import * as v from 'valibot';
 import { SefUblParser } from "./ublParser";
 import { type PopdvSubmitData, PopdvCorrectionSchema } from '../shared/types/popdv';
-import { Pico, type PicoContext } from './router';
+import { Router, type RouterContext } from './router';
 
 export interface PppdvSummary {
   period: string;
@@ -33,7 +33,7 @@ export class KlijentBaza extends DurableObject<Env> {
   private isSyncingPurchases = false;
   private currentBatchStart = 0;
   private readonly MAX_BATCH_DURATION_MS = 15000;
-  private app = Pico<Env>();
+  private app = Router<Env>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -48,7 +48,7 @@ export class KlijentBaza extends DurableObject<Env> {
 
   private setupRoutes() {
     // 1. POPDV Submissions & Handshake
-    this.app.post('/analytics/popdv/submit', async ({ req }: PicoContext<Env>) => {
+    this.app.post('/analytics/popdv/submit', async ({ req }: RouterContext<Env>) => {
       const { period, pib } = await req.json() as { period: string, pib: string };
       if (!period || !pib) return Response.json({ error: "Missing period or pib" }, { status: 400 });
 
@@ -78,7 +78,7 @@ export class KlijentBaza extends DurableObject<Env> {
       }
     });
 
-    this.app.post('/api/popdv/submit-draft', async ({ req }: PicoContext<Env>) => {
+    this.app.post('/api/popdv/submit-draft', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const period = url.searchParams.get('period');
       const pib = url.searchParams.get('pib');
@@ -120,7 +120,7 @@ export class KlijentBaza extends DurableObject<Env> {
       }
     });
 
-    this.app.post('/api/popdv/finalize', async ({ req }: PicoContext<Env>) => {
+    this.app.post('/api/popdv/finalize', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const period = url.searchParams.get('period');
       if (!period) return Response.json({ error: "Missing period" }, { status: 400 });
@@ -151,14 +151,14 @@ export class KlijentBaza extends DurableObject<Env> {
     });
 
     // 2. Analytics & Exports
-    this.app.get('/api/analytics/pppdv-summary', async ({ req }: PicoContext<Env>) => {
+    this.app.get('/api/analytics/pppdv-summary', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const period = url.searchParams.get('period');
       if (!period || !/^\d{4}-\d{2}$/.test(period)) return Response.json({ error: "Nevalidan period" }, { status: 400 });
       return Response.json({ success: true, data: this.getPppdvSummary(period) });
     });
 
-    this.app.get('/api/analytics/export-excel', async ({ req }: PicoContext<Env>) => {
+    this.app.get('/api/analytics/export-excel', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const period = url.searchParams.get('period');
       if (!period || !/^\d{4}-\d{2}$/.test(period)) return Response.json({ error: "Nevalidan period" }, { status: 400 });
@@ -197,7 +197,7 @@ export class KlijentBaza extends DurableObject<Env> {
       });
     });
 
-    this.app.get('/analytics/popdv', async ({ req }: PicoContext<Env>) => {
+    this.app.get('/analytics/popdv', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const period = url.searchParams.get('period');
       const pib = url.searchParams.get('pib');
@@ -205,7 +205,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json(this.generatePopdvData(period, pib));
     });
 
-    this.app.get('/reports/popdv', async ({ req }: PicoContext<Env>) => {
+    this.app.get('/reports/popdv', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const from = url.searchParams.get('from');
       const to = url.searchParams.get('to');
@@ -223,7 +223,7 @@ export class KlijentBaza extends DurableObject<Env> {
     });
 
     // 3. Webhooks & Ingestion
-    this.app.post('/webhooks/sef-update', async ({ req }: PicoContext<Env>) => {
+    this.app.post('/webhooks/sef-update', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const configRez = this.sql.exec(`SELECT sef_subscription_token FROM konfiguracija WHERE id = 1`).toArray();
       const storedToken = configRez[0]?.sef_subscription_token as string | null;
@@ -284,7 +284,7 @@ export class KlijentBaza extends DurableObject<Env> {
     });
 
     // 4. Invoices & Config
-    this.app.post('/fakture/send', async ({ req }: PicoContext<Env>) => {
+    this.app.post('/fakture/send', async ({ req }: RouterContext<Env>) => {
       const invoiceData = await req.json() as SefInvoiceData;
       const validation = v.safeParse(SefInvoiceSchema, invoiceData);
       if (!validation.success) return Response.json({ error: "Invalid data", details: validation.issues }, { status: 422 });
@@ -300,7 +300,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ success: true, id: invoiceData.ID }, { status: 202 });
     });
 
-    this.app.post('/fakture/batch', async ({ req }: PicoContext<Env>) => {
+    this.app.post('/fakture/batch', async ({ req }: RouterContext<Env>) => {
       const { fakture } = await req.json() as { fakture: any[] };
       const limit = this.checkLimit(fakture.length);
       if (!limit.moze) return Response.json(limit.error, { status: 402 });
@@ -316,7 +316,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ success: true, count: fakture.length }, { status: 202 });
     });
 
-    this.app.patch('/fakture/:id/odbitak', async ({ req, result }: PicoContext<Env>) => {
+    this.app.patch('/fakture/:id/odbitak', async ({ req, result }: RouterContext<Env>) => {
       const sefId = (result as any).pathname.groups.id;
       const body = await req.json();
       const validation = v.safeParse(PopdvCorrectionSchema, body);
@@ -345,7 +345,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json(config[0] || { environment: 'sandbox' });
     });
 
-    this.app.post('/config', async ({ req }: PicoContext<Env>) => {
+    this.app.post('/config', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
       this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, webhook_url, environment, sef_subscription_token, limit_faktura) VALUES (1, ?, ?, ?, ?, ?)`, data.sef_api_key || '', data.webhook_url || null, data.environment || 'sandbox', data.sef_subscription_token || null, data.limit ?? 50);
       return Response.json({ success: true });
@@ -366,7 +366,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ logs });
     });
 
-    this.app.get('/fakture', async ({ req }: PicoContext<Env>) => {
+    this.app.get('/fakture', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const page = parseInt(url.searchParams.get('page') || '1');
       const pageSize = 20;

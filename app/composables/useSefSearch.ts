@@ -2,7 +2,6 @@ import { ref, watch } from 'vue'
 
 export const useSefSearch = () => {
   const config = useRuntimeConfig()
-  const API_BASE = config.public.sefApiBase || 'https://sef-sync-worker.dlbr.workers.dev'
   
   const query = ref('')
   const results = ref<Array<{ pib: string; maticni_broj: string; naziv_firme: string }>>([])
@@ -22,7 +21,7 @@ export const useSefSearch = () => {
     error.value = null
 
     try {
-      const data = await $fetch(`${API_BASE}/api/onboarding/search?q=${encodeURIComponent(trimmed)}`) as any
+      const data = await $fetch(`/api/onboarding/search?q=${encodeURIComponent(trimmed)}`) as any
       
       if (data.uspeh) {
         results.value = data.rezultati

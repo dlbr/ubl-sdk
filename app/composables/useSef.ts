@@ -65,13 +65,9 @@ export const useSefApi = () => {
   const { klijentId } = useSefAuth()
   const config = useRuntimeConfig()
   
-  // Bazni URL tvojeg Cloudflare Worker-a
-  const API_BASE = config.public.sefApiBase || 'https://sef-sync-worker.dlbr.workers.dev'
-
   // Univerzalni wrapper za zahteve sa ugrađenim zaglavljem
   const fetchWithAuth = (url: string, options: any = {}) => {
     return $fetch(url, {
-      baseURL: API_BASE,
       ...options,
       headers: {
         ...options.headers,
@@ -82,7 +78,7 @@ export const useSefApi = () => {
 
   // ONBOARDING: Registracija klijenta
   const register = async (pib: string, naziv: string, sef_api_key: string) => {
-    return await $fetch(`${API_BASE}/api/register`, {
+    return await $fetch(`/api/register`, {
       method: 'POST',
       body: { pib, naziv, sef_api_key }
     })
@@ -91,7 +87,6 @@ export const useSefApi = () => {
   // DASHBOARD: Dohvatanje statistike (reaktivno)
   const getStats = () => {
     return useFetch<SefStats>('/api/dashboard/stats', {
-      baseURL: API_BASE,
       headers: { 'X-Klijent-ID': klijentId.value || '' },
       key: `stats-${klijentId.value}`,
       server: false // Statistika se osvežava na klijentu
@@ -101,7 +96,6 @@ export const useSefApi = () => {
   // DASHBOARD: Dohvatanje logova grešaka
   const getLogs = () => {
     return useFetch<{ logs: SefLog[] }>('/api/dashboard/logs', {
-      baseURL: API_BASE,
       headers: { 'X-Klijent-ID': klijentId.value || '' },
       key: `logs-${klijentId.value}`,
       server: false
@@ -111,7 +105,6 @@ export const useSefApi = () => {
   // DASHBOARD: Dohvatanje liste faktura (paginirano)
   const getFakture = (page: Ref<number>) => {
     return useFetch<SefFaktureResponse>('/api/fakture', {
-      baseURL: API_BASE,
       query: { page },
       headers: { 'X-Klijent-ID': klijentId.value || '' },
       key: `fakture-${klijentId.value}`,
