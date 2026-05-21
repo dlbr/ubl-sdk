@@ -1,5 +1,5 @@
 import { defineEventHandler, getCookie, createError, getHeader, sendRedirect } from 'h3';
-import { SessionEngine } from '@@/shared/services/session';
+import { SessionEngine } from '../../shared/services/session';
 
 /**
  * Edge Auth Middleware - v2 Hardened (Cloudflare Worker Native)
