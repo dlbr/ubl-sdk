@@ -196,7 +196,8 @@ const copyId = async () => {
           <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl">
             <h3 class="text-sm font-bold text-blue-800">Dokumentacija</h3>
             <p class="text-xs text-blue-700 mt-1 leading-relaxed">
-              Sve fakture šaljite na <code>/api/fakture/batch</code> endpoint. Pogledajte kompletnu specifikaciju u README fajlu.
+              Sve fakture šaljite na <code>/api/fakture/batch</code> endpoint. 
+              <NuxtLink to="/docs" class="text-blue-900 font-bold underline ml-1">Kompletna API specifikacija &rarr;</NuxtLink>
             </p>
           </div>
         </div>

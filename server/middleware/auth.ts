@@ -13,6 +13,7 @@ export default defineEventHandler(async (event) => {
   const isPublic = 
     path === '/' || 
     path === '/onboarding' ||
+    path === '/docs' ||
     path.startsWith('/_nuxt/') ||
     path.startsWith('/__nuxt_error') ||
     path.startsWith('/api/auth/login') ||
