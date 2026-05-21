@@ -277,6 +277,6 @@ describe('KlijentBaza: SEF E2E Integration', () => {
 
     expect(res.status).toBe(402);
     const body = await res.json() as any;
-    expect(body.error).toBe("Limit paketa je pređen");
+    expect(body.error).toBe("LIMIT_EXCEEDED");
   });
 });
