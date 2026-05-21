@@ -8,6 +8,7 @@ import * as v from 'valibot';
 import { SefUblParser } from "./ublParser";
 import { type PopdvSubmitData, PopdvCorrectionSchema } from '../shared/types/popdv';
 import { Router, type RouterContext } from './router';
+import { AuthEngine } from '../shared/services/auth';
 
 export interface PppdvSummary {
   period: string;
@@ -354,21 +355,37 @@ export class KlijentBaza extends DurableObject<Env> {
     });
 
     this.app.get('/config', async () => {
-      const config = this.sql.exec(`SELECT webhook_url, environment, sef_subscription_token FROM konfiguracija WHERE id = 1`).toArray();
-      return Response.json(config[0] || { environment: 'sandbox' });
+      const config = this.sql.exec(`SELECT webhook_url, environment, sef_subscription_token, klijent_id, plan_name, limit_faktura, (password_hash IS NOT NULL) as has_password FROM konfiguracija WHERE id = 1`).toArray();
+      return Response.json(config[0] || { environment: 'sandbox', plan_name: 'Micro' });
     });
 
     this.app.post('/config', async ({ req }: PicoContext<Env>) => {
       const data = await req.json() as any;
-      this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, klijent_id, webhook_url, environment, sef_subscription_token, limit_faktura) VALUES (1, ?, ?, ?, ?, ?, ?)`, 
+      this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, klijent_id, password_hash, webhook_url, environment, sef_subscription_token, limit_faktura, plan_name) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`, 
         data.sef_api_key || '', 
         data.klijent_id || null,
+        data.password_hash || null,
         data.webhook_url || null, 
         data.environment || 'sandbox', 
         data.sef_subscription_token || null, 
-        data.limit ?? 50
+        data.limit ?? 50,
+        data.plan || 'Micro'
       );
       return Response.json({ success: true });
+    });
+
+    this.app.post('/api/internal/verify-password', async ({ req }: PicoContext<Env>) => {
+      const { password } = await req.json() as { password?: string };
+      if (!password) return new Response(null, { status: 400 });
+
+      const config = this.sql.exec(`SELECT password_hash FROM konfiguracija WHERE id = 1`).toArray() as any[];
+      const storedHash = config[0]?.password_hash;
+
+      if (!storedHash) return new Response(null, { status: 404 });
+
+      // OKLOP: Verifikaciju vršimo unutar DO izolacije
+      const isCorrect = await AuthEngine.verifyPassword(password, storedHash);
+      return Response.json({ success: isCorrect }, { status: isCorrect ? 200 : 401 });
     });
 
     this.app.get('/stats', async () => {
@@ -443,12 +460,21 @@ export class KlijentBaza extends DurableObject<Env> {
     } catch (e) {}
 
     try {
-      // OKLOP: Migracija za postojeće DO instance da podrže klijent_id
+      // OKLOP: Migracija za postojeće DO instance da podrže klijent_id i lozinku
       this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN klijent_id TEXT;`);
     } catch (e) {}
 
+    try {
+      this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN password_hash TEXT;`);
+    } catch (e) {}
+
+    try {
+      // OKLOP: Migracija za Enterprise podršku i planove
+      this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN plan_name TEXT DEFAULT 'Micro';`);
+    } catch (e) {}
+
     this.ctx.storage.transactionSync(() => {
-      this.sql.exec(`CREATE TABLE IF NOT EXISTS konfiguracija (id INTEGER PRIMARY KEY CHECK (id = 1), sef_api_key TEXT NOT NULL, klijent_id TEXT, sef_subscription_token TEXT, webhook_url TEXT, environment TEXT DEFAULT 'sandbox', limit_faktura INTEGER DEFAULT 50);`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS konfiguracija (id INTEGER PRIMARY KEY CHECK (id = 1), sef_api_key TEXT NOT NULL, klijent_id TEXT, password_hash TEXT, sef_subscription_token TEXT, webhook_url TEXT, environment TEXT DEFAULT 'sandbox', limit_faktura INTEGER DEFAULT 50, plan_name TEXT DEFAULT 'Micro');`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS fakture (internal_id TEXT PRIMARY KEY, sef_id TEXT UNIQUE, status TEXT NOT NULL, broj_fakture TEXT NOT NULL, iznos REAL NOT NULL, raw_data TEXT, error_message TEXT, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_purchase_invoices (sef_id TEXT PRIMARY KEY, invoice_number TEXT NOT NULL, supplier_pib TEXT NOT NULL, issue_date TEXT NOT NULL, total_amount REAL NOT NULL, status TEXT NOT NULL, raw_xml TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_sync_watermarks (id INTEGER PRIMARY KEY AUTOINCREMENT, sync_type TEXT NOT NULL, last_successful_date TEXT NOT NULL, current_page INTEGER DEFAULT 1, status TEXT NOT NULL, records_synced INTEGER DEFAULT 0, error_message TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);`);
@@ -558,17 +584,36 @@ export class KlijentBaza extends DurableObject<Env> {
   }
 
   private checkLimit(noviBroj: number): { moze: boolean, error?: any } {
-    const tenantConfig = this.sql.exec(`SELECT vrednost FROM tenant_config WHERE kljuc = 'limit_faktura'`).toArray() as any[];
-    const mainConfig = this.sql.exec(`SELECT limit_faktura FROM konfiguracija WHERE id = 1`).toArray() as any[];
+    const configRez = this.sql.exec(`SELECT plan_name, limit_faktura FROM konfiguracija WHERE id = 1`).toArray() as any[];
+    const plan = configRez[0]?.plan_name || 'Micro';
     
-    // Prioritet ima tenant_config, pa onda globalni limit iz konfiguracije
-    let limit = 50;
-    if (tenantConfig.length > 0) limit = parseInt(tenantConfig[0].vrednost);
-    else if (mainConfig.length > 0 && mainConfig[0].limit_faktura !== undefined) limit = mainConfig[0].limit_faktura;
+    // ENTERPRISE OKLOP: Zaobilazimo limite i logujemo masovnu operaciju
+    if (plan === 'Enterprise') {
+      this.sql.exec(
+        `INSERT INTO error_logs (internal_id, error_message, status_code) 
+         VALUES ('SYSTEM', 'Enterprise batch: Propušteno ${noviBroj} dokumenata bez restrikcija.', 200)`
+      );
+      return { moze: true };
+    }
 
-    const count = this.sql.exec(`SELECT COUNT(*) as broj FROM fakture WHERE strftime('%m', kreirano_u) = strftime('%m', 'now')`).one() as { broj: number };
+    const limit = parseInt(configRez[0]?.limit_faktura || '50');
+    
+    const count = this.sql.exec(`
+      SELECT COUNT(*) as broj FROM fakture 
+      WHERE strftime('%m', kreirano_u) = strftime('%m', 'now')
+      AND strftime('%Y', kreirano_u) = strftime('%Y', 'now')
+    `).one() as { broj: number };
+
     if (count.broj + noviBroj > limit) {
-      return { moze: false, error: { error: "Limit paketa je pređen" } };
+      return { 
+        moze: false, 
+        error: { 
+          error: "Limit paketa je pređen. Nadogradite nalog na Enterprise za neograničeno slanje.",
+          trenutno: count.broj,
+          limit,
+          paket: plan
+        } 
+      };
     }
     return { moze: true };
   }

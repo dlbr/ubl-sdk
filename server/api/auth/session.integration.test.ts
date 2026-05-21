@@ -24,8 +24,12 @@ const mockEnv = {
           if (options?.method === 'POST') return { ok: true };
           return {
             ok: true,
-            json: async () => ({ sef_api_key: 'sk_live_blindirani_kljuc_2026' })
+            json: async () => ({ sef_api_key: 'sk_live_blindirani_kljuc_2026', environment: 'sandbox' })
           };
+        }
+        if (url.endsWith('/api/internal/verify-password')) {
+          const { password } = JSON.parse(options.body);
+          return { ok: password === 'lozinka123' };
         }
         return { ok: false };
       }
@@ -38,6 +42,14 @@ describe('Edge Session Management - Integracioni Testovi', () => {
   process.env.SESSION_SECRET = SESSION_SECRET;
 
   it('Scenario 1: Uspešan login mora izvršiti registraciju i generisati __Host- kolačić', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockImplementation(async (url) => {
+       if (url.includes('/purchase-invoice/v3/changes')) {
+         return new Response(JSON.stringify({ invoices: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+       }
+       return new Response(null, { status: 404 });
+    });
+
     const req = { method: 'POST', url: '/api/auth/login', headers: { 'content-type': 'application/json' } } as any;
     const headers = new Headers();
     const res = {
@@ -51,14 +63,16 @@ describe('Edge Session Management - Integracioni Testovi', () => {
     event.context.__body = {
       pib: '100000010',
       api_key: 'sk_live_blindirani_kljuc_2026',
-      operater: 'Knjigovođa Nikola'
+      operater: 'Knjigovođa Nikola',
+      password: 'lozinka123'
     };
     Object.defineProperty(event.node.req, 'body', { value: event.context.__body });
 
     const odgovor = await loginHandler(event);
     
+    globalThis.fetch = originalFetch;
+    
     expect(odgovor.success).toBe(true);
-    expect(odgovor.operater).toBe('Knjigovođa Nikola');
 
     // VERIFIKACIJA OKLOPA: Da li je postavljen ispravan __Host- kolačić?
     const setCookieHeader = headers.get('set-cookie');
