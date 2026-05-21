@@ -67,7 +67,7 @@ export default defineEventHandler(async (event) => {
     setCookie(event, '__Host-sef_bridge_session', sealedCookieValue, {
       httpOnly: true,
       secure: true,      // Obavezno za __Host- prefiks
-      sameSite: 'strict', // Sprečava CSRF napade u potpunosti
+      sameSite: 'lax',   // Dozvoljava slanje kolačića pri navigaciji sa eksternih linkova
       path: '/',          // Obavezno za __Host-
       maxAge: 60 * 60 * 8 // Trajanje sesije: tačno 8 sati (radno vreme knjigovođe)
     });
