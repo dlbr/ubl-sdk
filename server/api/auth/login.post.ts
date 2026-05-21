@@ -66,13 +66,14 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // 6. Prva registracija (prazna konfiguracija)
+    // 6. Prva registracija (prazna konfiguracija) ili osvežavanje identiteta
     if (!dbConfig || !dbConfig.sef_api_key) {
       const initRes = await doStub.fetch('http://durableobject/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           sef_api_key: body.api_key, 
+          klijent_id: `klijent_${body.pib}`, // OKLOP: Perzistiramo klijentId unutar samog DO
           environment: 'sandbox',
           sef_subscription_token: null 
         })

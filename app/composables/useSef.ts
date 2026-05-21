@@ -6,6 +6,7 @@ export interface SefStats {
   health: number;
   environment: 'sandbox' | 'production';
   webhook_url?: string | null;
+  klijent_id?: string;
 }
 
 export interface SefLog {
@@ -37,22 +38,22 @@ export interface SefFaktureResponse {
 }
 
 export const useSefAuth = () => {
-  // Pomoćni klijentski kolačić (samo za pamćenje PIB-a u UI-ju, nema autorizacionu moć)
-  const klijentId = useCookie('sef_klijent_id', {
-    maxAge: 60 * 60 * 24 * 30, // 30 dana
-    sameSite: 'lax'
-  })
+  // OKLOP: Uklonjen plaintext kolačić. Identitet se sada čuva isključivo u šifrovanoj sesiji na serveru.
+  const klijentId = ref<string | null>(null)
 
-  // Autorizacija se proverava na backendu preko __Host-sef_bridge_session
-  const isAuthenticated = computed(() => !!klijentId.value)
-
+  // Inicijalizacija klijentId-a ako smo u browseru (nakon što statsData stigne)
   const login = (id: string) => {
     klijentId.value = id
   }
 
+  const isAuthenticated = computed(() => {
+    // Na klijentu, ako imamo klijentId ref, smatramo se ulogovanim
+    // Backend će svakako uraditi finalnu proveru preko sealed session-a
+    return !!klijentId.value
+  })
+
   const logout = async () => {
     klijentId.value = null
-    // Pozivamo logout na backendu da obriše __Host- kolačić
     await $fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
     navigateTo('/')
   }

@@ -358,9 +358,16 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json(config[0] || { environment: 'sandbox' });
     });
 
-    this.app.post('/config', async ({ req }: RouterContext<Env>) => {
+    this.app.post('/config', async ({ req }: PicoContext<Env>) => {
       const data = await req.json() as any;
-      this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, webhook_url, environment, sef_subscription_token, limit_faktura) VALUES (1, ?, ?, ?, ?, ?)`, data.sef_api_key || '', data.webhook_url || null, data.environment || 'sandbox', data.sef_subscription_token || null, data.limit ?? 50);
+      this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, klijent_id, webhook_url, environment, sef_subscription_token, limit_faktura) VALUES (1, ?, ?, ?, ?, ?, ?)`, 
+        data.sef_api_key || '', 
+        data.klijent_id || null,
+        data.webhook_url || null, 
+        data.environment || 'sandbox', 
+        data.sef_subscription_token || null, 
+        data.limit ?? 50
+      );
       return Response.json({ success: true });
     });
 
@@ -380,7 +387,8 @@ export class KlijentBaza extends DurableObject<Env> {
         purchase_stats: pStats, 
         health: health.broj,
         environment,
-        webhook_url
+        webhook_url,
+        klijent_id: this.sql.exec(`SELECT klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0]?.klijent_id || 'unknown'
       });
     });
 

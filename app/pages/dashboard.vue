@@ -8,13 +8,11 @@ const invoiceTableRef = ref()
 const { data: statsData, pending: statsPending, refresh: refreshStats } = await getStats()
 const { data: logsData, pending: logsPending, refresh: refreshLogs } = await getLogs()
 
-const syncLoading = ref(false)
-const webhookUrl = ref('')
-const showCopyStatus = ref(false)
-
-// Inicijalizacija webhook URL-a - OKLOP: Koristimo watch sa once: true
-// da sprečimo resetovanje unosa korisnika tokom reaktivnih osvežavanja (sync-a)
+// OKLOP: Inicijalizujemo klijentId iz dešifrovanih podataka sa servera
 watch(statsData, (newData) => {
+  if (newData?.klijent_id) {
+    login(newData.klijent_id)
+  }
   if (newData?.webhook_url) {
     webhookUrl.value = newData.webhook_url
   }
