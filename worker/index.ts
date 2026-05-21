@@ -50,11 +50,24 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
 
     // Delimo fajl na linije u memorijski bezbednim segmentima
     const lines = csvContent.split('\n');
+    const headerLine = lines[0];
+    if (!headerLine) return Response.json({ error: 'Missing header' });
+    
+    const headerCols = parseCsvLine(headerLine);
+    if (!headerCols) return Response.json({ error: 'Invalid header' });
+
+    // Dinamičko mapiranje kolona
+    const idx = {
+      pib: headerCols.findIndex(c => c.toLowerCase().includes('pib')),
+      mb: headerCols.findIndex(c => c.toLowerCase().includes('maticnibroj') || c.toLowerCase().includes('mb')),
+      naziv: headerCols.findIndex(c => c.toLowerCase().includes('naziv') || c.toLowerCase().includes('name')),
+      status: headerCols.findIndex(c => c.toLowerCase().includes('status'))
+    };
+
     let statements: any[] = [];
-    const D1_MAX_BATCH = 100; // Optimalna granica za Cloudflare D1 konekcioni pul
+    const D1_MAX_BATCH = 100;
     let processed = 0;
 
-    // Krećemo od indeksa 1 da preskočimo zaglavlje CSV datoteke
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
@@ -62,10 +75,12 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
       const columns = parseCsvLine(line);
       if (!columns) continue;
 
-      const pib = columns[0];
-      const maticni = columns[1];
-      const naziv = columns[2] || 'Nepoznata Firma';
-      const status = columns[3] || 'Active';
+      const pib = idx.pib !== -1 ? columns[idx.pib] : null;
+      if (!pib) continue;
+
+      const maticni = idx.mb !== -1 ? columns[idx.mb] : '';
+      const naziv = idx.naziv !== -1 ? columns[idx.naziv] : 'Nepoznata Firma';
+      const status = idx.status !== -1 ? columns[idx.status] : 'Active';
 
       statements.push(
         env.REGISTAR_DB.prepare(
@@ -94,12 +109,34 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
 
     return Response.json({ 
       success: true, 
-      message: `Centralni SEF registar uspešno ažuriran. Indeksirano: ${processed} kompanija.`
+      message: `Centralni SEF registar uspešno ažuriran. Indeksirano: ${processed} kompanija.`,
+      header: headerLine // OKLOP: Vraćamo header za proveru mapiranja
     });
 
   } catch (err: any) {
     return Response.json({ success: false, error: `Fatalni uvoz: ${err.message}` }, { status: 500 });
   }
+});
+
+app.post('/api/admin/debug-csv', async ({ req, env }: RouterContext<Env>) => {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || authHeader !== `Bearer ${env.ADMIN_API_KEY}`) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const { sef_api_key } = await req.json() as { sef_api_key: string };
+  const sefClient = new SefClient({ 
+    apiKey: sef_api_key, 
+    baseUrl: env.SEF_API_URL || 'https://efaktura.mfin.gov.rs/api',
+    environment: 'production'
+  });
+
+  const csvContent = await sefClient.downloadAllCompanies();
+  if (!csvContent) return Response.json({ error: 'Empty' });
+  return Response.json({ 
+    firstLines: csvContent.split('\n').slice(0, 10),
+    length: csvContent.length 
+  });
 });
 
 // Pomoćna funkcija za brzo dešifrovanje kolačića na ivici (Web Crypto kompatibilno)
@@ -164,6 +201,9 @@ app.get('/api/onboarding/search', async ({ req, env }: RouterContext<Env>) => {
     sqlQuery = `SELECT pib, maticni_broj, naziv_firme FROM sef_kompanije WHERE pib LIKE ? LIMIT 10`;
     params = [`${query}%`];
   } else {
+    // OKLOP: FTS5 pretraga sa trigramom je moćna, ali moramo bežati od specijalnih karaktera
+    // Čistimo query od navodnika i tačaka koji zbunjuju FTS5 motor
+    const cleanQuery = query.replace(/[".*]/g, ' ');
     sqlQuery = `
       SELECT s.pib, s.maticni_broj, s.naziv_firme 
       FROM sef_kompanije s
@@ -172,7 +212,7 @@ app.get('/api/onboarding/search', async ({ req, env }: RouterContext<Env>) => {
       ORDER BY bm25(sef_kompanije_fts)
       LIMIT 10
     `;
-    params = [`"${query}"`];
+    params = [cleanQuery];
   }
 
   try {
@@ -374,12 +414,15 @@ function parseCsvLine(line: string): string[] | null {
   const result: string[] = [];
   let current = '';
   let inQuotes = false;
+  
+  // OKLOP: Detektujemo separator (zarezi ili tačka-zarez)
+  const sep = line.includes(';') ? ';' : ',';
 
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
     if (char === '"') {
       inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === sep && !inQuotes) {
       result.push(current.trim());
       current = '';
     } else {
