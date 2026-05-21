@@ -56,11 +56,20 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
     const headerCols = parseCsvLine(headerLine);
     if (!headerCols) return Response.json({ error: 'Invalid header' });
 
-    // Dinamičko mapiranje kolona
+    // Dinamičko mapiranje kolona - OKLOP: Prošireni ključne reči za državne formate
     const idx = {
-      pib: headerCols.findIndex(c => c.toLowerCase().includes('pib')),
-      mb: headerCols.findIndex(c => c.toLowerCase().includes('maticnibroj') || c.toLowerCase().includes('mb')),
-      naziv: headerCols.findIndex(c => c.toLowerCase().includes('naziv') || c.toLowerCase().includes('name')),
+      pib: headerCols.findIndex(c => {
+        const val = c.toLowerCase();
+        return val.includes('pib') || val.includes('tax');
+      }),
+      mb: headerCols.findIndex(c => {
+        const val = c.toLowerCase();
+        return val.includes('maticni') || val.includes('mb') || val.includes('registrationnumber');
+      }),
+      naziv: headerCols.findIndex(c => {
+        const val = c.toLowerCase();
+        return val.includes('naziv') || val.includes('ime') || val.includes('name') || val.includes('company');
+      }),
       status: headerCols.findIndex(c => c.toLowerCase().includes('status'))
     };
 
