@@ -9,7 +9,15 @@ import { AuthEngine } from '../../../shared/services/auth';
  * Podržava i klasičan login (lozinka) i aktivaciju/oporavak (SEF API ključ).
  */
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event) as { pib: string; api_key?: string; password?: string; operater: string; naziv?: string };
+  const body = await readBody(event) as { 
+    pib: string; 
+    api_key?: string; 
+    password?: string; 
+    operater: string; 
+    naziv?: string;
+    plan?: string;
+    billing_period?: string;
+  };
 
   if (!body || !body.pib) {
     throw createError({ statusCode: 400, statusMessage: 'PIB je obavezan.' });
@@ -51,6 +59,26 @@ export default defineEventHandler(async (event) => {
         passwordHashToStore = await AuthEngine.hashPassword(body.password);
       }
 
+      // OKLOP: Finansijska inicijalizacija (ako klijent nije već bio podešen)
+      const selectedPlan = body.plan || dbConfig?.plan_name || 'Micro';
+      const selectedPeriod = body.billing_period || dbConfig?.billing_period || 'monthly';
+      const licencaOd = dbConfig?.licenca_od_datuma || danas;
+      
+      // Mapiranje limita na osnovu plana
+      const planLimits: Record<string, number> = {
+        'Micro': 50,
+        'Plus': 500,
+        'Agency': 5000,
+        'Enterprise': 999999
+      };
+      const selectedLimit = planLimits[selectedPlan] || 50;
+
+      // Ako je godišnji model, postavljamo rok na 365 dana
+      let licencaIstice = dbConfig?.licenca_istice_timestamp || null;
+      if (!licencaIstice && selectedPeriod === 'annual') {
+        licencaIstice = String(Date.now() + (365 * 24 * 60 * 60 * 1000));
+      }
+
       // Ažuriramo D1 registar za svaki slučaj
       await env.REGISTAR_DB.prepare(
         `INSERT INTO klijenti (klijent_id, naziv, ima_aktivne_fakture, poslednji_sync) 
@@ -66,7 +94,12 @@ export default defineEventHandler(async (event) => {
           sef_api_key: body.api_key,
           klijent_id: `klijent_${body.pib}`,
           password_hash: passwordHashToStore || dbConfig?.password_hash,
-          environment: dbConfig?.environment || 'sandbox'
+          environment: dbConfig?.environment || 'sandbox',
+          plan: selectedPlan,
+          limit: selectedLimit,
+          billing_period: selectedPeriod,
+          licenca_od_datuma: licencaOd,
+          licenca_istice_timestamp: licencaIstice
         })
       });
 

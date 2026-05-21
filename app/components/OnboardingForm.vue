@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
+const props = defineProps<{
+  plan?: string,
+  period?: string
+}>()
+
 const { query, results, isLoading } = useSefSearch()
 const { activate } = useSefApi()
 const { login } = useSefAuth()
@@ -32,7 +37,13 @@ const handleRegister = async () => {
   error.value = ''
   
   try {
-    const res = await activate(izabranaFirma.value.pib, izabranaFirma.value.naziv_firme, sefKey.value) as any
+    const res = await activate(
+      izabranaFirma.value.pib, 
+      izabranaFirma.value.naziv_firme, 
+      sefKey.value,
+      props.plan,
+      props.period
+    ) as any
     if (res.success) {
       // Inicijalizujemo lokalni state (ali sesija je već u __Host- kolačiću)
       login(`klijent_${izabranaFirma.value.pib}`)

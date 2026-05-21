@@ -94,10 +94,10 @@ export const useSefApi = () => {
   }
 
   // ONBOARDING: Aktivacija klijenta i kreiranje sesije
-  const activate = async (pib: string, naziv: string, sef_api_key: string, operater: string = 'Sistemski Operater') => {
+  const activate = async (pib: string, naziv: string, sef_api_key: string, plan: string = 'Micro', period: string = 'monthly', operater: string = 'Sistemski Operater') => {
     return await $fetch(`/api/auth/login`, {
       method: 'POST',
-      body: { pib, naziv, api_key: sef_api_key, operater }
+      body: { pib, naziv, api_key: sef_api_key, plan, billing_period: period, operater }
     })
   }
 

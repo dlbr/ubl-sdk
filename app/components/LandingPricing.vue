@@ -111,7 +111,7 @@ const plans = [
           </ul>
 
           <NuxtLink 
-            to="/onboarding"
+            :to="`/onboarding?plan=${plan.name}&period=${isYearly ? 'annual' : 'monthly'}`"
             :class="plan.popular ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200' : 'bg-gray-900 text-white hover:bg-black shadow-gray-200'"
             class="w-full py-4 rounded-2xl font-black text-center transition shadow-xl active:scale-95"
           >
