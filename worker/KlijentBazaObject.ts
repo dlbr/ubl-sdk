@@ -748,10 +748,14 @@ export class KlijentBaza extends DurableObject<Env> {
       return { 
         moze: false, 
         error: { 
-          error: "Limit paketa je pređen",
-          trenutno: count.broj,
-          limit,
-          paket: plan
+          success: false,
+          error: "LIMIT_EXCEEDED",
+          poruka: `Potrošili ste sve kredite za slanje faktura u okviru izabranog paketa (${plan}: ${limit}).`,
+          detalji: {
+            potroseno: count.broj,
+            limit: limit,
+            sugestija: "Za nastavak rada, nadogradite vaš nalog na Plus ili Agency paket putem dashboard-a."
+          }
         } 
       };
     }

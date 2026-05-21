@@ -19,6 +19,11 @@ const licencaSkoroIstice = computed(() => {
   return preostaloMs > 0 && preostaloMs <= petnaestDanaMs
 })
 
+const limitPotrosen = computed(() => {
+  if (!statsData.value?.usage) return false
+  return statsData.value.usage.procenat >= 100
+})
+
 // OKLOP: Inicijalizujemo klijentId iz dešifrovanih podataka sa servera
 watch(statsData, (newData) => {
   if (newData?.klijent_id) {
@@ -60,8 +65,16 @@ const copyId = async () => {
 
 <template>
   <div class="min-h-screen bg-gray-50/50 font-sans text-gray-900">
+    <!-- Banner za potrošen limit -->
+    <div v-if="limitPotrosen" class="bg-red-600 text-white text-center py-2 px-4 text-xs font-bold sticky top-0 z-[60] shadow-md uppercase tracking-wider flex items-center justify-center gap-4">
+      <span>⚠️ PAŽNJA: Limit vašeg paketa je potrošen. Slanje novih faktura je privremeno suspendovano.</span>
+      <NuxtLink to="/docs" class="bg-white text-red-600 px-3 py-1 rounded-md hover:bg-gray-100 transition shadow-sm">
+        Nadogradi Paket &rarr;
+      </NuxtLink>
+    </div>
+
     <!-- Banner za skoro isticanje licence -->
-    <div v-if="licencaSkoroIstice" class="bg-amber-600 text-white text-center py-2 px-4 text-xs font-bold sticky top-0 z-[60] shadow-md uppercase tracking-wider">
+    <div v-else-if="licencaSkoroIstice" class="bg-amber-600 text-white text-center py-2 px-4 text-xs font-bold sticky top-0 z-[60] shadow-md uppercase tracking-wider">
       ⚠️ Pažnja: Vaša godišnja licenca za SEF Bridge ističe uskoro. 
       Automatska obnova biće isporučena na Vaš SEF nalog 7 dana pre isteka.
     </div>
@@ -111,12 +124,13 @@ const copyId = async () => {
         </div>
         <button 
           @click="handleSync" 
-          :disabled="syncLoading"
-          class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition shadow-lg shadow-blue-200 gap-2 text-sm"
+          :disabled="syncLoading || limitPotrosen"
+          class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:bg-gray-400 transition shadow-lg shadow-blue-200 gap-2 text-sm"
         >
           <span v-if="syncLoading" class="animate-spin">🔄</span>
+          <span v-else-if="limitPotrosen">🔒</span>
           <span v-else>⚡</span>
-          {{ syncLoading ? 'Sinhronizacija...' : 'Osveži sa SEF-a' }}
+          {{ syncLoading ? 'Sinhronizacija...' : (limitPotrosen ? 'Limit Potrošen' : 'Osveži sa SEF-a') }}
         </button>
       </div>
 
