@@ -177,8 +177,12 @@ function preuzmiSesijuIzKolacica(cookieString: string | null): { klijentId: stri
     const mece = cookieString.split('; ').find(row => row.startsWith('sef_bridge_session='));
     if (!mece) return null;
     
-    const rawValue = mece.split('=')[1];
+    let rawValue = mece.split('=')[1];
     if (!rawValue) return null;
+
+    // OKLOP: Dekodiramo URL-encoded karaktere (npr. %2E za tačku) pre splitovanja
+    rawValue = decodeURIComponent(rawValue);
+
     const [iv, payload] = rawValue.split('.');
     if (!payload) return null;
 

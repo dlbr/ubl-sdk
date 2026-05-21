@@ -45,8 +45,10 @@ export default defineEventHandler(async (event) => {
     const rawCookie = getHeader(event, 'cookie');
     if (rawCookie) {
       const match = rawCookie.match(/sef_bridge_session=([^;]+)/);
-      if (match) sessionCookie = match[1];
+      if (match) sessionCookie = decodeURIComponent(match[1]!);
     }
+  } else {
+    sessionCookie = decodeURIComponent(sessionCookie);
   }
 
   if (!sessionCookie) {
