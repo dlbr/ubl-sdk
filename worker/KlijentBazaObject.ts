@@ -442,8 +442,13 @@ export class KlijentBaza extends DurableObject<Env> {
       this.sql.exec(`ALTER TABLE sef_purchase_invoice_taxes ADD COLUMN non_deductible_amount REAL DEFAULT 0;`);
     } catch (e) {}
 
+    try {
+      // OKLOP: Migracija za postojeće DO instance da podrže klijent_id
+      this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN klijent_id TEXT;`);
+    } catch (e) {}
+
     this.ctx.storage.transactionSync(() => {
-      this.sql.exec(`CREATE TABLE IF NOT EXISTS konfiguracija (id INTEGER PRIMARY KEY CHECK (id = 1), sef_api_key TEXT NOT NULL, sef_subscription_token TEXT, webhook_url TEXT, environment TEXT DEFAULT 'sandbox', limit_faktura INTEGER DEFAULT 50);`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS konfiguracija (id INTEGER PRIMARY KEY CHECK (id = 1), sef_api_key TEXT NOT NULL, klijent_id TEXT, sef_subscription_token TEXT, webhook_url TEXT, environment TEXT DEFAULT 'sandbox', limit_faktura INTEGER DEFAULT 50);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS fakture (internal_id TEXT PRIMARY KEY, sef_id TEXT UNIQUE, status TEXT NOT NULL, broj_fakture TEXT NOT NULL, iznos REAL NOT NULL, raw_data TEXT, error_message TEXT, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_purchase_invoices (sef_id TEXT PRIMARY KEY, invoice_number TEXT NOT NULL, supplier_pib TEXT NOT NULL, issue_date TEXT NOT NULL, total_amount REAL NOT NULL, status TEXT NOT NULL, raw_xml TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_sync_watermarks (id INTEGER PRIMARY KEY AUTOINCREMENT, sync_type TEXT NOT NULL, last_successful_date TEXT NOT NULL, current_page INTEGER DEFAULT 1, status TEXT NOT NULL, records_synced INTEGER DEFAULT 0, error_message TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);`);
