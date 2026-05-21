@@ -34,8 +34,8 @@ export default defineEventHandler(async (event) => {
     return;
   }
 
-  // 3. PREUZIMANJE MDN __Host- KOLAČIĆA
-  const sessionCookie = getCookie(event, '__Host-sef_bridge_session');
+  // 3. PREUZIMANJE KLIJENTSKOG KOLAČIĆA
+  const sessionCookie = getCookie(event, 'sef_bridge_session');
 
   if (!sessionCookie) {
     // OKLOP: Ako je u pitanju stranica (ne API), šaljemo na onboarding umesto 401 greške

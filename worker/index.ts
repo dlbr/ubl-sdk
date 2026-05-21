@@ -166,7 +166,7 @@ app.post('/api/admin/debug-csv', async ({ req, env }: RouterContext<Env>) => {
 function preuzmiSesijuIzKolacica(cookieString: string | null): { klijentId: string; operater: string } | null {
   if (!cookieString) return null;
   try {
-    const mece = cookieString.split('; ').find(row => row.startsWith('__Host-sef_bridge_session='));
+    const mece = cookieString.split('; ').find(row => row.startsWith('sef_bridge_session='));
     if (!mece) return null;
     
     const rawValue = mece.split('=')[1];

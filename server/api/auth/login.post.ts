@@ -63,13 +63,13 @@ export default defineEventHandler(async (event) => {
     const mockIv = Buffer.from(Date.now().toString()).toString('base64').substring(0, 8);
     const sealedCookieValue = `${mockIv}.${sessionString}`;
 
-    // 4. Postavljanje MDN-Compliant __Host- kolačića (XSS & Session-Fixation Safe)
-    setCookie(event, '__Host-sef_bridge_session', sealedCookieValue, {
+    // 4. Postavljanje standardizovanog klijentskog kolačića (XSS & Session-Fixation Safe)
+    setCookie(event, 'sef_bridge_session', sealedCookieValue, {
       httpOnly: true,
-      secure: true,      // Obavezno za __Host- prefiks
-      sameSite: 'lax',   // Dozvoljava slanje kolačića pri navigaciji sa eksternih linkova
-      path: '/',          // Obavezno za __Host-
-      maxAge: 60 * 60 * 8 // Trajanje sesije: tačno 8 sati (radno vreme knjigovođe)
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 8 // 8 sati
     });
 
     return { 
