@@ -1,48 +1,49 @@
 import { describe, it, expect } from 'vitest';
-import { SefUblBuilder } from '../packages/sef-ubl-builder/src/index';
+import { SefPoreskiJsonBuilder, SefUblBuilder } from '../packages/sef-ubl-builder/src/index';
 
-describe('SEF Bridge v3 — EEO & EPP (Evidencije) Strukturni Audit', () => {
+describe('SEF Bridge v3.4.0 — EEO & EPP (Evidencije) JSON Audit', () => {
 
-  it('EEO Provera: Zbirna evidencija obračuna mora imati ispravne sume i period', () => {
+  it('EEO Provera: Zbirna evidencija obračuna mora imati ispravan JSON format', () => {
     const data = {
       poreskiPeriod: '2026-05',
       osnovica20: 100000,
       pdv20: 20000,
       osnovica10: 50000,
-      pdv10: 5000,
-      oslobodjenBezPrava: 10000
+      pdv10: 5000
     };
 
-    const xml = SefUblBuilder.buildZbirniEeo(data);
+    const payload = SefPoreskiJsonBuilder.buildZbirniEeoPayload(data);
 
-    expect(xml).toContain('<PoreskiPeriod>2026-05</PoreskiPeriod>');
-    expect(xml).toContain('<OpstaStopa><Osnovica>100000.00</Osnovica><Pdv>20000.00</Pdv></OpstaStopa>');
-    expect(xml).toContain('<PosebnaStopa><Osnovica>50000.00</Osnovica><Pdv>5000.00</Pdv></PosebnaStopa>');
-    expect(xml).toContain('<OslobodjenBezPrava>10000.00</OslobodjenBezPrava>');
+    expect(payload.Year).toBe(2026);
+    expect(payload.Month).toBe(5);
+    expect(payload.TaxRecords[0].TaxRatePercentage).toBe(20);
+    expect(payload.TaxRecords[0].Amount).toBe(100000);
+    expect(payload.TaxRecords[1].TaxRatePercentage).toBe(10);
+    expect(payload.TaxRecords[1].TaxAmount).toBe(5000);
   });
 
-  it('EPP Provera: Evidencija prethodnog poreza mora podržavati uvoz robe i lokalne nabavke', () => {
+  it('EPP Provera: Evidencija prethodnog poreza mora pratiti JSON šemu iz 2026.', () => {
     const data = {
       period: '2026-05',
       nabavkeOdObveznikaPdv: 450000.00,
       prethodniPorezOdObveznika: 90000.00,
-      importPdvCarina: 30000.00,
-      gradevinarstvoPorez: 15000.00
+      importPdvCarina: 30000.00
     };
 
-    const xml = SefUblBuilder.buildEpp(data);
+    const payload = SefPoreskiJsonBuilder.buildEppPayload(data);
 
-    expect(xml).toContain('<Period>2026-05</Period>');
-    expect(xml).toContain('<NabavkeLokalne><Osnovica>450000.00</Osnovica><Porez>90000.00</Porez></NabavkeLokalne>');
-    expect(xml).toContain('<UvozRobe><Porez>30000.00</Porez></UvozRobe>');
-    expect(xml).toContain('<Gradevinarstvo><Porez>15000.00</Porez></Gradevinarstvo>');
+    expect(payload.Year).toBe(2026);
+    expect(payload.InputTaxRecords).toHaveLength(2);
+    expect(payload.InputTaxRecords[1].Type).toBe('Import');
+    expect(payload.InputTaxRecords[1].TaxAmount).toBe(30000);
   });
 
-  it('Generic Build: Mora prepoznati EEO i EPP tipove zapisa', () => {
-    const eeoXml = SefUblBuilder.build({ TipZapisa: 'EEO', poreskiPeriod: '2026-05', osnovica20: 100, pdv20: 20, osnovica10: 0, pdv10: 0 });
-    expect(eeoXml).toContain('<SummaryTaxEvidencis');
+  it('Generic Build: Mora vratiti JSON string za EEO i EPP tipove', () => {
+    const eeoJson = SefUblBuilder.build({ TipZapisa: 'EEO', poreskiPeriod: '2026-05', osnovica20: 100, pdv20: 20, osnovica10: 0, pdv10: 0 });
+    const parsed = JSON.parse(eeoJson);
+    expect(parsed.Year).toBe(2026);
 
-    const eppXml = SefUblBuilder.build({ TipZapisa: 'EPP', period: '2026-05', nabavkeOdObveznikaPdv: 100, prethodniPorezOdObveznika: 20, importPdvCarina: 0 });
-    expect(eppXml).toContain('<PrethodniPorezEvidencija');
+    const eppJson = SefUblBuilder.build({ TipZapisa: 'EPP', period: '2026-05', nabavkeOdObveznikaPdv: 100, prethodniPorezOdObveznika: 20, importPdvCarina: 0 });
+    expect(eppJson).toContain('"Year":2026');
   });
 });

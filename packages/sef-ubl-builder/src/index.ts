@@ -18,6 +18,52 @@ import {
 } from './types';
 
 /**
+ * SefPoreskiJsonBuilder - Generates official JSON payloads for SEF tax records (EEO/EPP).
+ */
+export class SefPoreskiJsonBuilder {
+  
+  // Zvanični format za Zbirnu evidenciju obračuna PDV-a (Član 4)
+  static buildZbirniEeoPayload(data: ZbirniEeoData) {
+    const [year, month] = data.poreskiPeriod.split('-').map(Number);
+    return {
+      Year: year,
+      Month: month,
+      TaxRecords: [
+        {
+          TaxRatePercentage: 20.00,
+          Amount: parseFloat(data.osnovica20.toFixed(2)),
+          TaxAmount: parseFloat(data.pdv20.toFixed(2))
+        },
+        {
+          TaxRatePercentage: 10.00,
+          Amount: parseFloat(data.osnovica10.toFixed(2)),
+          TaxAmount: parseFloat(data.pdv10.toFixed(2))
+        }
+      ]
+    };
+  }
+
+  // Zvanični format za Evidenciju prethodnog poreza (EPP)
+  static buildEppPayload(data: EppData) {
+    const [year, month] = data.period.split('-').map(Number);
+    return {
+      Year: year,
+      Month: month,
+      InputTaxRecords: [
+        {
+          Type: "PurchaseInvoiced", // Nabavke od obveznika PDV
+          TaxAmount: parseFloat(data.prethodniPorezOdObveznika.toFixed(2))
+        },
+        {
+          Type: "Import", // Uvoz robe (Carinski PDV)
+          TaxAmount: parseFloat(data.importPdvCarina.toFixed(2))
+        }
+      ]
+    };
+  }
+}
+
+/**
  * SefUblBuilder - Generates UBL 2.1 compliant XML for various SEF document types.
  * Hardened for Edge runtime (no Node.js dependencies).
  */
@@ -475,32 +521,6 @@ ${extension}
 </Invoice>`.trim();
   }
 
-  /**
-   * 17. ZBIRNA EVIDENCIJA OBRAČUNA (EEO PDV - Član 4)
-   */
-  static buildZbirniEeo(data: ZbirniEeoData) {
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<SummaryTaxEvidencis xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">
-  <PoreskiPeriod>${data.poreskiPeriod}</PoreskiPeriod>
-  <OpstaStopa><Osnovica>${this.formatAmount(data.osnovica20)}</Osnovica><Pdv>${this.formatAmount(data.pdv20)}</Pdv></OpstaStopa>
-  <PosebnaStopa><Osnovica>${this.formatAmount(data.osnovica10)}</Osnovica><Pdv>${this.formatAmount(data.pdv10)}</Pdv></PosebnaStopa>
-  <OslobodjenBezPrava>${this.formatAmount(data.oslobodjenBezPrava || 0)}</OslobodjenBezPrava>
-</SummaryTaxEvidencis>`.trim();
-  }
-
-  /**
-   * 18. EVIDENCIJA PRETHODNOG POREZA (EPP)
-   */
-  static buildEpp(data: EppData) {
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<PrethodniPorezEvidencija xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">
-  <Period>${data.period}</Period>
-  <NabavkeLokalne><Osnovica>${this.formatAmount(data.nabavkeOdObveznikaPdv)}</Osnovica><Porez>${this.formatAmount(data.prethodniPorezOdObveznika)}</Porez></NabavkeLokalne>
-  <UvozRobe><Porez>${this.formatAmount(data.importPdvCarina)}</Porez></UvozRobe>
-  <Gradevinarstvo><Porez>${this.formatAmount(data.gradevinarstvoPorez || 0)}</Porez></Gradevinarstvo>
-</PrethodniPorezEvidencija>`.trim();
-  }
-
   private static normalizeData(data: any) {
     // Čupamo podatke iz SefInvoiceData (ako postoje) u ravnu strukturu koju builderi očekuju
     if (data.broj === undefined) data.broj = data.ID;
@@ -529,8 +549,8 @@ ${extension}
       case '386': return this.buildAvansni(normalized);
       case '381': return this.buildSmanjenje(normalized);
       case '383': return this.buildPovecanje(normalized);
-      case 'EEO': return this.buildZbirniEeo(normalized);
-      case 'EPP': return this.buildEpp(normalized);
+      case 'EEO': return JSON.stringify(SefPoreskiJsonBuilder.buildZbirniEeoPayload(normalized));
+      case 'EPP': return JSON.stringify(SefPoreskiJsonBuilder.buildEppPayload(normalized));
       case '380':
       default:
         if (normalized.avansBroj) return this.buildKonacniSaAvansom(normalized);

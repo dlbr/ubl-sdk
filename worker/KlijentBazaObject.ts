@@ -768,7 +768,7 @@ this.app.post('/admin/auto-renew', async ({ req }: RouterContext<Env>) => {
 
     // Oklop 1: Ako je klijent u statusu BLOKIRAN, stopiraj izlazni saobraćaj odmah
     if (status === 'BLOKIRAN') {
-      // OKLOP: Poreski Grace Period do 10. u mesecu
+      // OKLOP: Poreski Grace Period do 10. u mesecu (Zakon o e-fakturisaju, Član 11)
       const danas = new Date();
       const danUMesecu = danas.getDate();
       
@@ -798,11 +798,11 @@ this.app.post('/admin/auto-renew', async ({ req }: RouterContext<Env>) => {
       return { moze: true };
     }
 
-    // Oklop 2: Kumulativni godišnji obračun
+    // Oklop 2: Kumulativni godišnji obračun (Refundacija na 'Rejected')
     if (config?.billing_period === 'annual') {
       const godisnjiLimit = parseInt(String(config.limit_faktura_godisnje || '600'));
       const pocetakLicence = config.licenca_od_datuma || '2026-05-21';
-      const countGodisnji = this.sql.exec(`SELECT COUNT(*) as broj FROM fakture WHERE kreirano_u >= ?`, pocetakLicence).one() as { broj: number };
+      const countGodisnji = this.sql.exec(`SELECT COUNT(*) as broj FROM fakture WHERE status != 'Rejected' AND kreirano_u >= ?`, pocetakLicence).one() as { broj: number };
 
       if (countGodisnji.broj + noviBroj > godisnjiLimit) {
         this.sql.exec(
@@ -829,7 +829,8 @@ this.app.post('/admin/auto-renew', async ({ req }: RouterContext<Env>) => {
     const limit = parseInt(String(config?.limit_faktura ?? '50'));
     const count = this.sql.exec(`
       SELECT COUNT(*) as broj FROM fakture 
-      WHERE strftime('%m', kreirano_u) = strftime('%m', 'now')
+      WHERE status != 'Rejected'
+      AND strftime('%m', kreirano_u) = strftime('%m', 'now')
       AND strftime('%Y', kreirano_u) = strftime('%Y', 'now')
     `).one() as { broj: number };
 
