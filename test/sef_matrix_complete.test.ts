@@ -58,6 +58,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
     });
     expect(xml).toContain('<cbc:ID>E</cbc:ID>');
     expect(xml).toContain('<cbc:TaxExemptionReasonCode>PDV-RS-24-1-1</cbc:TaxExemptionReasonCode>');
+    expect(xml).toContain('<cbc:TaxExemptionReason>Oslobođeno plaćanja PDV-a po članu 24. stav 1. tačka 1. Zakona o PDV</cbc:TaxExemptionReason>');
     expect(xml).toContain('<cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>');
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1000.00</cbc:PayableAmount>');
   });

@@ -279,6 +279,13 @@ ${extension}
   // 8. Faktura sa oslobođenjem od PDV-a (380 TaxCategory E/O/AE)
   static buildOslobodjena(data: any) {
     const xml = this.buildBaseInvoice(data, '380');
+    // OKLOP: Mapiranje šifre u tekstualni opis zakonskog člana (Obavezno za SEF)
+    const reasonMapping: Record<string, string> = {
+      'PDV-RS-24-1-1': 'Oslobođeno plaćanja PDV-a po članu 24. stav 1. tačka 1. Zakona o PDV',
+      'PDV-RS-10-2-3': 'Prenos poreske obaveze po članu 10. stav 2. tačka 3. Zakona o PDV'
+    };
+    const reason = reasonMapping[data.sifraOslobodjenja] || 'Oslobođeno plaćanja PDV-a po zakonu.';
+
     return xml + `
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>
@@ -289,6 +296,7 @@ ${extension}
         <cbc:ID>${data.poreskaKategorija}</cbc:ID>
         <cbc:Percent>0</cbc:Percent>
         <cbc:TaxExemptionReasonCode>${data.sifraOslobodjenja}</cbc:TaxExemptionReasonCode>
+        <cbc:TaxExemptionReason>${reason}</cbc:TaxExemptionReason>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:TaxCategory>
     </cac:TaxSubtotal>

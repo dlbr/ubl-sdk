@@ -304,7 +304,7 @@ export class KlijentBaza extends DurableObject<Env> {
       const validation = v.safeParse(SefInvoiceSchema, invoiceData);
       if (!validation.success) return Response.json({ error: "Invalid data", details: validation.issues }, { status: 422 });
 
-      const limit = this.checkLimit(1);
+      const limit = this.checkLimit(1, invoiceData);
       if (!limit.moze) return Response.json(limit.error, { status: 402 });
 
       this.ctx.storage.transactionSync(() => {
@@ -317,7 +317,8 @@ export class KlijentBaza extends DurableObject<Env> {
 
     this.app.post('/fakture/batch', async ({ req }: RouterContext<Env>) => {
       const { fakture } = await req.json() as { fakture: any[] };
-      const limit = this.checkLimit(fakture.length);
+      // OKLOP: Za batch proveravamo prvi dokument za grace period ako je klijent blokiran
+      const limit = this.checkLimit(fakture.length, fakture[0]);
       if (!limit.moze) return Response.json(limit.error, { status: 402 });
 
       this.ctx.storage.transactionSync(() => {
@@ -391,10 +392,25 @@ export class KlijentBaza extends DurableObject<Env> {
       const isCorrect = await AuthEngine.verifyPassword(password, storedHash);
       return Response.json({ success: isCorrect }, { status: isCorrect ? 200 : 401 });
     });
+this.app.post('/admin/auto-renew', async ({ req }: RouterContext<Env>) => {
+  const payload = await req.json() as { sef_faktura_id?: string };
 
-    this.app.post('/admin/auto-renew', async () => {
-      const configRez = this.sql.exec(`SELECT licenca_istice_timestamp FROM konfiguracija WHERE id = 1`).toArray() as any[];
-      const trenutniIstek = parseInt(configRez[0]?.licenca_istice_timestamp || String(Date.now()));
+  // OKLOP: Idempotency provera
+  if (payload.sef_faktura_id) {
+    const vecProcesuiran = this.sql.exec(
+      `SELECT 1 FROM procesuirani_webhook_id WHERE sef_faktura_id = ?`, 
+      payload.sef_faktura_id
+    ).toArray().length > 0;
+
+    if (vecProcesuiran) {
+      return Response.json({ success: true, message: "Ignorisan duplirani državni push." });
+    }
+
+    this.sql.exec(`INSERT INTO procesuirani_webhook_id (sef_faktura_id) VALUES (?)`, payload.sef_faktura_id);
+  }
+
+  const configRez = this.sql.exec(`SELECT licenca_istice_timestamp FROM konfiguracija WHERE id = 1`).toArray() as any[];
+  const trenutniIstek = parseInt(configRez[0]?.licenca_istice_timestamp || String(Date.now()));
       const JEDNA_GODINA_MS = 365 * 24 * 60 * 60 * 1000;
       const noviIstek = trenutniIstek + JEDNA_GODINA_MS;
 
@@ -591,6 +607,7 @@ export class KlijentBaza extends DurableObject<Env> {
       this.sql.exec(`CREATE TABLE IF NOT EXISTS tenant_config (kljuc TEXT PRIMARY KEY, vrednost TEXT, azurirano_at INTEGER DEFAULT (strftime('%s', 'now')));`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS istorija_statusa (id INTEGER PRIMARY KEY AUTOINCREMENT, faktura_id TEXT NOT NULL, status TEXT NOT NULL, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(faktura_id) REFERENCES fakture(internal_id) ON DELETE CASCADE);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS error_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, internal_id TEXT, sef_id TEXT, error_message TEXT NOT NULL, status_code INTEGER, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP);`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS procesuirani_webhook_id (sef_faktura_id TEXT PRIMARY KEY, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP);`);
     });
   }
 
@@ -719,7 +736,7 @@ export class KlijentBaza extends DurableObject<Env> {
     } finally { this.isDraining = false; }
   }
 
-  private checkLimit(noviBroj: number): { moze: boolean, error?: any } {
+  private checkLimit(noviBroj: number, invoiceData?: SefInvoiceData): { moze: boolean, error?: any } {
     const configRez = this.sql.exec(`SELECT plan_name, limit_faktura, billing_period, licenca_od_datuma, licenca_istice_timestamp, status_pretplate, limit_faktura_godisnje FROM konfiguracija WHERE id = 1`).toArray() as any[];
     const config = configRez[0];
     const plan = config?.plan_name || 'Micro';
@@ -727,6 +744,22 @@ export class KlijentBaza extends DurableObject<Env> {
 
     // Oklop 1: Ako je klijent u statusu BLOKIRAN, stopiraj izlazni saobraćaj odmah
     if (status === 'BLOKIRAN') {
+      // OKLOP: Poreski Grace Period do 10. u mesecu
+      const danas = new Date();
+      const danUMesecu = danas.getDate();
+      
+      if (danUMesecu <= 10 && invoiceData?.IssueDate) {
+        const datumFakture = new Date(invoiceData.IssueDate);
+        const prethodniMesec = new Date();
+        prethodniMesec.setMonth(danas.getMonth() - 1);
+
+        if (datumFakture.getMonth() === prethodniMesec.getMonth() && 
+            datumFakture.getFullYear() === prethodniMesec.getFullYear()) {
+          console.log(`[Poreski Oklop] Puštamo fakturu ${invoiceData.ID} zbog zakonskog roka (10. u mesecu) uprkos blokadi.`);
+          return { moze: true };
+        }
+      }
+
       return { 
         moze: false, 
         error: { error: "Pristup blokiran", poruka: "Licenca je istekla. Slanje faktura je onemogućeno do uplate novog perioda." } 

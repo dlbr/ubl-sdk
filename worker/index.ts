@@ -298,7 +298,7 @@ app.post('/api/webhooks/sef', validateJson(SefWebhookSchema, async (c: RouterCon
       await klijentDO.fetch('http://durableobject/admin/auto-renew', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proknjizeno: true })
+        body: JSON.stringify({ sef_faktura_id: faktura_id, proknjizeno: true })
       });
 
       return Response.json({ uspeh: true, poruka: "Licenca automatski produžena na osnovu uplate uočene na SEF-u." });
