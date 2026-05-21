@@ -60,11 +60,11 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
     const idx = {
       pib: headerCols.findIndex(c => {
         const val = c.toLowerCase();
-        return val.includes('pib') || val.includes('tax');
+        return val.includes('pib') || val.includes('tax') || val.includes('vatregistrationcode');
       }),
       mb: headerCols.findIndex(c => {
         const val = c.toLowerCase();
-        return val.includes('maticni') || val.includes('mb') || val.includes('registrationnumber');
+        return val.includes('maticni') || val.includes('mb') || val.includes('registrationcode') || val.includes('registrationnumber');
       }),
       naziv: headerCols.findIndex(c => {
         const val = c.toLowerCase();
@@ -84,12 +84,19 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
       const columns = parseCsvLine(line);
       if (!columns) continue;
 
-      const pib = idx.pib !== -1 ? columns[idx.pib] : null;
+      // OKLOP: Safe getter koji garantuje string i sprečava 'undefined' koji D1 mrzi
+      const getVal = (index: number, fallback: string = ''): string => {
+        if (index === -1) return fallback;
+        const val = columns[index];
+        return (val !== undefined && val !== null) ? String(val).trim() : fallback;
+      };
+
+      const pib = getVal(idx.pib, '');
       if (!pib) continue;
 
-      const maticni = idx.mb !== -1 ? columns[idx.mb] : '';
-      const naziv = idx.naziv !== -1 ? columns[idx.naziv] : 'Nepoznata Firma';
-      const status = idx.status !== -1 ? columns[idx.status] : 'Active';
+      const maticni = getVal(idx.mb, '');
+      const naziv = getVal(idx.naziv, 'Nepoznata Firma');
+      const status = getVal(idx.status, 'Active');
 
       statements.push(
         env.REGISTAR_DB.prepare(

@@ -201,31 +201,53 @@ export class SefClient {
 
   /**
    * Downloads the complete registry of companies from SEF Public API.
-   * HARDENED FOR EDGE: Vraća sirovi CSV tekst umesto alokacije teških JSON objekata.
+   * HARDENED FOR EDGE: Requests CSV for low memory footprint.
    */
   async downloadAllCompanies(): Promise<string | null> {
-    // ISPRAVLJENO: Državni endpoint za download svih kompanija često zahteva direktnu javnu stazu
-    // u zavisnosti od okruženja (koristi se /publicApi/downloadAllCompanies)
-    const endpoint = `${this.baseUrl}/publicApi/downloadAllCompanies?includeAllStatuses=false`;
+    // Koristimo getAllCompanies koji je po preporuci korisnika stabilniji
+    const endpoint = `${this.baseUrl}/publicApi/getAllCompanies?includeAllStatuses=false`;
 
     try {
       const response = await this.fetchWithTimeout(endpoint, {
         method: 'GET',
         headers: {
           'ApiKey': this.apiKey,
-          'Accept': 'text/csv, application/octet-stream',
+          'Accept': 'text/csv, application/csv, text/plain',
           'User-Agent': 'SEF-Bridge-Edge-Tank/2.0'
         }
-      }, 60000); // 60 sekundi je bezbedan limit za preuzimanje velikog CSV-a
+      }, 60000);
 
       if (!response.ok) {
         console.error(`[SEF Mreža] Neuspešno preuzimanje registra kompanija. Status: ${response.status}`);
         return null;
       }
       
-      // OKLOP: Vraćamo tekst (CSV) koji tvoj index.ts ruter već zna da strimuje liniju po liniju,
-      // čime potrošnju memorije držimo zakucanu na minimalnih nekoliko megabajta.
-      return await response.text();
+      const contentType = response.headers.get('content-type') || '';
+      let text = await response.text();
+
+      // OKLOP: Uklanjamo Byte Order Mark (BOM) ako postoji (čest slučaj kod državnih CSV-ova)
+      if (text.charCodeAt(0) === 0xFEFF) {
+        text = text.slice(1);
+      }
+
+      if (contentType.includes('json')) {
+        // Ako država odbije CSV i pošalje JSON, moramo ga konvertovati u naš interni CSV format
+        // kako bismo zadržali kompatibilnost sa striming parserom u index.ts
+        try {
+          const json = JSON.parse(text) as any[];
+          if (Array.isArray(json)) {
+             const header = 'VatRegistrationCode,RegistrationCode,Name,Status';
+             const lines = json.map(c => 
+               `"${c.VatRegistrationCode || c.pib || ''}","${c.RegistrationCode || c.maticniBroj || ''}","${(c.Name || c.naziv || '').replace(/"/g, '""')}","${c.Status || 'Active'}"`
+             );
+             return [header, ...lines].join('\n');
+          }
+        } catch (jsonErr) {
+          console.error('[SEF Mreža] Neuspela konverzija JSON registra u CSV:', jsonErr);
+        }
+      }
+
+      return text;
     } catch (err) {
       console.error('[SEF Mreža] Fatalna greška pri preuzimanju centralnog registra kompanija:', err);
       return null;
