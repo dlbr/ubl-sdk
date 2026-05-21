@@ -9,12 +9,14 @@ import { Buffer } from 'node:buffer';
  */
 export default defineEventHandler(async (event) => {
   const path = event.path;
+  const method = event.method;
 
   // 1. JAVNE RUTE: Dozvoljavamo pristup bez aktivne sesije
   const isPublic = 
     path === '/' || 
     path === '/onboarding' ||
     path.startsWith('/_nuxt/') ||
+    path.startsWith('/__nuxt_error') ||
     path.startsWith('/api/auth/login') ||
     path.startsWith('/api/onboarding/') ||
     path.startsWith('/api/webhook-setup') ||
@@ -36,13 +38,26 @@ export default defineEventHandler(async (event) => {
   }
 
   // 3. PREUZIMANJE KLIJENTSKOG KOLAČIĆA
-  const sessionCookie = getCookie(event, 'sef_bridge_session');
+  // OKLOP: Pokušavamo preko getCookie, ali i direktno iz zaglavlja ako Nitro 'štuca' na Edge-u
+  let sessionCookie = getCookie(event, 'sef_bridge_session');
+  
+  if (!sessionCookie) {
+    const rawCookie = getHeader(event, 'cookie');
+    if (rawCookie) {
+      const match = rawCookie.match(/sef_bridge_session=([^;]+)/);
+      if (match) sessionCookie = match[1];
+    }
+  }
 
   if (!sessionCookie) {
-    // OKLOP: Ako je u pitanju stranica (ne API), šaljemo na onboarding umesto 401 greške
-    if (!path.startsWith('/api/')) {
+    // OKLOP: Redirekcija samo za GET zahteve koji su za stranice (HTML)
+    const isPageRequest = !path.startsWith('/api/') && getHeader(event, 'accept')?.includes('text/html');
+    if (isPageRequest) {
+      console.warn(`[Auth] Redirecting to onboarding from ${path} - session cookie missing.`);
       return sendRedirect(event, '/onboarding');
     }
+    
+    // Za API zahteve bacamo 401
     throw createError({
       statusCode: 401,
       statusMessage: 'Sesija istekla ili ne postoji.',
