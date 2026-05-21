@@ -679,7 +679,7 @@ export class KlijentBaza extends DurableObject<Env> {
         const client = new SefClient({ 
         apiKey: config.sef_api_key, 
         environment: config.environment,
-        baseUrl: config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs'
+        baseUrl: config.environment === 'production' ? 'https://efaktura.mfin.gov.rs/api' : 'https://demoefaktura.mfin.gov.rs/api'
       });
         const result = await client.sendInvoice(SefXmlBuilder.build(JSON.parse(next[0].raw_data)), next[0].internal_id);
         if (result.success) {
@@ -729,9 +729,22 @@ export class KlijentBaza extends DurableObject<Env> {
       const countGodisnji = this.sql.exec(`SELECT COUNT(*) as broj FROM fakture WHERE kreirano_u >= ?`, pocetakLicence).one() as { broj: number };
 
       if (countGodisnji.broj + noviBroj > godisnjiLimit) {
+        this.sql.exec(
+          `INSERT INTO error_logs (internal_id, error_message, status_code) 
+           VALUES ('SYSTEM', 'Limit pređen (godišnji): pokušano slanje ${noviBroj} dokumenata (potrošeno: ${countGodisnji.broj}, limit: ${godisnjiLimit}).', 402)`
+        );
         return { 
           moze: false, 
-          error: { error: "Potrošen godišnji limit", trenutno: countGodisnji.broj, limit: godisnjiLimit } 
+          error: { 
+            success: false,
+            error: "LIMIT_EXCEEDED",
+            poruka: `Potrošili ste sve kredite za slanje faktura u okviru izabranog paketa (${plan}: ${godisnjiLimit}).`,
+            detalji: {
+              potroseno: countGodisnji.broj,
+              limit: godisnjiLimit,
+              sugestija: "Za nastavak rada, nadogradite vaš nalog na Enterprise paket putem dashboard-a."
+            }
+          } 
         };
       }
       return { moze: true };
@@ -745,6 +758,10 @@ export class KlijentBaza extends DurableObject<Env> {
     `).one() as { broj: number };
 
     if (count.broj + noviBroj > limit) {
+      this.sql.exec(
+        `INSERT INTO error_logs (internal_id, error_message, status_code) 
+         VALUES ('SYSTEM', 'Limit pređen: pokušano slanje ${noviBroj} dokumenata (potrošeno: ${count.broj}, limit: ${limit}).', 402)`
+      );
       return { 
         moze: false, 
         error: { 

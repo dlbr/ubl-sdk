@@ -41,16 +41,36 @@ export default defineEventHandler(async (event) => {
     if (body.api_key) {
       console.log(`[Auth Edge] Pokrećem verifikaciju SEF ključa za PIB ${body.pib}...`);
       
-      const checkClient = new SefClient({ 
-        apiKey: body.api_key, 
-        baseUrl: env.SEF_API_URL || 'https://efaktura.mfin.gov.rs/api', 
-        environment: dbConfig?.environment || 'production' 
-      });
-      
       const danas = new Date().toISOString().split('T')[0]!;
-      const testChanges = await checkClient.getPurchaseInvoiceChanges(danas, danas, 1);
+      let verifiedEnv: 'production' | 'sandbox' | null = null;
 
-      if (testChanges === null) {
+      // OKLOP: Automatska detekcija okruženja (Prvo probamo produkciju, pa sandbox)
+      const tryEnvs: Array<'production' | 'sandbox'> = ['production', 'sandbox'];
+      
+      for (const envType of tryEnvs) {
+        const baseUrl = envType === 'production' 
+          ? 'https://efaktura.mfin.gov.rs/api' 
+          : 'https://demoefaktura.mfin.gov.rs/api';
+
+        const checkClient = new SefClient({ 
+          apiKey: body.api_key, 
+          baseUrl, 
+          environment: envType
+        });
+
+        try {
+          const testChanges = await checkClient.getPurchaseInvoiceChanges(danas, danas, 1);
+          if (testChanges !== null) {
+            verifiedEnv = envType;
+            console.log(`[Auth Edge] Ključ uspešno verifikovan na: ${envType}`);
+            break;
+          }
+        } catch (e) {
+          console.warn(`[Auth Edge] Verifikacija neuspešna na ${envType}, probam sledeće...`);
+        }
+      }
+
+      if (!verifiedEnv) {
         throw createError({ statusCode: 401, statusMessage: 'Nevalidan SEF API ključ. Provera na državnom portalu nije uspela.' });
       }
 
@@ -94,7 +114,7 @@ export default defineEventHandler(async (event) => {
           sef_api_key: body.api_key,
           klijent_id: `klijent_${body.pib}`,
           password_hash: passwordHashToStore || dbConfig?.password_hash,
-          environment: dbConfig?.environment || 'sandbox',
+          environment: verifiedEnv, // Čuvamo detektovano okruženje
           plan: selectedPlan,
           limit: selectedLimit,
           billing_period: selectedPeriod,
