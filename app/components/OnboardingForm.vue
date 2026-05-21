@@ -12,7 +12,13 @@ const error = ref('')
 
 const selectCompany = (firma: any) => {
   izabranaFirma.value = firma
-  query.value = firma.naziv_firme
+  query.value = '' // OKLOP: Čistimo input nakon selekcije
+  results.value = []
+}
+
+const resetCompany = () => {
+  izabranaFirma.value = null
+  query.value = ''
   results.value = []
 }
 
@@ -50,7 +56,7 @@ const handleRegister = async () => {
 
     <div class="space-y-6">
       <!-- Autocomplete Pretraga -->
-      <div class="relative">
+      <div v-if="!izabranaFirma" class="relative">
         <label class="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2">Pretraga po Nazivu ili PIB-u</label>
         <div class="relative">
           <input
@@ -80,11 +86,19 @@ const handleRegister = async () => {
 
       <!-- Prikaz selekcije -->
       <transition enter-active-class="transition duration-200 ease-out" enter-from-class="transform scale-95 opacity-0" enter-to-class="transform scale-100 opacity-100">
-        <div v-if="izabranaFirma" class="p-5 bg-blue-50 rounded-2xl border border-blue-100 relative group">
-          <button @click="izabranaFirma = null" class="absolute top-4 right-4 text-blue-300 hover:text-blue-600">✕</button>
-          <div class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Izabrani Entitet</div>
-          <div class="font-black text-blue-900 mt-1 leading-tight">{{ izabranaFirma.naziv_firme }}</div>
-          <div class="text-xs text-blue-600 mt-1 font-mono tracking-tighter">PIB: {{ izabranaFirma.pib }}</div>
+        <div v-if="izabranaFirma" class="p-6 bg-blue-50 rounded-2xl border-2 border-blue-100 relative group flex items-center justify-between">
+          <div class="flex-1">
+            <div class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Izabrani Entitet</div>
+            <div class="font-black text-blue-900 mt-1 leading-tight text-lg">{{ izabranaFirma.naziv_firme }}</div>
+            <div class="text-xs text-blue-600 mt-1 font-mono tracking-tighter font-bold uppercase">PIB: {{ izabranaFirma.pib }} • MB: {{ izabranaFirma.maticni_broj }}</div>
+          </div>
+          <button 
+            @click="resetCompany" 
+            class="ml-4 p-3 bg-white border border-blue-200 text-blue-400 hover:text-red-500 hover:border-red-200 rounded-xl transition shadow-sm flex items-center justify-center group/btn"
+            title="Poništi selekciju"
+          >
+            <span class="text-lg leading-none font-bold">×</span>
+          </button>
         </div>
       </transition>
 

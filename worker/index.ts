@@ -78,7 +78,7 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
     let processed = 0;
 
     for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
+      const line = lines[i]?.trim();
       if (!line) continue;
 
       const columns = parseCsvLine(line);
@@ -86,7 +86,7 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
 
       // OKLOP: Safe getter koji garantuje string i sprečava 'undefined' koji D1 mrzi
       const getVal = (index: number, fallback: string = ''): string => {
-        if (index === -1) return fallback;
+        if (index === -1 || index >= columns.length) return fallback;
         const val = columns[index];
         return (val !== undefined && val !== null) ? String(val).trim() : fallback;
       };
@@ -98,8 +98,8 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
       const naziv = getVal(idx.naziv, 'Nepoznata Firma');
       const status = getVal(idx.status, 'Active');
 
-      statements.push(
-        env.REGISTAR_DB.prepare(
+      try {
+        const stmt = env.REGISTAR_DB.prepare(
           `INSERT INTO sef_kompanije (pib, maticni_broj, naziv_firme, status, azurirano_at) 
            VALUES (?, ?, ?, ?, strftime('%s', 'now')) 
            ON CONFLICT(pib) DO UPDATE SET 
@@ -107,10 +107,17 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
              naziv_firme = excluded.naziv_firme, 
              status = excluded.status,
              azurirano_at = strftime('%s', 'now')`
-        ).bind(pib, maticni, naziv, status)
-      );
+        ).bind(pib, maticni, naziv, status);
 
-      if (statements.length === D1_MAX_BATCH) {
+        if (stmt) {
+          statements.push(stmt);
+        }
+      } catch (stmtErr) {
+        console.error(`[Admin] Greška pri pripremi SQL-a za PIB ${pib}:`, stmtErr);
+        continue;
+      }
+
+      if (statements.length >= D1_MAX_BATCH) {
         await env.REGISTAR_DB.batch(statements);
         processed += statements.length;
         statements = [];
@@ -438,7 +445,11 @@ function parseCsvLine(line: string): string[] | null {
     const char = line[i];
     if (char === '"') {
       inQuotes = !inQuotes;
-    } else if (char === sep && !inQuotes) {
+      // Ne dodajemo navodnike u samu vrednost
+      continue;
+    } 
+    
+    if (char === sep && !inQuotes) {
       result.push(current.trim());
       current = '';
     } else {
@@ -446,6 +457,8 @@ function parseCsvLine(line: string): string[] | null {
     }
   }
   result.push(current.trim());
+  
+  // Vraćamo niz samo ako imamo barem PIB i Naziv (min 2, ali stavljamo 3 radi sigurnosti statusa)
   return result.length >= 3 ? result : null;
 }
 

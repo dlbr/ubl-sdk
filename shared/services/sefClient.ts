@@ -237,9 +237,13 @@ export class SefClient {
           const json = JSON.parse(text) as any[];
           if (Array.isArray(json)) {
              const header = 'VatRegistrationCode,RegistrationCode,Name,Status';
-             const lines = json.map(c => 
-               `"${c.VatRegistrationCode || c.pib || ''}","${c.RegistrationCode || c.maticniBroj || ''}","${(c.Name || c.naziv || '').replace(/"/g, '""')}","${c.Status || 'Active'}"`
-             );
+             const lines = json.map(c => {
+               const pib = String(c.VatRegistrationCode || c.pib || '').replace(/"/g, '');
+               const mb = String(c.RegistrationCode || c.maticniBroj || '').replace(/"/g, '');
+               const name = String(c.Name || c.naziv || '').replace(/"/g, ' ');
+               const status = String(c.Status || 'Active').replace(/"/g, '');
+               return `"${pib}","${mb}","${name}","${status}"`;
+             });
              return [header, ...lines].join('\n');
           }
         } catch (jsonErr) {
