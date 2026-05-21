@@ -9,17 +9,21 @@ export { KlijentBaza } from './KlijentBazaObject';
 export const app = Router<Env>();
 
 // Standardizovana CORS zaglavlja za produkciju
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
-  'Access-Control-Allow-Credentials': 'true',
-  'Access-Control-Max-Age': '86400',
+const getCorsHeaders = (req: Request) => {
+  const origin = req.headers.get('Origin');
+  return {
+    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie, X-Klijent-ID',
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '86400',
+  };
 };
 
-const applyCors = (res: Response): Response => {
+const applyCors = (res: Response, req: Request): Response => {
   const noviRes = new Response(res.body, res);
-  Object.entries(CORS_HEADERS).forEach(([k, v]) => noviRes.headers.set(k, v));
+  const headers = getCorsHeaders(req);
+  Object.entries(headers).forEach(([k, v]) => noviRes.headers.set(k, v));
   return noviRes;
 };
 
@@ -467,22 +471,26 @@ import nuxtHandler from '../.output/server/index.mjs';
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext) {
+    const corsHeaders = getCorsHeaders(req);
+
     if (req.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
+      return new Response(null, { status: 204, headers: corsHeaders });
     }
 
     const url = new URL(req.url);
-    
+
+    // Ako je zahtev za API, pokušavamo sa Router-om
     if (url.pathname.startsWith('/api')) {
       const res = await app.fetch(req, env, ctx);
+      // Router vraća 404 ako ruta ne postoji, tada puštamo Nuxt-u (npr. za server/api rute)
       if (res.status !== 404) {
-        return applyCors(res);
+        return applyCors(res, req);
       }
     }
 
+    // Za sve ostalo (Frontend rute, statički fajlovi), delegiramo Nuxt-u
     return nuxtHandler.fetch(req, env, ctx);
   },
-
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil((async () => {
       const { results } = await env.REGISTAR_DB.prepare(
