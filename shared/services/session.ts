@@ -48,7 +48,7 @@ export class SessionEngine {
     let binary = '';
     const bytes = new Uint8Array(combined);
     for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
+      binary += String.fromCharCode(bytes[i]!);
     }
     return btoa(binary);
   }

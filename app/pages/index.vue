@@ -64,8 +64,11 @@ const { klijentId, isAuthenticated } = useSefAuth()
       </div>
     </section>
 
+    <!-- Pricing Sekcija -->
+    <LandingPricing />
+
     <!-- Footer -->
-    <footer class="py-12 text-center text-gray-400 text-sm font-bold uppercase tracking-widest">
+    <footer class="py-12 text-center text-gray-400 text-sm font-bold uppercase tracking-widest bg-gray-50 border-t border-gray-200">
       &copy; 2026 SEF BRIDGE PRO. EDGE INFRASTRUKTURA REPUBLIKE SRBIJE.
     </footer>
   </div>

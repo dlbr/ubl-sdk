@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const { getStats, getLogs, triggerSync, updateWebhook } = useSefApi()
-const { klijentId, logout } = useSefAuth()
+const { klijentId, login, logout } = useSefAuth()
 
 const invoiceTableRef = ref()
 

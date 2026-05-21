@@ -3,7 +3,9 @@ import { validateJson } from './validator';
 import { SefInvoiceSchema, SefWebhookSchema } from '../shared/types/sef';
 import { SefClient } from '../shared/services/sefClient';
 
-export type Env = globalThis.Env;
+export interface Env extends globalThis.Env {
+  ADMIN_API_KEY: string;
+}
 export { KlijentBaza } from './KlijentBazaObject';
 
 export const app = Router<Env>();
@@ -284,7 +286,7 @@ app.get('/api/onboarding/search', async ({ req, env }: RouterContext<Env>) => {
 // 2. GLOBALNI WEBHOOK PRIJEMNIK (DRŽAVNI PUSH)
 // ==========================================
 app.post('/api/webhooks/sef', validateJson(SefWebhookSchema, async (c: RouterContext<Env>) => {
-  const { kompanija_pib, faktura_id, status, broj_fakture } = c.validJson!;
+  const { kompanija_pib, faktura_id, status, broj_fakture, timestamp } = c.validJson!;
   
   // KLJUČNI OKLOP: Da li je ovo naša sistemska faktura za naplatu licence?
   if (broj_fakture && broj_fakture.startsWith('SEF-BRG-')) {

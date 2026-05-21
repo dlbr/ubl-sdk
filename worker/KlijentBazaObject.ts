@@ -261,7 +261,7 @@ export class KlijentBaza extends DurableObject<Env> {
       }
     });
 
-    this.app.get('/api/config/webhook-instructions', async ({ req }) => {
+    this.app.get('/api/config/webhook-instructions', async ({ req }: RouterContext<Env>) => {
       const configRez = this.sql.exec(`SELECT sef_subscription_token, environment FROM konfiguracija WHERE id = 1`).toArray() as any[];
       const token = configRez[0]?.sef_subscription_token || 'TOKEN_MISSING';
       const environment = configRez[0]?.environment || 'sandbox';
@@ -362,7 +362,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json(config[0] || { environment: 'sandbox', plan_name: 'Micro' });
     });
 
-    this.app.post('/config', async ({ req }: PicoContext<Env>) => {
+    this.app.post('/config', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
       this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, klijent_id, password_hash, webhook_url, environment, sef_subscription_token, limit_faktura, plan_name) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`, 
         data.sef_api_key || '', 
@@ -377,7 +377,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ success: true });
     });
 
-    this.app.post('/api/internal/verify-password', async ({ req }: PicoContext<Env>) => {
+    this.app.post('/api/internal/verify-password', async ({ req }: RouterContext<Env>) => {
       const { password } = await req.json() as { password?: string };
       if (!password) return new Response(null, { status: 400 });
 
