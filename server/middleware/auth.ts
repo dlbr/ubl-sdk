@@ -81,9 +81,10 @@ export default defineEventHandler(async (event) => {
     if (!path.startsWith('/api/')) {
       return sendRedirect(event, '/onboarding');
     }
+    // OKLOP: Prosleđujemo originalnu poruku ako već imamo H3Error, inače fallback
     throw createError({
-      statusCode: 401,
-      statusMessage: 'Sesija nevalidna.',
+      statusCode: err.statusCode || 401,
+      statusMessage: err.statusMessage || 'Sesija nevalidna.',
     });
   }
 });

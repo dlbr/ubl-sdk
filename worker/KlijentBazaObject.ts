@@ -368,10 +368,20 @@ export class KlijentBaza extends DurableObject<Env> {
       const stats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM fakture GROUP BY status`).toArray();
       const pStats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM sef_purchase_invoices GROUP BY status`).toArray();
       
+      const configRez = this.sql.exec(`SELECT environment, webhook_url FROM konfiguracija WHERE id = 1`).toArray() as any[];
+      const environment = configRez[0]?.environment || 'sandbox';
+      const webhook_url = configRez[0]?.webhook_url || null;
+
       // Zdravstveni indikator: broj grešaka u zadnjih 24h
       const health = this.sql.exec(`SELECT COUNT(*) as broj FROM error_logs WHERE kreirano_u > datetime('now', '-1 day')`).one() as { broj: number };
       
-      return Response.json({ stats, purchase_stats: pStats, health: health.broj });
+      return Response.json({ 
+        stats, 
+        purchase_stats: pStats, 
+        health: health.broj,
+        environment,
+        webhook_url
+      });
     });
 
     this.app.get('/logs', async () => {

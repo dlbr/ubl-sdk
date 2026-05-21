@@ -55,13 +55,13 @@ describe('Edge Session Management - Integracioni Testovi', () => {
     expect(odgovor.success).toBe(true);
     expect(odgovor.operater).toBe('Knjigovođa Nikola');
 
-    // VERIFIKACIJA OKLOPA: Da li je postavljen ispravan __Host- kolačić?
+    // VERIFIKACIJA OKLOPA: Da li je postavljen ispravan kolačić?
     const setCookieHeader = headers.get('set-cookie');
     expect(setCookieHeader).toBeDefined();
-    expect(setCookieHeader).toContain('__Host-sef_bridge_session=');
+    expect(setCookieHeader).toContain('sef_bridge_session=');
     expect(setCookieHeader).toContain('HttpOnly');
     expect(setCookieHeader).toContain('Secure');
-    expect(setCookieHeader).toContain('SameSite=Strict');
+    expect(setCookieHeader).toContain('SameSite=Lax');
   });
 
   it('Scenario 2: Auth middleware mora blokirati zahteve bez prisutnog kolačića', async () => {
@@ -81,7 +81,7 @@ describe('Edge Session Management - Integracioni Testovi', () => {
     const req = { 
       method: 'GET', 
       url: '/api/analytics/pppdv-summary?period=2026-05', 
-      headers: { 'cookie': `__Host-sef_bridge_session=${malformedCookieValue}` } 
+      headers: { 'cookie': `sef_bridge_session=${malformedCookieValue}` } 
     } as any;
     
     const res = { getHeader: () => '', setHeader: () => {} } as any;

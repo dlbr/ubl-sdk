@@ -4,7 +4,8 @@ export interface SefStats {
   stats: Array<{ status: string, broj: number }>;
   purchase_stats: Array<{ status: string, broj: number }>;
   health: number;
-  webhook_url?: string;
+  environment: 'sandbox' | 'production';
+  webhook_url?: string | null;
 }
 
 export interface SefLog {

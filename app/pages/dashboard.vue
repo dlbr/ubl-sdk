@@ -73,7 +73,16 @@ const copyId = async () => {
       <!-- Header -->
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         <div>
-          <h1 class="text-3xl font-black text-gray-900 tracking-tight">Kontrolna Tabla</h1>
+          <div class="flex items-center gap-3">
+            <h1 class="text-3xl font-black text-gray-900 tracking-tight">Kontrolna Tabla</h1>
+            <span 
+              v-if="statsData" 
+              :class="statsData.environment === 'production' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-orange-100 text-orange-700 border-orange-200'"
+              class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase border tracking-widest mt-1"
+            >
+              {{ statsData.environment }}
+            </span>
+          </div>
           <p class="text-gray-500 mt-1 font-medium">Pregled operacija i sinhronizacije za vaš PIB.</p>
         </div>
         <button 
