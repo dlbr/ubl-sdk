@@ -76,6 +76,7 @@ export const SefInvoiceSchema = v.object({
 export const SefWebhookSchema = v.object({
   kompanija_pib: v.pipe(v.string(), v.regex(PibRegex, 'PIB mora imati tačno 9 cifara')),
   faktura_id: v.pipe(v.string(), v.minLength(1, 'Faktura ID je obavezan')),
+  broj_fakture: v.optional(v.string()),
   status: v.string(), // Ovdje možemo dodati picklist ako znamo sve statuse
   timestamp: v.optional(v.string()),
 });

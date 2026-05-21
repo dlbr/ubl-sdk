@@ -284,7 +284,25 @@ app.get('/api/onboarding/search', async ({ req, env }: RouterContext<Env>) => {
 // 2. GLOBALNI WEBHOOK PRIJEMNIK (DRŽAVNI PUSH)
 // ==========================================
 app.post('/api/webhooks/sef', validateJson(SefWebhookSchema, async (c: RouterContext<Env>) => {
-  const { kompanija_pib, faktura_id, status, timestamp } = c.validJson!;
+  const { kompanija_pib, faktura_id, status, broj_fakture } = c.validJson!;
+  
+  // KLJUČNI OKLOP: Da li je ovo naša sistemska faktura za naplatu licence?
+  if (broj_fakture && broj_fakture.startsWith('SEF-BRG-')) {
+    if (status?.toLowerCase() === 'paid' || status?.toLowerCase() === 'pladena') {
+      const klijentId = `klijent_${kompanija_pib}`;
+      const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);  
+      const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+
+      await klijentDO.fetch('http://durableobject/admin/auto-renew', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proknjizeno: true })
+      });
+
+      return Response.json({ uspeh: true, poruka: "Licenca automatski produžena na osnovu uplate uočene na SEF-u." });
+    }
+  }
+
   const klijentId = `klijent_${kompanija_pib}`;
 
   const klijent = await c.env.REGISTAR_DB.prepare(

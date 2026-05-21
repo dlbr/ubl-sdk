@@ -391,13 +391,56 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ success: isCorrect }, { status: isCorrect ? 200 : 401 });
     });
 
+    this.app.post('/admin/auto-renew', async () => {
+      const configRez = this.sql.exec(`SELECT licenca_istice_timestamp FROM konfiguracija WHERE id = 1`).toArray() as any[];
+      const trenutniIstek = parseInt(configRez[0]?.licenca_istice_timestamp || String(Date.now()));
+      const JEDNA_GODINA_MS = 365 * 24 * 60 * 60 * 1000;
+      const noviIstek = trenutniIstek + JEDNA_GODINA_MS;
+
+      const noviOdDatuma = new Date(noviIstek - JEDNA_GODINA_MS).toISOString().split('T')[0]!;
+
+      this.sql.exec(`
+        UPDATE konfiguracija SET 
+          status_pretplate = 'AKTIVAN',
+          avans_za_obnovu_poslat = 0,
+          licenca_od_datuma = ?,
+          licenca_istice_timestamp = ?
+        WHERE id = 1
+      `, noviOdDatuma, String(noviIstek));
+
+      await this.ctx.storage.setAlarm(Date.now() + (24 * 60 * 60 * 1000));
+      return Response.json({ success: true });
+    });
+
     this.app.get('/stats', async () => {
       const stats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM fakture GROUP BY status`).toArray();
       const pStats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM sef_purchase_invoices GROUP BY status`).toArray();
       
-      const configRez = this.sql.exec(`SELECT environment, webhook_url FROM konfiguracija WHERE id = 1`).toArray() as any[];
-      const environment = configRez[0]?.environment || 'sandbox';
-      const webhook_url = configRez[0]?.webhook_url || null;
+      const configRez = this.sql.exec(`SELECT * FROM konfiguracija WHERE id = 1`).toArray() as any[];
+      const config = configRez[0] || {};
+      
+      const environment = config.environment || 'sandbox';
+      const webhook_url = config.webhook_url || null;
+      const plan = config.plan_name || 'Micro';
+      const billing_period = config.billing_period || 'monthly';
+
+      // Kalkulacija potrošnje za brojač
+      let potroseno = 0;
+      let limit = parseInt(String(config.limit_faktura ?? '50'));
+
+      if (billing_period === 'annual') {
+        limit = parseInt(String(config.limit_faktura_godisnje || '600'));
+        const pocetak = config.licenca_od_datuma || '1970-01-01';
+        const rez = this.sql.exec(`SELECT COUNT(*) as broj FROM fakture WHERE kreirano_u >= ?`, pocetak).one() as { broj: number };
+        potroseno = rez.broj;
+      } else {
+        const rez = this.sql.exec(`
+          SELECT COUNT(*) as broj FROM fakture 
+          WHERE strftime('%m', kreirano_u) = strftime('%m', 'now')
+          AND strftime('%Y', kreirano_u) = strftime('%Y', 'now')
+        `).one() as { broj: number };
+        potroseno = rez.broj;
+      }
 
       // Zdravstveni indikator: broj grešaka u zadnjih 24h
       const health = this.sql.exec(`SELECT COUNT(*) as broj FROM error_logs WHERE kreirano_u > datetime('now', '-1 day')`).one() as { broj: number };
@@ -408,7 +451,17 @@ export class KlijentBaza extends DurableObject<Env> {
         health: health.broj,
         environment,
         webhook_url,
-        klijent_id: this.sql.exec(`SELECT klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0]?.klijent_id || 'unknown'
+        klijent_id: config.klijent_id || 'unknown',
+        plan_name: plan,
+        billing_period,
+        licenca_istice_timestamp: config.licenca_istice_timestamp,
+        status_pretplate: config.status_pretplate || 'AKTIVAN',
+        usage: {
+          potroseno,
+          limit,
+          procenat: limit > 0 ? Math.round((potroseno / limit) * 100) : 0,
+          prikazi_brojac: plan !== 'Enterprise'
+        }
       });
     });
 

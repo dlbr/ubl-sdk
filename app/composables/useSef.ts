@@ -12,6 +12,12 @@ export interface SefStats {
   licenca_od_datuma?: string | null;
   licenca_istice_timestamp?: string | null;
   status_pretplate: 'AKTIVAN' | 'U_OTKAZNOM_ROKU' | 'BLOKIRAN';
+  usage: {
+    potroseno: number;
+    limit: number;
+    procenat: number;
+    prikazi_brojac: boolean;
+  };
 }
 
 export interface SefLog {

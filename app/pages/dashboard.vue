@@ -85,6 +85,15 @@ const copyId = async () => {
     </nav>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Usage Tracker Oklop -->
+      <div class="mb-8">
+        <UsageWidget 
+          :usage="statsData?.usage" 
+          :plan-name="statsData?.plan_name"
+          :billing-period="statsData?.billing_period"
+        />
+      </div>
+
       <!-- Header -->
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         <div>
