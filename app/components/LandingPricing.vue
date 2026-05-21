@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const isYearly = ref(true)
+const isYearly = ref(false)
 
 const plans = [
   {
