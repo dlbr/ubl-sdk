@@ -7,6 +7,11 @@ export interface SefStats {
   environment: 'sandbox' | 'production';
   webhook_url?: string | null;
   klijent_id?: string;
+  plan_name: string;
+  billing_period: 'monthly' | 'annual';
+  licenca_od_datuma?: string | null;
+  licenca_istice_timestamp?: string | null;
+  status_pretplate: 'AKTIVAN' | 'U_OTKAZNOM_ROKU' | 'BLOKIRAN';
 }
 
 export interface SefLog {
@@ -21,6 +26,7 @@ export interface SefFaktura {
   internal_id: string;
   sef_id: string | null;
   status: string;
+  invoice_type_code: string;
   broj_fakture: string;
   iznos: number;
   error_message: string | null;
@@ -131,12 +137,18 @@ export const useSefApi = () => {
     })
   }
 
+  // AKCIJA: Otkazivanje obnove pretplate
+  const cancelSubscription = async () => {
+    return await fetchWithAuth('/api/dashboard/cancel-subscription', { method: 'POST' })
+  }
+
   return {
     activate,
     getStats,
     getLogs,
     getFakture,
     triggerSync,
-    updateWebhook
+    updateWebhook,
+    cancelSubscription
   }
 }

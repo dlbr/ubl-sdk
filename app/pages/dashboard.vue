@@ -8,6 +8,17 @@ const invoiceTableRef = ref()
 const { data: statsData, pending: statsPending, refresh: refreshStats } = await getStats()
 const { data: logsData, pending: logsPending, refresh: refreshLogs } = await getLogs()
 
+const syncLoading = ref(false)
+const webhookUrl = ref('')
+const showCopyStatus = ref(false)
+
+const licencaSkoroIstice = computed(() => {
+  if (!statsData.value?.licenca_istice_timestamp) return false
+  const preostaloMs = parseInt(statsData.value.licenca_istice_timestamp) - Date.now()
+  const petnaestDanaMs = 15 * 24 * 60 * 60 * 1000
+  return preostaloMs > 0 && preostaloMs <= petnaestDanaMs
+})
+
 // OKLOP: Inicijalizujemo klijentId iz dešifrovanih podataka sa servera
 watch(statsData, (newData) => {
   if (newData?.klijent_id) {
@@ -49,6 +60,12 @@ const copyId = async () => {
 
 <template>
   <div class="min-h-screen bg-gray-50/50 font-sans text-gray-900">
+    <!-- Banner za skoro isticanje licence -->
+    <div v-if="licencaSkoroIstice" class="bg-amber-600 text-white text-center py-2 px-4 text-xs font-bold sticky top-0 z-[60] shadow-md uppercase tracking-wider">
+      ⚠️ Pažnja: Vaša godišnja licenca za SEF Bridge ističe uskoro. 
+      Automatska obnova biće isporučena na Vaš SEF nalog 7 dana pre isteka.
+    </div>
+
     <!-- Navigacija -->
     <nav class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
@@ -193,12 +210,31 @@ const copyId = async () => {
             </button>
           </div>
           
-          <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl">
-            <h3 class="text-sm font-bold text-blue-800">Dokumentacija</h3>
-            <p class="text-xs text-blue-700 mt-1 leading-relaxed">
-              Sve fakture šaljite na <code>/api/fakture/batch</code> endpoint. 
-              <NuxtLink to="/docs" class="text-blue-900 font-bold underline ml-1">Kompletna API specifikacija &rarr;</NuxtLink>
-            </p>
+          <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl text-center">
+            <NuxtLink to="/docs" class="text-blue-900 font-bold underline text-sm">Kompletna API specifikacija &rarr;</NuxtLink>
+          </div>
+
+          <!-- Subscription Management -->
+          <div class="bg-white border border-gray-200 p-6 rounded-xl shadow-sm space-y-4">
+            <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest">Pretplata i Licenca</h3>
+            <div class="flex justify-between items-center">
+              <span class="text-sm font-medium text-gray-600">Plan:</span>
+              <span class="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-[10px] font-black uppercase">{{ statsData?.plan_name }}</span>
+            </div>
+            <div v-if="statsData?.licenca_istice_timestamp" class="flex justify-between items-center">
+              <span class="text-sm font-medium text-gray-600">Ističe:</span>
+              <span class="text-xs font-mono font-bold">{{ new Date(parseInt(statsData.licenca_istice_timestamp)).toLocaleDateString('sr-RS') }}</span>
+            </div>
+            <button 
+              v-if="statsData?.status_pretplate === 'AKTIVAN'"
+              @click="async () => { await useSefApi().cancelSubscription(); refreshStats(); }"
+              class="w-full py-2 border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-200 rounded-lg text-[10px] font-bold uppercase transition"
+            >
+              Otkaži obnovu
+            </button>
+            <div v-else-if="statsData?.status_pretplate === 'U_OTKAZNOM_ROKU'" class="text-[10px] text-orange-600 font-bold text-center bg-orange-50 p-2 rounded-lg">
+              Automatska obnova je isključena.
+            </div>
           </div>
         </div>
       </div>

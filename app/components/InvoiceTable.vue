@@ -61,7 +61,12 @@ defineExpose({ refresh })
               <td colspan="5" class="px-6 py-12 text-center text-gray-400 italic">Nema pronađenih faktura.</td>
             </tr>
             <tr v-for="f in data?.fakture" :key="f.internal_id" class="hover:bg-gray-50 transition group">
-              <td class="px-6 py-4 font-medium text-gray-900">{{ f.broj_fakture }}</td>
+              <td class="px-6 py-4 font-medium text-gray-900">
+                {{ f.broj_fakture }}
+                <span v-if="f.invoice_type_code === '386'" class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-700 border border-amber-200">
+                  AVANS
+                </span>
+              </td>
               <td class="px-6 py-4 text-right font-mono text-sm">{{ formatCurrency(f.iznos) }}</td>
               <td class="px-6 py-4 text-center">
                 <span :class="getStatusClass(f.status)" class="px-2 py-1 rounded-md text-[10px] font-bold uppercase border">

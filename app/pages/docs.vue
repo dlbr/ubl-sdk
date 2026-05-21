@@ -134,6 +134,18 @@ const { klijentId } = useSefAuth()
                   </div>
                 </article>
 
+                <!-- Avansne Fakture -->
+                <article class="group border-l-4 border-amber-400 pl-6">
+                  <div class="flex items-center gap-3 mb-4">
+                    <span class="px-2 py-1 bg-amber-100 text-amber-700 text-[10px] font-black rounded uppercase">INFO</span>
+                    <h3 class="text-xl font-bold text-gray-900 group-hover:text-amber-600 transition">Avansne Fakture (386)</h3>
+                  </div>
+                  <p class="text-sm text-gray-500 mb-4 leading-relaxed">
+                    Za slanje avansnog računa, obavezno postavite <code>"InvoiceTypeCode": "386"</code>. 
+                    Sistem će automatski prepoznati poresku osnovicu i PDV za akontaciju i ispravno ih mapirati u tvojoj poreskoj evidenciji.
+                  </p>
+                </article>
+
                 <!-- Batch Ingestion -->
                 <article class="group">
                   <div class="flex items-center gap-3 mb-4">

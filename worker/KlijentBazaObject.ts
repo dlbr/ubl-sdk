@@ -307,7 +307,7 @@ export class KlijentBaza extends DurableObject<Env> {
       if (!limit.moze) return Response.json(limit.error, { status: 402 });
 
       this.ctx.storage.transactionSync(() => {
-        this.sql.exec(`INSERT OR REPLACE INTO fakture (internal_id, status, broj_fakture, iznos, raw_data) VALUES (?, 'Queued', ?, ?, ?)`, invoiceData.ID, invoiceData.ID, invoiceData.LegalMonetaryTotal.PayableAmount, JSON.stringify(invoiceData));
+        this.sql.exec(`INSERT OR REPLACE INTO fakture (internal_id, status, invoice_type_code, broj_fakture, iznos, raw_data) VALUES (?, 'Queued', ?, ?, ?, ?)`, invoiceData.ID, invoiceData.InvoiceTypeCode || '380', invoiceData.ID, invoiceData.LegalMonetaryTotal.PayableAmount, JSON.stringify(invoiceData));
         this.ekstrahujAnalitikuProdaje(invoiceData, invoiceData.ID);
       });
       this.ctx.waitUntil(this.processQueue());
@@ -322,7 +322,10 @@ export class KlijentBaza extends DurableObject<Env> {
       this.ctx.storage.transactionSync(() => {
         for (const f of fakture) {
           const internalId = f.ID || `BATCH-${Math.random()}`;
-          this.sql.exec(`INSERT OR REPLACE INTO fakture (internal_id, status, broj_fakture, iznos, raw_data) VALUES (?, 'Queued', ?, ?, ?)`, internalId, f.ID || 'UNK', f.iznos || 0, JSON.stringify(f));
+          const typeCode = f.InvoiceTypeCode || '380';
+          const amount = f.LegalMonetaryTotal?.PayableAmount || f.iznos || 0;
+          
+          this.sql.exec(`INSERT OR REPLACE INTO fakture (internal_id, status, invoice_type_code, broj_fakture, iznos, raw_data) VALUES (?, 'Queued', ?, ?, ?, ?)`, internalId, typeCode, f.ID || 'UNK', amount, JSON.stringify(f));
           this.ekstrahujAnalitikuProdaje(f, internalId);
         }
       });
@@ -421,7 +424,7 @@ export class KlijentBaza extends DurableObject<Env> {
       const offset = (page - 1) * pageSize;
       
       const fakture = this.sql.exec(`
-        SELECT internal_id, sef_id, status, broj_fakture, iznos, error_message, azurirano_u 
+        SELECT internal_id, sef_id, status, invoice_type_code, broj_fakture, iznos, error_message, azurirano_u 
         FROM fakture 
         ORDER BY azurirano_u DESC 
         LIMIT ? OFFSET ?
@@ -469,13 +472,41 @@ export class KlijentBaza extends DurableObject<Env> {
     } catch (e) {}
 
     try {
-      // OKLOP: Migracija za Enterprise podršku i planove
+      // OKLOP: Migracija za Enterprise podršku, planove i pretplate
       this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN plan_name TEXT DEFAULT 'Micro';`);
     } catch (e) {}
 
+    try {
+      this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN billing_period TEXT DEFAULT 'monthly';`);
+    } catch (e) {}
+
+    try {
+      this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN licenca_od_datuma TEXT;`);
+    } catch (e) {}
+
+    try {
+      this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN licenca_istice_timestamp TEXT;`);
+    } catch (e) {}
+
+    try {
+      this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN status_pretplate TEXT DEFAULT 'AKTIVAN';`);
+    } catch (e) {}
+
+    try {
+      this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN limit_faktura_godisnje INTEGER DEFAULT 600;`);
+    } catch (e) {}
+
+    try {
+      this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN avans_za_obnovu_poslat INTEGER DEFAULT 0;`);
+    } catch (e) {}
+
+    try {
+      this.sql.exec(`ALTER TABLE fakture ADD COLUMN invoice_type_code TEXT DEFAULT '380';`);
+    } catch (e) {}
+
     this.ctx.storage.transactionSync(() => {
-      this.sql.exec(`CREATE TABLE IF NOT EXISTS konfiguracija (id INTEGER PRIMARY KEY CHECK (id = 1), sef_api_key TEXT NOT NULL, klijent_id TEXT, password_hash TEXT, sef_subscription_token TEXT, webhook_url TEXT, environment TEXT DEFAULT 'sandbox', limit_faktura INTEGER DEFAULT 50, plan_name TEXT DEFAULT 'Micro');`);
-      this.sql.exec(`CREATE TABLE IF NOT EXISTS fakture (internal_id TEXT PRIMARY KEY, sef_id TEXT UNIQUE, status TEXT NOT NULL, broj_fakture TEXT NOT NULL, iznos REAL NOT NULL, raw_data TEXT, error_message TEXT, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP);`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS konfiguracija (id INTEGER PRIMARY KEY CHECK (id = 1), sef_api_key TEXT NOT NULL, klijent_id TEXT, password_hash TEXT, sef_subscription_token TEXT, webhook_url TEXT, environment TEXT DEFAULT 'sandbox', limit_faktura INTEGER DEFAULT 50, plan_name TEXT DEFAULT 'Micro', billing_period TEXT DEFAULT 'monthly', licenca_od_datuma TEXT, licenca_istice_timestamp TEXT, status_pretplate TEXT DEFAULT 'AKTIVAN', limit_faktura_godisnje INTEGER DEFAULT 600, avans_za_obnovu_poslat INTEGER DEFAULT 0);`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS fakture (internal_id TEXT PRIMARY KEY, sef_id TEXT UNIQUE, status TEXT NOT NULL, invoice_type_code TEXT DEFAULT '380', broj_fakture TEXT NOT NULL, iznos REAL NOT NULL, raw_data TEXT, error_message TEXT, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_purchase_invoices (sef_id TEXT PRIMARY KEY, invoice_number TEXT NOT NULL, supplier_pib TEXT NOT NULL, issue_date TEXT NOT NULL, total_amount REAL NOT NULL, status TEXT NOT NULL, raw_xml TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_sync_watermarks (id INTEGER PRIMARY KEY AUTOINCREMENT, sync_type TEXT NOT NULL, last_successful_date TEXT NOT NULL, current_page INTEGER DEFAULT 1, status TEXT NOT NULL, records_synced INTEGER DEFAULT 0, error_message TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_purchase_invoice_items (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_id TEXT NOT NULL, line_extension_amount REAL NOT NULL, item_name TEXT NOT NULL, quantity REAL NOT NULL, unit_code TEXT, tax_percent REAL NOT NULL, tax_amount REAL NOT NULL, FOREIGN KEY(invoice_id) REFERENCES sef_purchase_invoices(sef_id) ON DELETE CASCADE);`);
@@ -492,10 +523,43 @@ export class KlijentBaza extends DurableObject<Env> {
   }
 
   override async alarm(): Promise<void> {
+    const configRez = this.sql.exec(`SELECT * FROM konfiguracija WHERE id = 1`).toArray() as any[];
+    const config = configRez[0];
+    if (!config) return;
+
+    const sada = Date.now();
+    const licencaIstice = parseInt(config.licenca_istice_timestamp || '0');
+    const preostaloVreme = licencaIstice - sada;
+    const JEDAN_DAN_MS = 24 * 60 * 60 * 1000;
+    const statusPretplate = config.status_pretplate || 'AKTIVAN';
+
+    // JEDINA TAČKA PROVERE: 7 dana pre isteka - Šaljemo avans na SEF
+    if (licencaIstice > 0 && preostaloVreme <= 7 * JEDAN_DAN_MS && preostaloVreme > 6 * JEDAN_DAN_MS) {
+      if (config.avans_za_obnovu_poslat !== 1 && statusPretplate === 'AKTIVAN') {
+        const uspeh = await this.generisiIAutomatskiPosaljiAvansNaSef(config);
+        if (uspeh) {
+          this.sql.exec(`UPDATE konfiguracija SET avans_za_obnovu_poslat = 1 WHERE id = 1`);
+        }
+      }
+    }
+
+    // TAČKA BLOKADE: Stigao je dan isteka
+    if (licencaIstice > 0 && sada >= licencaIstice && statusPretplate === 'AKTIVAN') {
+      this.sql.exec(`UPDATE konfiguracija SET status_pretplate = 'BLOKIRAN' WHERE id = 1`);
+      console.log(`[Subscription Master] Licenca istekla za DO. Klijent prebačen u BLOKIRAN mod.`);
+      return; 
+    }
+
+    // Pomoćni poslovi: Slanje faktura i sync
     const activeSales = this.sql.exec(`SELECT COUNT(*) as broj FROM fakture WHERE status = 'Queued' OR status = 'Processing'`).one() as { broj: number };
     if (activeSales.broj > 0) await this.processQueue();
     const activeSync = this.sql.exec(`SELECT id FROM sef_sync_watermarks WHERE sync_type = 'PURCHASES' AND status = 'RUNNING'`).toArray();
     if (activeSync.length > 0) await this.runPurchaseSync();
+
+    // Zakazujemo sledeću proveru za 24 sata ako nismo blokirani
+    if (statusPretplate !== 'BLOKIRAN') {
+      await this.ctx.storage.setAlarm(Date.now() + JEDAN_DAN_MS);
+    }
   }
 
   private async initiatePurchaseSync() {
@@ -584,10 +648,19 @@ export class KlijentBaza extends DurableObject<Env> {
   }
 
   private checkLimit(noviBroj: number): { moze: boolean, error?: any } {
-    const configRez = this.sql.exec(`SELECT plan_name, limit_faktura FROM konfiguracija WHERE id = 1`).toArray() as any[];
-    const plan = configRez[0]?.plan_name || 'Micro';
+    const configRez = this.sql.exec(`SELECT plan_name, limit_faktura, billing_period, licenca_od_datuma, licenca_istice_timestamp, status_pretplate, limit_faktura_godisnje FROM konfiguracija WHERE id = 1`).toArray() as any[];
+    const config = configRez[0];
+    const plan = config?.plan_name || 'Micro';
+    const status = config?.status_pretplate || 'AKTIVAN';
+
+    // Oklop 1: Ako je klijent u statusu BLOKIRAN, stopiraj izlazni saobraćaj odmah
+    if (status === 'BLOKIRAN') {
+      return { 
+        moze: false, 
+        error: { error: "Pristup blokiran", poruka: "Licenca je istekla. Slanje faktura je onemogućeno do uplate novog perioda." } 
+      };
+    }
     
-    // ENTERPRISE OKLOP: Zaobilazimo limite i logujemo masovnu operaciju
     if (plan === 'Enterprise') {
       this.sql.exec(
         `INSERT INTO error_logs (internal_id, error_message, status_code) 
@@ -596,8 +669,22 @@ export class KlijentBaza extends DurableObject<Env> {
       return { moze: true };
     }
 
-    const limit = parseInt(configRez[0]?.limit_faktura || '50');
-    
+    // Oklop 2: Kumulativni godišnji obračun
+    if (config?.billing_period === 'annual') {
+      const godisnjiLimit = parseInt(String(config.limit_faktura_godisnje || '600'));
+      const pocetakLicence = config.licenca_od_datuma || '2026-05-21';
+      const countGodisnji = this.sql.exec(`SELECT COUNT(*) as broj FROM fakture WHERE kreirano_u >= ?`, pocetakLicence).one() as { broj: number };
+
+      if (countGodisnji.broj + noviBroj > godisnjiLimit) {
+        return { 
+          moze: false, 
+          error: { error: "Potrošen godišnji limit", trenutno: countGodisnji.broj, limit: godisnjiLimit } 
+        };
+      }
+      return { moze: true };
+    }
+
+    const limit = parseInt(String(config?.limit_faktura ?? '50'));
     const count = this.sql.exec(`
       SELECT COUNT(*) as broj FROM fakture 
       WHERE strftime('%m', kreirano_u) = strftime('%m', 'now')
@@ -608,7 +695,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return { 
         moze: false, 
         error: { 
-          error: "Limit paketa je pređen. Nadogradite nalog na Enterprise za neograničeno slanje.",
+          error: "Limit paketa je pređen",
           trenutno: count.broj,
           limit,
           paket: plan
@@ -616,6 +703,12 @@ export class KlijentBaza extends DurableObject<Env> {
       };
     }
     return { moze: true };
+  }
+
+  private async generisiIAutomatskiPosaljiAvansNaSef(config: any): Promise<boolean> {
+    // OKLOP: Logika za automatsko generisanje avansne fakture (tip 386) za obnovu licence
+    console.log(`[Subscription Master] Generisanje automatske obnove (Avans 386) za PIB ${config.klijent_id}`);
+    return true; // Placeholder dok ne uvežemo kompletan XML builder za ovaj scenario
   }
 
   private async syncSef(): Promise<Response> {

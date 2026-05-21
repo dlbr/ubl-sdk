@@ -216,11 +216,11 @@ describe('KlijentBaza: SEF E2E Integration', () => {
   }, 30000);
 
   it('3. Limit Enforcement - Blocking when monthly quota reached', async () => {
-    // Set low limit
+    // Set zero limit
     await klijentDO.fetch(new Request('http://do/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ limit: 0 }) // 0 limit means no more invoices
+      body: JSON.stringify({ limit: 0, plan: 'Micro' }) // 0 limit means no more invoices
     }));
 
     const invoiceData: any = {
