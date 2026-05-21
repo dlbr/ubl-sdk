@@ -11,7 +11,7 @@ const { klijentId } = useSefAuth()
           <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-200">
             <span class="text-white font-black text-lg">S</span>
           </div>
-          <span class="font-bold text-lg tracking-tight text-gray-900">SEF Bridge Docs</span>
+          <span class="font-bold text-lg tracking-tight text-gray-900">SEF Bridge API</span>
         </NuxtLink>
         <NuxtLink v-if="klijentId" to="/dashboard" class="text-sm font-bold text-blue-600 hover:underline">
           Nazad na Dashboard
@@ -27,182 +27,156 @@ const { klijentId } = useSefAuth()
         <div class="p-8 md:p-12">
           <header class="mb-16">
             <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black uppercase tracking-widest border border-blue-100 mb-4">
-              Tehnička Specifikacija v2.0
+              Dokumentacija v2.0
             </div>
             <h1 class="text-4xl font-black text-gray-900 mb-6 tracking-tight leading-tight">
-              SEF Bridge v2 — Tehnička Specifikacija & API Dokumentacija
+              ERP B2B Integracioni Modul — "XML-as-a-Service"
             </h1>
             <p class="text-lg text-gray-600 leading-relaxed max-w-3xl">
-              Sistem je projektovan kao izolovani, multi-tenant Edge Ledger koji se izvršava na samoj ivici Cloudflare mreže (Edge), 
-              obezbeđujući asinhronu komunikaciju sa Sistemom E-Faktura (SEF) i dvoetapnu validaciju za e-Porezi (POPDV/PPPDV).
+              Prestanite da gubite vreme na ručno sklapanje komplikovanih UBL 2.1 struktura i praćenje stalnih promena državnih validacija. 
+              <strong>SEF Bridge v2</strong> prima čist JSON, a za Vas generiše, potpisuje i isporučuje forenzički precizan XML na SEF.
             </p>
           </header>
 
           <div class="space-y-20">
-            <!-- 1. Arhitektonski Pregled -->
-            <section id="arhitektura">
-              <h2 class="text-2xl font-black text-gray-900 mb-6 flex items-center gap-3">
+            <!-- 1. JSON-to-UBL Engine -->
+            <section id="integration-pitch">
+              <h2 class="text-2xl font-black text-gray-900 mb-6 flex items-center gap-3 text-blue-600">
                 <span class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-sm">1</span>
-                Arhitektonski Pregled (Edge Topology)
+                JSON ➔ UBL 2.1 Mašina
               </h2>
               <p class="text-gray-600 mb-6 leading-relaxed">
-                SEF Bridge v2 ne koristi deljenu, centralnu bazu podataka. Svaki klijent (Tenant) prilikom onboarding-a dobija sopstveni, hardverski i memorijski izolovani <strong>Cloudflare Durable Object</strong> koji u sebi nosi nativnu, izolovanu SQLite bazu podataka.
+                Vaš ERP šalje podatke u formatu koji razumete (JSON), a naš sistem na ivici mreže ih trenutno mapira u zakonski validan UBL 2.1 format. Mi brinemo o imenskim prostorima (namespaces), <code>SrbDtExt</code> ekstenzijama i preciznim poreskim blokovima.
               </p>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                  <div class="text-blue-600 font-bold mb-2">Edge Latency</div>
-                  <p class="text-xs text-gray-500 leading-relaxed">Lokalne kriptografske sesije i ruting se izvršavaju za <strong>&lt;1ms</strong> usled blizine klijentu.</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-gray-900 rounded-3xl p-8 overflow-hidden shadow-2xl">
+                <div>
+                  <div class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">Vaš ERP šalje: JSON</div>
+                  <pre class="text-[11px] text-blue-100 leading-relaxed overflow-x-auto">
+{
+  "ID": "F-2026-001",
+  "InvoiceTypeCode": "380",
+  "Lines": [{
+    "ItemName": "Softverska Licenca",
+    "Quantity": 1,
+    "Price": 1500,
+    "VatPercent": 20
+  }]
+}</pre>
                 </div>
-                <div class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                  <div class="text-blue-600 font-bold mb-2">Poreska Agregacija</div>
-                  <p class="text-xs text-gray-500 leading-relaxed">Sumiranje 10.000 faktura traje <strong>&lt;47ms</strong> zahvaljujući in-memory SQLite JSON1 arhitekturi.</p>
-                </div>
-                <div class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                  <div class="text-blue-600 font-bold mb-2">Mrežna Otpornost</div>
-                  <p class="text-xs text-gray-500 leading-relaxed">Transient-Retry mehanizam automatski rešava 503 i 429 greške SEF-a bez prekida tvog ERP-a.</p>
+                <div class="relative">
+                  <div class="absolute -left-4 top-1/2 -translate-y-1/2 text-blue-500 font-black hidden md:block">➔</div>
+                  <div class="text-[10px] font-black text-green-400 uppercase tracking-widest mb-4">Sistem generiše: UBL 2.1 XML</div>
+                  <pre class="text-[10px] text-green-100 leading-tight opacity-60 overflow-x-auto">
+&lt;Invoice xmlns="..."&gt;
+  &lt;cbc:ID&gt;F-2026-001&lt;/cbc:ID&gt;
+  &lt;cbc:InvoiceTypeCode&gt;380&lt;/cbc:InvoiceTypeCode&gt;
+  &lt;cac:TaxTotal&gt;
+    &lt;cbc:TaxAmount currencyID="RSD"&gt;300.00&lt;/cbc:TaxAmount&gt;
+    &lt;!-- Forenzički tačni poreski blokovi --&gt;
+  &lt;/cac:TaxTotal&gt;
+&lt;/Invoice&gt;</pre>
                 </div>
               </div>
             </section>
 
-            <!-- 2. Autentifikacija -->
-            <section id="auth">
-              <h2 class="text-2xl font-black text-gray-900 mb-6 flex items-center gap-3">
+            <!-- 2. Rešeni "Pakleni" Scenariji -->
+            <section id="scenarios">
+              <h2 class="text-2xl font-black text-gray-900 mb-8 flex items-center gap-3 text-blue-600">
                 <span class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-sm">2</span>
-                Autentifikacija & Bezbednosni Oklop
+                Rešeni "Pakleni" Scenariji
               </h2>
-              
-              <div class="space-y-8">
-                <div>
-                  <h3 class="text-lg font-bold text-gray-900 mb-3">A. Klijentski Interfejs (Browser / Dashboard)</h3>
-                  <p class="text-gray-600 mb-4 text-sm leading-relaxed">
-                    Pristup kontrolnoj tabli je zaštićen <code>__Host-sef_bridge_session</code> HttpOnly kolačićem. 
-                    Ovaj "Titanium" oklop koristi <strong>AES-256-GCM</strong> enkripciju i <strong>SameSite=Strict</strong> politiku, 
-                    čime se u potpunosti eliminišu XSS i CSRF vektori napada.
-                  </p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="border border-gray-200 p-6 rounded-2xl hover:border-blue-300 transition group bg-white shadow-sm">
+                  <div class="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-amber-100 transition text-xl">💰</div>
+                  <h3 class="font-bold text-gray-900 mb-2">Avansi i Konačni Računi</h3>
+                  <p class="text-xs text-gray-500 leading-relaxed font-medium">Automatsko sravnjivanje <code>PrepaidAmount</code> i <code>BillingReference</code> tagova. Vi samo kažete "ovo zatvara onaj avans", Bridge radi kompletnu matematiku.</p>
                 </div>
+                <div class="border border-gray-200 p-6 rounded-2xl hover:border-blue-300 transition group bg-white shadow-sm">
+                  <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-100 transition text-xl">🏛️</div>
+                  <h3 class="font-bold text-gray-900 mb-2">Javne Nabavke (CRF/JBKJS)</h3>
+                  <p class="text-xs text-gray-500 leading-relaxed font-medium">Potpuna integracija sa Centralnim Registrom Faktura. Ispravno ubrizgavanje <code>BuyerReference</code> i JBKJS brojeva budžetskih korisnika bez ijedne greške.</p>
+                </div>
+                <div class="border border-gray-200 p-6 rounded-2xl hover:border-blue-300 transition group bg-white shadow-sm">
+                  <div class="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-100 transition text-xl">🛡️</div>
+                  <h3 class="font-bold text-gray-900 mb-2">Poreska Oslobođenja</h3>
+                  <p class="text-xs text-gray-500 leading-relaxed font-medium">Ugrađena mapa svih važećih <code>ReasonCode</code> šifara (član 24, član 10, izvoz). SEF nikada neće odbiti Vaš dokument zbog loše šifre oslobođenja.</p>
+                </div>
+                <div class="border border-gray-200 p-6 rounded-2xl hover:border-blue-300 transition group bg-white shadow-sm">
+                  <div class="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-red-100 transition text-xl">📦</div>
+                  <h3 class="font-bold text-gray-900 mb-2">Prilozi (Attachments)</h3>
+                  <p class="text-xs text-gray-500 leading-relaxed font-medium">Šaljite binarne PDF-ove u JSON-u, mi ih Base64 enkodiramo i smeštamo u <code>AdditionalDocumentReference</code> blok do zakonskih 25MB.</p>
+                </div>
+              </div>
+            </section>
 
-                <div>
-                  <h3 class="text-lg font-bold text-gray-900 mb-3">B. ERP / Programski Pristup (API Integracija)</h3>
-                  <p class="text-gray-600 mb-4 text-sm leading-relaxed">
-                    Spoljni sistemi vrše autentifikaciju prosleđivanjem unikatnog tokena u svakom zahtevu:
-                  </p>
-                  <div class="bg-gray-900 rounded-2xl p-6 font-mono text-sm shadow-inner">
-                    <div class="text-gray-500 mb-1"># HTTP Header</div>
-                    <div class="text-blue-400">X-Klijent-ID: <span class="text-white">klijent_100000010</span></div>
+            <!-- 3. Brzina i Autentifikacija -->
+            <section id="auth-speed">
+              <h2 class="text-2xl font-black text-gray-900 mb-8 flex items-center gap-3 text-blue-600">
+                <span class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-sm">3</span>
+                Brzina i Autentifikacija
+              </h2>
+              <div class="bg-blue-50 border border-blue-100 rounded-3xl p-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+                  <div>
+                    <h3 class="font-black text-blue-900 uppercase text-sm tracking-widest mb-4">Edge Latency</h3>
+                    <p class="text-sm text-blue-800 leading-relaxed">
+                      Sistem se izvršava na samoj ivici Cloudflare mreže. Vreme odziva za validaciju i generisanje XML-a je obično <strong>manje od 50ms</strong>, što je neuporedivo brže od bilo kog centralizovanog rešenja.
+                    </p>
+                  </div>
+                  <div>
+                    <h3 class="font-black text-blue-900 uppercase text-sm tracking-widest mb-4">Programski Pristup</h3>
+                    <p class="text-sm text-blue-800 leading-relaxed">
+                      Svaki zahtev autorizujte putem unikatnog ID-ja Vašeg tenanta koji dobijate na dashboard-u:
+                    </p>
+                    <code class="block mt-4 p-3 bg-white rounded-xl border border-blue-200 text-blue-600 font-mono text-xs">
+                      X-Klijent-ID: klijent_123456789
+                    </code>
                   </div>
                 </div>
               </div>
             </section>
 
-            <!-- 3. API Reference -->
-            <section id="api">
-              <h2 class="text-2xl font-black text-gray-900 mb-8 flex items-center gap-3">
-                <span class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-sm">3</span>
-                API Reference (Proizvodni Endpointi)
+            <!-- 4. API Reference -->
+            <section id="api-reference">
+              <h2 class="text-2xl font-black text-gray-900 mb-8 flex items-center gap-3 text-blue-600">
+                <span class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-sm">4</span>
+                API Referenca
               </h2>
 
               <div class="space-y-12">
-                <!-- Onboarding -->
                 <article class="group">
                   <div class="flex items-center gap-3 mb-4">
                     <span class="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-black rounded uppercase">POST</span>
-                    <h3 class="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition">/api/register</h3>
+                    <h3 class="text-xl font-bold text-gray-900">/api/fakture/send</h3>
                   </div>
-                  <p class="text-sm text-gray-500 mb-4">Inicijalizuje izolovani SQLite Ledger za novu firmu i postavlja inicijalne limite.</p>
+                  <p class="text-sm text-gray-500 mb-6 font-medium">Prima JSON podatke fakture, validira ih, prevodi u UBL 2.1 i asinhrono isporučuje na SEF.</p>
                   <div class="bg-gray-900 rounded-2xl p-6 font-mono text-xs overflow-x-auto text-gray-300">
 <pre>{
-  "pib": "100000010",
-  "naziv": "Kompanija d.o.o.",
-  "sef_api_key": "sk_live_drzavni_api_kljuc"
-}</pre>
-                  </div>
-                </article>
-
-                <!-- Login -->
-                <article class="group">
-                  <div class="flex items-center gap-3 mb-4">
-                    <span class="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-black rounded uppercase">POST</span>
-                    <h3 class="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition">/api/auth/login</h3>
-                  </div>
-                  <p class="text-sm text-gray-500 mb-4 italic">Self-Healing Key Rotation: Ako je ključ promenjen na SEF-u, sistem ga automatski proverava i ažurira Ledger u hodu.</p>
-                  <div class="bg-gray-900 rounded-2xl p-6 font-mono text-xs overflow-x-auto text-gray-300">
-<pre>{
-  "pib": "100000010",
-  "api_key": "sk_live_vazeci_kljuc",
-  "operater": "Knjigovođa Nikola"
-}</pre>
-                  </div>
-                </article>
-
-                <!-- Avansne Fakture -->
-                <article class="group border-l-4 border-amber-400 pl-6">
-                  <div class="flex items-center gap-3 mb-4">
-                    <span class="px-2 py-1 bg-amber-100 text-amber-700 text-[10px] font-black rounded uppercase">INFO</span>
-                    <h3 class="text-xl font-bold text-gray-900 group-hover:text-amber-600 transition">Avansne Fakture (386)</h3>
-                  </div>
-                  <p class="text-sm text-gray-500 mb-4 leading-relaxed">
-                    Za slanje avansnog računa, obavezno postavite <code>"InvoiceTypeCode": "386"</code>. 
-                    Sistem će automatski prepoznati poresku osnovicu i PDV za akontaciju i ispravno ih mapirati u tvojoj poreskoj evidenciji.
-                  </p>
-                </article>
-
-                <!-- Batch Ingestion -->
-                <article class="group">
-                  <div class="flex items-center gap-3 mb-4">
-                    <span class="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-black rounded uppercase">POST</span>
-                    <h3 class="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition">/api/fakture/batch</h3>
-                  </div>
-                  <p class="text-sm text-gray-500 mb-4">Asinhroni uvoz velikog broja dokumenata. Odmah vraća 202, a procesiranje se nastavlja u pozadini.</p>
-                  <div class="bg-gray-900 rounded-2xl p-6 font-mono text-xs overflow-x-auto text-gray-300">
-<pre>{
-  "fakture": [
-    { "ID": "INV-001", "broj_fakture": "2026/01", "iznos": 12000.00, ... },
-    { "ID": "INV-002", "broj_fakture": "2026/02", "iznos": 5400.00, ... }
-  ]
-}</pre>
-                  </div>
-                </article>
-
-                <!-- POPDV Summary -->
-                <article class="group">
-                  <div class="flex items-center gap-3 mb-4">
-                    <span class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-black rounded uppercase">GET</span>
-                    <h3 class="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition">/api/analytics/pppdv-summary</h3>
-                  </div>
-                  <p class="text-sm text-gray-500 mb-4">Generiše poreske pozicije za zadati period (format: YYYY-MM).</p>
-                  <div class="bg-gray-900 rounded-2xl p-6 font-mono text-xs overflow-x-auto text-green-400">
-<pre>{
-  "success": true,
-  "data": {
-    "period": "2026-05",
-    "pozicija001_osnovica20": 500000.00,
-    "pozicija101_pdv20": 100000.00,
-    "porezZaUplatuIliPovracaj": 55000.00
+  "ID": "INV-2026-101",
+  "InvoiceTypeCode": "380",
+  "IssueDate": "2026-05-21",
+  "Lines": [
+    {
+      "ItemName": "Artikal 1",
+      "Quantity": 1,
+      "Price": 1000.00,
+      "VatPercent": 20
+    }
+  ],
+  "LegalMonetaryTotal": {
+    "PayableAmount": 1200.00
   }
 }</pre>
                   </div>
                 </article>
-              </div>
-            </section>
 
-            <!-- 4. Državni Webhook-ovi -->
-            <section id="webhooks">
-              <h2 class="text-2xl font-black text-gray-900 mb-6 flex items-center gap-3">
-                <span class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-sm">4</span>
-                Državni Webhook-ovi (Push Pipeline)
-              </h2>
-              <p class="text-gray-600 mb-6 leading-relaxed text-sm">
-                Za praćenje izmena statusa u realnom vremenu, podesite sledeće URL-ove na svom klijentskom nalogu na zvaničnom SEF portalu:
-              </p>
-              <div class="space-y-4">
-                <div class="bg-orange-50 border border-orange-100 p-6 rounded-2xl">
-                  <div class="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1">URL za izlazne fakture (Sales)</div>
-                  <code class="text-sm break-all font-bold text-orange-900">https://sef.dlbr.cloud/api/webhooks/sef?smer=SALES</code>
-                </div>
-                <div class="bg-orange-50 border border-orange-100 p-6 rounded-2xl">
-                  <div class="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1">URL za ulazne fakture (Purchases)</div>
-                  <code class="text-sm break-all font-bold text-orange-900">https://sef.dlbr.cloud/api/webhooks/sef?smer=PURCHASES</code>
-                </div>
+                <article class="group">
+                  <div class="flex items-center gap-3 mb-4">
+                    <span class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-black rounded uppercase">POST</span>
+                    <h3 class="text-xl font-bold text-gray-900">/api/fakture/batch</h3>
+                  </div>
+                  <p class="text-sm text-gray-500 mb-4 font-medium">Masovni uvoz dokumenata. Preporučeno za noćne sinhronizacije i velike ERP sisteme.</p>
+                </article>
               </div>
             </section>
           </div>
@@ -212,8 +186,8 @@ const { klijentId } = useSefAuth()
               <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
               <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Sistem je Operativan na Cloudflare Edge</span>
             </div>
-            <p class="text-gray-400 text-xs font-medium">
-              SEF Bridge v2.0 &bull; Razvijeno za inženjere &bull; Sva prava zadržana 2026.
+            <p class="text-gray-400 text-xs font-medium uppercase tracking-tighter">
+              SEF Bridge v2.0 &bull; Razvijeno za ERP inženjere &bull; Sva prava zadržana 2026.
             </p>
           </footer>
         </div>

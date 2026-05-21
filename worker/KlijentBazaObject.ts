@@ -9,6 +9,7 @@ import { SefUblParser } from "./ublParser";
 import { type PopdvSubmitData, PopdvCorrectionSchema } from '../shared/types/popdv';
 import { Router, type RouterContext } from './router';
 import { AuthEngine } from '../shared/services/auth';
+import { SefPppdvExporter } from '../shared/services/pppdvExporter';
 
 export interface PppdvSummary {
   period: string;
@@ -412,6 +413,24 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ success: true });
     });
 
+    this.app.get('/api/analytics/pppdv-export', async ({ req }: RouterContext<Env>) => {
+      const url = new URL(req.url);
+      const period = url.searchParams.get('period') || new Date().toISOString().substring(0, 7);
+      
+      const configRez = this.sql.exec(`SELECT klijent_id FROM konfiguracija WHERE id = 1`).toArray() as any[];
+      const pib = configRez[0]?.klijent_id?.replace('klijent_', '') || '100000000';
+      
+      const summary = this.getPppdvSummary(period);
+      const txt = SefPppdvExporter.generateTxt(pib, summary);
+      
+      return new Response(txt, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': `attachment; filename="pppdv_${period}.txt"`
+        }
+      });
+    });
+
     this.app.get('/stats', async () => {
       const stats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM fakture GROUP BY status`).toArray();
       const pStats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM sef_purchase_invoices GROUP BY status`).toArray();
@@ -810,9 +829,41 @@ export class KlijentBaza extends DurableObject<Env> {
   }
 
   public getPppdvSummary(period: string): PppdvSummary {
-    const s = this.sql.exec(`SELECT SUM(CASE WHEN t.tax_percentage = 20.0 THEN t.taxable_amount ELSE 0 END) as b20, SUM(CASE WHEN t.tax_percentage = 20.0 THEN t.tax_amount ELSE 0 END) as p20 FROM sef_sales_invoice_taxes t JOIN fakture f ON t.invoice_id = f.internal_id WHERE f.status IN ('Sent', 'Approved') AND f.azurirano_u LIKE ?`, `${period}%`).toArray()[0] as any;
-    const p = this.sql.exec(`SELECT SUM(t.tax_amount - t.non_deductible_amount) as cist FROM sef_purchase_invoice_taxes t JOIN sef_purchase_invoices p ON t.invoice_id = p.sef_id WHERE p.status = 'Approved' AND p.issue_date LIKE ?`, `${period}%`).toArray()[0] as any;
-    return { period, pozicija001_osnovica20: s.b20 || 0, pozicija101_pdv20: s.p20 || 0, pozicija002_osnovica10: 0, pozicija102_pdv10: 0, pozicija003_oslobodjenSaPravom: 0, pozicija008_prethodniPorezOdbitni: p.cist || 0, porezZaUplatuIliPovracaj: (s.p20 || 0) - (p.cist || 0) };
+    const s = this.sql.exec(`
+      SELECT 
+        SUM(CASE WHEN t.tax_percentage = 20.0 AND t.tax_category_code = 'S' THEN t.taxable_amount ELSE 0 END) as b20,
+        SUM(CASE WHEN t.tax_percentage = 20.0 AND t.tax_category_code = 'S' THEN t.tax_amount ELSE 0 END) as p20,
+        SUM(CASE WHEN t.tax_percentage = 10.0 AND t.tax_category_code = 'S' THEN t.taxable_amount ELSE 0 END) as b10,
+        SUM(CASE WHEN t.tax_percentage = 10.0 AND t.tax_category_code = 'S' THEN t.tax_amount ELSE 0 END) as p10,
+        SUM(CASE WHEN t.tax_category_code IN ('E', 'Z', 'AE') THEN t.taxable_amount ELSE 0 END) as oslobodjen
+      FROM sef_sales_invoice_taxes t 
+      JOIN fakture f ON t.invoice_id = f.internal_id 
+      WHERE f.status IN ('Sent', 'Approved') AND f.azurirano_u LIKE ?
+    `, `${period}%`).toArray()[0] as any;
+
+    const p = this.sql.exec(`
+      SELECT 
+        SUM(t.tax_amount - t.non_deductible_amount) as cist 
+      FROM sef_purchase_invoice_taxes t 
+      JOIN sef_purchase_invoices p ON t.invoice_id = p.sef_id 
+      WHERE p.status = 'Approved' AND p.issue_date LIKE ?
+    `, `${period}%`).toArray()[0] as any;
+
+    // OKLOP: Matematika zaokruživanja u celim dinarima za e-Poreze
+    const p101 = Math.round(s.p20 || 0);
+    const p102 = Math.round(s.p10 || 0);
+    const p108 = Math.round(p.cist || 0);
+
+    return { 
+      period, 
+      pozicija001_osnovica20: Math.round(s.b20 || 0), 
+      pozicija101_pdv20: p101, 
+      pozicija002_osnovica10: Math.round(s.b10 || 0), 
+      pozicija102_pdv10: p102, 
+      pozicija003_oslobodjenSaPravom: Math.round(s.oslobodjen || 0), 
+      pozicija008_prethodniPorezOdbitni: p108, 
+      porezZaUplatuIliPovracaj: (p101 + p102) - p108 
+    };
   }
 
   public generatePopdvData(period: string, tenantPib: string): PopdvSubmitData {

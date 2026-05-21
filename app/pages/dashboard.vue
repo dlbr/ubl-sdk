@@ -11,6 +11,7 @@ const { data: logsData, pending: logsPending, refresh: refreshLogs } = await get
 const syncLoading = ref(false)
 const webhookUrl = ref('')
 const showCopyStatus = ref(false)
+const currentPeriod = ref(new Date().toISOString().substring(0, 7))
 
 const licencaSkoroIstice = computed(() => {
   if (!statsData.value?.licenca_istice_timestamp) return false
@@ -233,6 +234,20 @@ const copyId = async () => {
             </button>
           </div>
           
+          <!-- e-Porezi Export -->
+          <div class="bg-white border border-gray-200 p-6 rounded-xl shadow-sm space-y-4">
+            <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest">e-Porezi (PPPDV)</h3>
+            <p class="text-[10px] text-gray-500 leading-relaxed">
+              Preuzmite zvanični <strong>.txt</strong> fajl za automatski uvoz poreske prijave na portal <strong>demoppppdv.mfin.gov.rs</strong>.
+            </p>
+            <button 
+              @click="() => useSefApi().downloadPppdvTxt(currentPeriod)"
+              class="w-full py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-green-100 flex items-center justify-center gap-2"
+            >
+              <span>📥</span> Preuzmi za e-Porezi
+            </button>
+          </div>
+
           <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl text-center">
             <NuxtLink to="/docs" class="text-blue-900 font-bold underline text-sm">Kompletna API specifikacija &rarr;</NuxtLink>
           </div>

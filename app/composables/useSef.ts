@@ -148,6 +148,20 @@ export const useSefApi = () => {
     return await fetchWithAuth('/api/dashboard/cancel-subscription', { method: 'POST' })
   }
 
+  // AKCIJA: Preuzimanje PPPDV TXT fajla za e-Poreze
+  const downloadPppdvTxt = async (period: string) => {
+    const res = await $fetch(`/api/analytics/pppdv-export?period=${period}`, {
+      responseType: 'blob'
+    })
+    const url = window.URL.createObjectURL(new Blob([res as any]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `pppdv_${period}.txt`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  }
+
   return {
     activate,
     getStats,
@@ -155,6 +169,7 @@ export const useSefApi = () => {
     getFakture,
     triggerSync,
     updateWebhook,
-    cancelSubscription
+    cancelSubscription,
+    downloadPppdvTxt
   }
 }
