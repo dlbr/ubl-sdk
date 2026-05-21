@@ -22,14 +22,23 @@ export class SefPppdvExporter {
     lines.push(`H|1.0|PPPDV|${pib}|${dateOd}|${dateDo}`);
 
     // D|Polje|Vrednost
-    if (summary.pozicija001_osnovica20 > 0) lines.push(`D|001|${summary.pozicija001_osnovica20}`);
-    if (summary.pozicija101_pdv20 > 0) lines.push(`D|101|${summary.pozicija101_pdv20}`);
-    if (summary.pozicija002_osnovica10 > 0) lines.push(`D|002|${summary.pozicija002_osnovica10}`);
-    if (summary.pozicija102_pdv10 > 0) lines.push(`D|102|${summary.pozicija102_pdv10}`);
+    if (summary.pozicija001_osnovicaOpsta > 0) lines.push(`D|001|${summary.pozicija001_osnovicaOpsta}`);
+    if (summary.pozicija101_pdvOpsta > 0) lines.push(`D|101|${summary.pozicija101_pdvOpsta}`);
+    if (summary.pozicija002_osnovicaPosebna > 0) lines.push(`D|002|${summary.pozicija002_osnovicaPosebna}`);
+    if (summary.pozicija102_pdvPosebna > 0) lines.push(`D|102|${summary.pozicija102_pdvPosebna}`);
     if (summary.pozicija003_oslobodjenSaPravom > 0) lines.push(`D|003|${summary.pozicija003_oslobodjenSaPravom}`);
+    if (summary.pozicija004_oslobodjenBezPrava > 0) lines.push(`D|004|${summary.pozicija004_oslobodjenBezPrava}`);
     
-    // Polje 110 je zbir obračunatog PDV-a (101 + 102)
-    const ukupnoObracunato = summary.pozicija101_pdv20 + summary.pozicija102_pdv10;
+    // Uvoz
+    if (summary.pozicija005_uvozOsnovica > 0) lines.push(`D|005|${summary.pozicija005_uvozOsnovica}`);
+    if (summary.pozicija105_uvozPdv > 0) lines.push(`D|105|${summary.pozicija105_uvozPdv}`);
+
+    // Interni obračun (Reverse Charge)
+    if (summary.pozicija006_interniObracunOsnovica > 0) lines.push(`D|006|${summary.pozicija006_interniObracunOsnovica}`);
+    if (summary.pozicija106_interniObracunPdv > 0) lines.push(`D|106|${summary.pozicija106_interniObracunPdv}`);
+
+    // Polje 110 je zbir obračunatog PDV-a (101 + 102 + 103 + 104 + 105 + 106 + 107 + 109)
+    const ukupnoObracunato = summary.pozicija101_pdvOpsta + summary.pozicija102_pdvPosebna + summary.pozicija105_uvozPdv + summary.pozicija106_interniObracunPdv;
     if (ukupnoObracunato > 0) lines.push(`D|110|${ukupnoObracunato}`);
 
     // Polje 008 / 108 (Prethodni porez)

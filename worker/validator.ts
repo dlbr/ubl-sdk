@@ -20,39 +20,40 @@ export function validateJson<Env, TSchema extends v.BaseSchema<any, any, any>>(
       }), { status: 415, headers: { 'content-type': 'application/json' } });
     }
 
+    let rawJson: any;
     try {
       // Kloniramo zahtev da ne bismo potrošili body stream trajno pre DO-a ako zatreba
-      const rawJson = await ctx.req.clone().json();
-      
-      // 2. Izvršavanje Valibot validacije
-      const result = v.safeParse(schema, rawJson);
-
-      if (!result.success) {
-        // 3. Ekstrakcija i normalizacija grešaka sa bezbednim fallback-om
-        const formatiraneGreske = result.issues.map(issue => ({
-          polje: issue.path ? issue.path.map((p: any) => p.key).join('.') : 'root',
-          poruka: issue.message
-        }));
-
-        return new Response(JSON.stringify({
-          success: false,
-          error: "Validacija podataka nije uspela pre slanja na SEF.",
-          details: formatiraneGreske
-        }), { status: 422, headers: { 'content-type': 'application/json' } });
-      }
-
-      // 4. ISPRAVLJENO: Mutiramo postojeći ctx umesto destukturiranja ({ ...ctx })
-      // Na ovaj način čuvamo sve getter-e, setter-e i `this` kontekst unutar Router metoda.
-      const validatedCtx = ctx as ValidatedContext<Env, TSchema>;
-      validatedCtx.validJson = result.output;
-
-      return await handler(validatedCtx);
+      rawJson = await ctx.req.clone().json();
     } catch (e) {
       return new Response(JSON.stringify({
         success: false,
         error: "Malformisan JSON payload. Parsiranje nije uspelo."
       }), { status: 400, headers: { 'content-type': 'application/json' } });
     }
+      
+    // 2. Izvršavanje Valibot validacije
+    const result = v.safeParse(schema, rawJson);
+
+    if (!result.success) {
+      // 3. Ekstrakcija i normalizacija grešaka sa bezbednim fallback-om
+      const formatiraneGreske = result.issues.map(issue => ({
+        polje: issue.path ? issue.path.map((p: any) => p.key).join('.') : 'root',
+        poruka: issue.message
+      }));
+
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Validacija podataka nije uspela pre slanja na SEF.",
+        details: formatiraneGreske
+      }), { status: 422, headers: { 'content-type': 'application/json' } });
+    }
+
+    // 4. ISPRAVLJENO: Mutiramo postojeći ctx umesto destukturiranja ({ ...ctx })
+    // Na ovaj način čuvamo sve getter-e, setter-e i `this` kontekst unutar Router metoda.
+    const validatedCtx = ctx as ValidatedContext<Env, TSchema>;
+    validatedCtx.validJson = result.output;
+
+    return await handler(validatedCtx);
   };
 }
 

@@ -1,10 +1,15 @@
 import { Router, type RouterContext } from './router';
 import { validateJson } from './validator';
 import { SefInvoiceSchema, SefWebhookSchema } from '../shared/types/sef';
+import ComplianceWatcher from "./compliance-watcher";
 import { SefClient } from '../shared/services/sefClient';
 
 export interface Env extends globalThis.Env {
   ADMIN_API_KEY: string;
+  PORESKI_KV: KVNamespace;
+  SEF_UBL_ARHIVA: R2Bucket;
+  AI: any;
+  SEF_QUEUE: Queue;
 }
 export { KlijentBaza } from './KlijentBazaObject';
 
@@ -32,6 +37,14 @@ const applyCors = (res: Response, req: Request): Response => {
 // ==========================================
 // 0. ADMIN OPERACIJE (STRIMING UVOZ BEZ SALA)
 // ==========================================
+import { posaljiHotfixTelegramAlarm } from '../shared/services/telegram-notifier';
+
+app.get('/api/test/telegram', async ({ env }) => {
+  const mockError = "SEF_API_ERROR (400): Schematron violation [Rule: SRB-380-01] - New mandatory element missing.";
+  await posaljiHotfixTelegramAlarm(mockError, "FKT-TEST-BOT-001", env);
+  return Response.json({ success: true, message: "Test alarm poslat na Telegram." });
+});
+
 app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env>) => {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader || authHeader !== `Bearer ${env.ADMIN_API_KEY}`) {
@@ -48,13 +61,11 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
   });
 
   try {
-    // OKLOP: downloadAllCompanies sada vraća sirovi CSV string, bez preopterećenja memorije
     const csvContent = await sefClient.downloadAllCompanies();
     if (!csvContent) {
       return Response.json({ success: false, error: 'Odsustvo odziva ili prazan sadržaj sa SEF-a.' }, { status: 502 });
     }
 
-    // Delimo fajl na linije u memorijski bezbednim segmentima
     const lines = csvContent.split('\n');
     const headerLine = lines[0];
     if (!headerLine) return Response.json({ error: 'Missing header' });
@@ -62,7 +73,6 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
     const headerCols = parseCsvLine(headerLine);
     if (!headerCols) return Response.json({ error: 'Invalid header' });
 
-    // Dinamičko mapiranje kolona - OKLOP: Prošireni ključne reči za državne formate
     const idx = {
       pib: headerCols.findIndex(c => {
         const val = c.toLowerCase();
@@ -90,7 +100,6 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
       const columns = parseCsvLine(line);
       if (!columns) continue;
 
-      // OKLOP: Safe getter koji garantuje string i sprečava 'undefined' koji D1 mrzi
       const getVal = (index: number, fallback: string = ''): string => {
         if (index === -1 || index >= columns.length) return fallback;
         const val = columns[index];
@@ -130,7 +139,6 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
       }
     }
 
-    // Pražnjenje preostalih SQL izvršnih upita
     if (statements.length > 0) {
       await env.REGISTAR_DB.batch(statements);
       processed += statements.length;
@@ -139,7 +147,7 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
     return Response.json({ 
       success: true, 
       message: `Centralni SEF registar uspešno ažuriran. Indeksirano: ${processed} kompanija.`,
-      header: headerLine // OKLOP: Vraćamo header za proveru mapiranja
+      header: headerLine
     });
 
   } catch (err: any) {
@@ -170,33 +178,24 @@ app.post('/api/admin/debug-csv', async ({ req, env }: RouterContext<Env>) => {
 
 import { SessionEngine } from '../shared/services/session';
 
-// ... (zadržavamo postojeće importe)
-
-// Pomoćna funkcija za brzo dešifrovanje kolačića na ivici (Titanium Unseal)
 async function preuzmiSesijuIzKolacica(cookieString: string | null, env: Env): Promise<{ klijentId: string; operater: string } | null> {
   if (!cookieString) return null;
   try {
-    // Tražimo naš __Host- prefiksirani kolačić
     const mece = cookieString.split('; ').find(row => row.startsWith('__Host-sef_bridge_session='));
     if (!mece) return null;
     
     let rawValue = mece.split('=')[1];
     if (!rawValue) return null;
 
-    // OKLOP: Dekodiramo URL-encoded karaktere pre otključavanja
     rawValue = decodeURIComponent(rawValue);
-
-    // Korišćenje Titanium Session Engine za dešifrovanje (AES-256-GCM)
     return await SessionEngine.unseal(rawValue, env.SESSION_SECRET);
   } catch {
     return null;
   }
 }
 
-// MIDDLEWARE ZA ZAŠTITU RUTA
 const auth = (handler: (c: RouterContext<Env> & { klijentId?: string, operater?: string }) => Promise<Response> | Response) => {
   return async (c: RouterContext<Env> & { klijentId?: string, operater?: string }) => {
-    // OKLOP: Dozvoljavamo direktan ID preko zaglavlja za ERP integracije i testove
     if (c.req.headers.has('X-Klijent-ID')) {
       c.klijentId = c.req.headers.get('X-Klijent-ID') || '';
       c.operater = 'Sistemski Operater';
@@ -216,14 +215,10 @@ const auth = (handler: (c: RouterContext<Env> & { klijentId?: string, operater?:
   };
 };
 
-// ==========================================
-// 1. ONBOARDING & REGISTRACIJA
-// ==========================================
 app.post('/api/register', async ({ req, env }: RouterContext<Env>) => {
   const { pib, naziv, sef_api_key } = await req.json() as { pib: string, naziv: string, sef_api_key: string };
   if (!pib || !sef_api_key) return Response.json({ error: 'PIB i SEF API Key su obavezni' }, { status: 400 });
 
-  // Deterministički klijent ID usklađen sa novom strukturom
   const klijentId = `klijent_${pib}`;
 
   await env.REGISTAR_DB.prepare(
@@ -231,7 +226,6 @@ app.post('/api/register', async ({ req, env }: RouterContext<Env>) => {
      ON CONFLICT(klijent_id) DO UPDATE SET naziv = excluded.naziv`
   ).bind(klijentId, naziv || klijentId).run();
 
-  // OKLOP: Korišćenje idFromName za determinističke hešove
   const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
   const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
   
@@ -260,8 +254,6 @@ app.get('/api/onboarding/search', async ({ req, env }: RouterContext<Env>) => {
     sqlQuery = `SELECT pib, maticni_broj, naziv_firme FROM sef_kompanije WHERE pib LIKE ? LIMIT 10`;
     params = [`${query}%`];
   } else {
-    // OKLOP: FTS5 pretraga sa trigramom je moćna, ali moramo bežati od specijalnih karaktera
-    // Čistimo query od navodnika i tačaka koji zbunjuju FTS5 motor
     const cleanQuery = query.replace(/[".*]/g, ' ');
     sqlQuery = `
       SELECT s.pib, s.maticni_broj, s.naziv_firme 
@@ -282,13 +274,9 @@ app.get('/api/onboarding/search', async ({ req, env }: RouterContext<Env>) => {
   }
 });
 
-// ==========================================
-// 2. GLOBALNI WEBHOOK PRIJEMNIK (DRŽAVNI PUSH)
-// ==========================================
 app.post('/api/webhooks/sef', validateJson(SefWebhookSchema, async (c: RouterContext<Env>) => {
   const { kompanija_pib, faktura_id, status, broj_fakture, timestamp } = c.validJson!;
   
-  // KLJUČNI OKLOP: Da li je ovo naša sistemska faktura za naplatu licence?
   if (broj_fakture && broj_fakture.startsWith('SEF-BRG-')) {
     if (status?.toLowerCase() === 'paid' || status?.toLowerCase() === 'pladena') {
       const klijentId = `klijent_${kompanija_pib}`;
@@ -343,9 +331,6 @@ app.post('/api/webhooks/sef', validateJson(SefWebhookSchema, async (c: RouterCon
   return new Response(JSON.stringify({ uspeh: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }));
 
-// ==========================================
-// 3. DASHBOARD & ANALYTICS PROXY PREMA DO
-// ==========================================
 app.get('/api/dashboard/stats', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/stats'));
@@ -389,9 +374,6 @@ app.get('/api/analytics/export-excel', auth(async (c: RouterContext<Env> & { kli
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request(`http://durableobject/api/analytics/export-excel${url.search}`));
 }));
 
-// ==========================================
-// 4. POPDV PROTOKOL
-// ==========================================
 app.post('/api/analytics/popdv/submit-draft', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
@@ -420,9 +402,6 @@ app.patch('/api/fakture/:id/odbitak', auth(async (c: RouterContext<Env> & { klij
   }));
 }));
 
-// ==========================================
-// 5. OPERATIVNE AKCIJE
-// ==========================================
 app.post('/api/fakture/send', auth(validateJson(SefInvoiceSchema, async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   
@@ -457,22 +436,16 @@ app.post('/api/fakture/batch', auth(async (c: RouterContext<Env> & { klijentId?:
   return doResponse;
 }));
 
-// ==========================================
-// 6. CSV PARSER LOGIKA
-// ==========================================
 function parseCsvLine(line: string): string[] | null {
   const result: string[] = [];
   let current = '';
   let inQuotes = false;
-  
-  // OKLOP: Detektujemo separator (zarezi ili tačka-zarez)
   const sep = line.includes(';') ? ';' : ',';
 
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
     if (char === '"') {
       inQuotes = !inQuotes;
-      // Ne dodajemo navodnike u samu vrednost
       continue;
     } 
     
@@ -484,38 +457,177 @@ function parseCsvLine(line: string): string[] | null {
     }
   }
   result.push(current.trim());
-  
-  // Vraćamo niz samo ako imamo barem PIB i Naziv (min 2, ali stavljamo 3 radi sigurnosti statusa)
   return result.length >= 3 ? result : null;
 }
 
 // @ts-ignore
 import nuxtHandler from '../.output/server/index.mjs';
 
+// ==========================================
+// 6. LIVE STATE CODEBOOKS (METADATA)
+// ==========================================
+app.get('/api/v1/sifrarnici/jedinice-mera', async ({ env }: RouterContext<Env>) => {
+  const mere = await env.PORESKI_KV.get("DRZAVNE_JEDINICE_MERA", "json");
+  return Response.json(mere || ["H87", "PCE", "KGM", "SET"]);
+});
+
+app.get('/api/v1/sifrarnici/poreska-pravila', async ({ env }: RouterContext<Env>) => {
+  const pravila = await env.PORESKI_KV.get("DRZAVNA_PORESKA_PRAVILA_RS", "json");
+  return Response.json(pravila || { OPSTA_STOPA: 20.00, POSEBNA_STOPA: 10.00 });
+});
+
+// ==========================================
+// 7. AGENCY DASHBOARD & MULTI-TENANT GATEWAY
+// ==========================================
+
+// Middleware za proveru Agency Token-a
+const agencyAuth = (handler: (c: RouterContext<Env> & { agencyId: string }) => Promise<Response> | Response) => {
+  return async (c: RouterContext<Env> & { agencyId?: string }) => {
+    const token = c.req.headers.get('X-Agency-Token');
+    if (!token) return Response.json({ error: 'Nedostaje X-Agency-Token' }, { status: 401 });
+
+    const agency = await c.env.REGISTAR_DB.prepare(
+      `SELECT id FROM agencije WHERE master_token = ?`
+    ).bind(token).first<{ id: string }>();
+
+    if (!agency) return Response.json({ error: 'Nevalidan Agency Token' }, { status: 401 });
+
+    c.agencyId = agency.id;
+    return await handler(c as any);
+  };
+};
+
+app.post('/api/agency/register', async ({ req, env }: RouterContext<Env>) => {
+  const authHeader = req.headers.get('Authorization');
+  const expectedAuth = `Bearer ${env.ADMIN_API_KEY || 'admin_secret'}`;
+  
+  if (authHeader !== expectedAuth) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const { naziv, email } = await req.json() as { naziv: string, email: string };
+  const agencyId = `agency_${crypto.randomUUID().substring(0,8)}`;
+  const masterToken = `AT-${crypto.randomUUID().replace(/-/g, '')}`;
+
+  await env.REGISTAR_DB.prepare(
+    `INSERT INTO agencije (id, naziv, email, master_token) VALUES (?, ?, ?, ?)`
+  ).bind(agencyId, naziv, email, masterToken).run();
+
+  return Response.json({ success: true, agencyId, masterToken });
+});
+
+app.post('/api/agency/link-client', agencyAuth(async (c) => {
+  const { pib_firme, tenant_id } = await c.req.json() as { pib_firme: string, tenant_id: string };
+  
+  await c.env.REGISTAR_DB.prepare(
+    `INSERT OR REPLACE INTO agencija_klijenti (agencija_id, pib_firme, tenant_klijent_id) VALUES (?, ?, ?)`
+  ).bind(c.agencyId, pib_firme, tenant_id).run();
+
+  return Response.json({ success: true });
+}));
+
+app.get('/api/agency/dashboard', agencyAuth(async (c) => {
+  const klijenti = await c.env.REGISTAR_DB.prepare(
+    `SELECT pib_firme, tenant_klijent_id FROM agencija_klijenti WHERE agencija_id = ?`
+  ).bind(c.agencyId).all<{ pib_firme: string, tenant_klijent_id: string }>();
+
+  if (!klijenti.results || klijenti.results.length === 0) return Response.json({ klijenti: [] });
+
+  // Paralelna agregacija podataka sa ivice mreže
+  const rezultati = await Promise.all(klijenti.results.map(async (k) => {
+    try {
+      const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(k.tenant_klijent_id);
+      const res = await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://do/stats'));
+      const stats = await res.json() as any;
+      return {
+        pib: k.pib_firme,
+        status: stats.status || stats.status_pretplate || 'UNKNOWN',
+        krediti: stats.ledger_saldo || 0,
+        aktivne_fakture: stats.total_sales || 0
+      };
+    } catch (e) {
+      return { pib: k.pib_firme, error: "DO_UNREACHABLE" };
+    }
+  }));
+
+  return Response.json({ klijenti: rezultati });
+}));
+
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext) {
     const corsHeaders = getCorsHeaders(req);
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
 
-    if (req.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders });
+    // Inicijalizacija D1 tabela ako ne postoje (pojednostavljena migracija u letu)
+    if (req.url.includes('/api/agency/')) {
+       await env.REGISTAR_DB.prepare(`CREATE TABLE IF NOT EXISTS agencije (id TEXT PRIMARY KEY, naziv TEXT, email TEXT, master_token TEXT UNIQUE, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP)`).run();
+       await env.REGISTAR_DB.prepare(`CREATE TABLE IF NOT EXISTS agencija_klijenti (agencija_id TEXT, pib_firme TEXT PRIMARY KEY, tenant_klijent_id TEXT, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP)`).run();
     }
 
     const url = new URL(req.url);
-
-    // Ako je zahtev za API, pokušavamo sa Router-om
     if (url.pathname.startsWith('/api')) {
       const res = await app.fetch(req, env, ctx);
-      // Router vraća 404 ako ruta ne postoji, tada puštamo Nuxt-u (npr. za server/api rute)
-      if (res.status !== 404) {
-        return applyCors(res, req);
-      }
+      if (res.status !== 404) return applyCors(res, req);
     }
-
-    // Za sve ostalo (Frontend rute, statički fajlovi), delegiramo Nuxt-u
     return nuxtHandler.fetch(req, env, ctx);
   },
+
+  async queue(batch: MessageBatch<any>, env: Env): Promise<void> {
+    const isHotfixActive = await env.PORESKI_KV.get("ALERT_SEF_HOTFIX_DETECTED");
+    if (isHotfixActive) {
+      // Hotfix still active, push messages back to queue to retry later
+      console.log(`[Queue] Hotfix still active, deferring ${batch.messages.length} messages.`);
+      batch.retryAll();
+      return;
+    }
+
+    console.log(`[Queue] Processing ${batch.messages.length} compliance-queued invoices...`);
+    for (const msg of batch.messages) {
+      const { id, broj, xml, klijentId } = msg.body;
+      const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
+      const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
+      
+      try {
+        await klijentDO.fetch(new Request('http://durableobject/fakture/send-queued', {
+          method: 'POST',
+          body: JSON.stringify({ internalId: id, xml }),
+          headers: { 'Content-Type': 'application/json' }
+        }));
+        msg.ack();
+      } catch (err) {
+        console.error(`[Queue] Failed to process queued invoice ${broj}:`, err);
+        msg.retry();
+      }
+    }
+  },
+
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil((async () => {
+      // 1. LIVE METADATA SYNC (Every 6 hours / Cron)
+      const sefClient = new SefClient({ 
+        apiKey: env.ADMIN_API_KEY, 
+        baseUrl: env.SEF_API_URL || 'https://efaktura.mfin.gov.rs/api',
+        environment: 'production'
+      });
+
+      try {
+        const mere = await sefClient.getUnitMeasures();
+        if (mere) {
+          await env.PORESKI_KV.put("DRZAVNE_JEDINICE_MERA", JSON.stringify(mere));
+          console.log(`[Cron] Uspešno ažurirano ${mere.length} jedinica mera iz državnog šifrarnika.`);
+        }
+      } catch (err) {
+        console.error("[Cron] Greška pri sinhronizaciji šifrarnika:", err);
+      }
+
+      // v3.9.0: SEF COMPLIANCE WATCHER
+      try {
+        await ComplianceWatcher.checkSefUpdates(env);
+      } catch (err) {
+        console.error("[Cron] Compliance Watcher fail:", err);
+      }
+
+      // 2. CLIENT STATUS SYNC
       const { results } = await env.REGISTAR_DB.prepare(
         `SELECT klijent_id FROM klijenti 
          WHERE ima_aktivne_fakture = 1 
@@ -531,7 +643,6 @@ export default {
           const batch = results.slice(i, i + BATCH_SIZE);
           await Promise.all(batch.map(async (red) => {
             try {
-              // POPRAVKA: Usklađeno sa strukturom - koristimo idFromName jer je red.klijent_id običan string ("klijent_1000...")
               const doId = env.KLIJENT_BAZA_OBJECT.idFromName(red.klijent_id);
               const odgovor = await env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/sync-sef', { method: 'POST' }));
               azurirajSyncVreme.push(red.klijent_id);

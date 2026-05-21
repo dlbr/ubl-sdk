@@ -1,3 +1,12 @@
+export type SefPoreskaKategorija = 
+  | 'S20'  // Standardno 20%
+  | 'S10'  // Standardno 10%
+  | 'AE20' // Obrnuti obračun 20%
+  | 'AE10' // Obrnuti obračun 10%
+  | 'E'    // Oslobođeno bez prava na odbitak
+  | 'Z'    // Nulta stopa (Sa pravom na odbitak)
+  | 'N';   // Anuliranje / Specifični režimi
+
 export interface BaseInvoiceData {
   broj: string;
   pibProdavca: string;
@@ -5,6 +14,23 @@ export interface BaseInvoiceData {
   datumIzdavanja?: string;
   datumDospeca?: string;
   valuta?: string;
+  poreskaKategorija?: SefPoreskaKategorija | string;
+  smerDokumenta?: 'POZITIVAN' | 'NEGATIVAN';
+  tipDokumenta?: '380' | '386' | '381';
+  avansneReference?: {
+    brojAvansnogRacuna: string;
+    idSefAvansa: string;
+    iznosUmanjenja: number;
+  }[];
+}
+
+export interface PojedinacnaEeoData {
+  poreskiPeriod: string;
+  internalInvoiceNumber?: string;
+  osnovicaOpsta: number;
+  pdvOpsta: number;
+  osnovicaPosebna: number;
+  pdvPosebna: number;
 }
 
 export interface AvansData extends BaseInvoiceData {
@@ -43,10 +69,10 @@ export interface OslobodjenaData extends BaseInvoiceData {
 
 export interface ZbirniEeoData {
   poreskiPeriod: string; // npr. 2026-05
-  osnovica20: number;
-  pdv20: number;
-  osnovica10: number;
-  pdv10: number;
+  osnovicaOpsta: number;
+  pdvOpsta: number;
+  osnovicaPosebna: number;
+  pdvPosebna: number;
   oslobodjenBezPrava?: number;
 }
 

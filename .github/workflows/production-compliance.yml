@@ -1,0 +1,42 @@
+name: SEF Bridge v3 — Kontinuirana Zakonska Usaglašenost
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  compliance-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Preuzimanje koda iz repozitorijuma
+      uses: actions/checkout@v4
+
+    - name: Inicijalizacija Node.js okruženja
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+
+    - name: Instalacija zavisnosti
+      run: npm install
+
+    - name: Pokretanje lokalnih testova (UBL & JSON Matrix)
+      run: npm test
+
+    - name: 🚨 Državni Sanity Check (E2E Test na Demo SEF API)
+      env:
+        DRZAVNI_DEMO_API_KEY: ${{ secrets.SEF_DEMO_API_KEY }}
+        TEST_KLIJENT_PIB: "102345678"
+      run: |
+        echo "Pokrećem simulaciju slanja JSON EEO/EPP na državni Sandbox..."
+        node scripts/state-sandbox-ping.js
+
+    - name: Deploy na Cloudflare Workers
+      if: github.ref == 'refs/heads/main' && success()
+      uses: cloudflare/wrangler-action@v3
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

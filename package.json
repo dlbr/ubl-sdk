@@ -26,6 +26,8 @@
   },
   "dependencies": {
     "@dlbr/sef-ubl-builder": "workspace:*",
+    "@google/genai": "^2.2.0",
+    "pdf-parse": "^2.4.5",
     "valibot": "^1.4.0"
   }
 }

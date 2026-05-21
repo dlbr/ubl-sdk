@@ -21,6 +21,14 @@ bindings = [
   { name = "KLIJENT_BAZA_OBJECT", class_name = "KlijentBaza" }
 ]
 
+[[kv_namespaces]]
+binding = "PORESKI_KV"
+id = "b688022ffcc247d4843b97d70b76b719"
+
+[[r2_buckets]]
+binding = "SEF_UBL_ARHIVA"
+bucket_name = "prod-sef-ubl-arhiva-10godina"
+
 [[migrations]]
 tag = "v1_init_ledger"
 new_sqlite_classes = ["KlijentBaza"]
@@ -30,3 +38,15 @@ enabled = true
 
 [triggers]
 crons = ["0 2 * * *"]
+
+[ai]
+binding = "AI"
+
+[[queues.producers]]
+binding = "SEF_QUEUE"
+queue = "sef-compliance-queue"
+
+[[queues.consumers]]
+queue = "sef-compliance-queue"
+max_batch_size = 10
+max_batch_timeout = 30

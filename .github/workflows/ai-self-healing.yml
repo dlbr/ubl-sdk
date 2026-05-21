@@ -1,0 +1,56 @@
+name: SEF Bridge v4.0.0 — AI Self-Healing Compliance
+
+on:
+  repository_dispatch:
+    types: [sef_hotfix_detected] # Okidač od strane našeg skrapera (Compliance Watcher)
+  workflow_dispatch:
+    inputs:
+      pdf_url:
+        description: 'URL zvaničnog državnog Hotfix PDF-a'
+        required: true
+
+jobs:
+  ai_patch_and_deploy:
+    name: 🧠 AI Patcher & 🚀 Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Povlačenje koda sa GitHub-a
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Podešavanje Node.js okruženja
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 📦 Instalacija zavisnosti (npm)
+        run: npm ci
+
+      - name: 📄 Ekstrakcija teksta iz PDF-a i AI analiza
+        id: ai_patcher
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PDF_URL: ${{ github.event.inputs.pdf_url || github.event.client_payload.pdf_url }}
+        run: |
+          echo "Preuzimanje PDF-a: $PDF_URL"
+          # 1. Skripta preuzima PDF i pretvara ga u sirovi tekst
+          node scripts/extract-pdf-text.js "$PDF_URL" > hotfix_text.txt
+          
+          echo "Pokretanje AI Patcher-a..."
+          # 2. Pokreće se AI agent koji čita tekst i modifikuje lokalne fajlove (validator.ts / index.ts)
+          node scripts/ai-code-patcher.js hotfix_text.txt
+          
+      - name: 🧪 Pokretanje Lokalnog Test Suita (Vitest)
+        run: npm test
+
+      - name: 🛡️ Verifikacija na Državnom Sandbox-u (CI/CD Bedem)
+        env:
+          SEF_DEMO_API_KEY: ${{ secrets.SEF_DEMO_API_KEY }}
+        run: node scripts/state-sandbox-ping.js
+
+      - name: 🚀 AUTOMATSKI REDEPLOY (Cloudflare Wrangler)
+        if: success() # Izvršava se ISKLJUČIVO ako su svi prethodni koraci i testovi 100% prošli!
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy

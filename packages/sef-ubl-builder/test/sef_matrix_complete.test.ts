@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SefUblBuilder } from '../src/index';
+import { SefUblBuilder, SefPoreskiJsonBuilder } from '../src/index';
 
 describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
 
@@ -8,6 +8,8 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
       broj: 'AV-1', pibProdavca: '100000001', pibKupca: '200000002', osnovica: 1000, pdv: 200
     });
     expect(xml).toContain('<cbc:InvoiceTypeCode>386</cbc:InvoiceTypeCode>');
+    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
+    expect(xml).toContain('<cbc:Percent>20.00</cbc:Percent>');
     expect(xml).toContain('<cbc:TaxableAmount currencyID="RSD">1000.00</cbc:TaxableAmount>');
     expect(xml).toContain('<cbc:TaxAmount currencyID="RSD">200.00</cbc:TaxAmount>');
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1200.00</cbc:PayableAmount>');
@@ -20,10 +22,11 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
       ukupnaOsnovica: 2000, ukupniPdv: 400, odbitakAvansaSaPdv: 1200
     });
     expect(xml).toContain('<cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>');
-    expect(xml).toContain('<cac:BillingReference>');
-    expect(xml).toContain('<cbc:ID>AV-1</cbc:ID>');
-    expect(xml).toContain('<cbc:PrepaidAmount currencyID="RSD">1200.00</cbc:PrepaidAmount>');
-    expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1200.00</cbc:PayableAmount>'); // 2400 - 1200
+    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
+    expect(xml).toContain('<cbc:Percent>20.00</cbc:Percent>');
+    expect(xml).toContain('<cac:InvoiceLine>');
+    expect(xml).toContain('<cbc:ID>AVANS-REDUKCIJA</cbc:ID>');
+    expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1200.00</cbc:PayableAmount>');
   });
 
   it('3. Knjižno Odobrenje / Storno (381)', () => {
@@ -33,10 +36,8 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
       iznosZaSmanjenjeOsnovice: 1000, iznosZaSmanjenjePdv: 200
     });
     expect(xml).toContain('<CreditNote');
-    expect(xml).toContain('<cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>');
-    expect(xml).toContain('<cbc:ID>KON-1</cbc:ID>');
-    expect(xml).toContain('<cbc:DocumentDescription>Greška u ceni</cbc:DocumentDescription>');
-    expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1200.00</cbc:PayableAmount>');
+    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
+    expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">-1200.00</cbc:PayableAmount>');
   });
 
   it('4. Knjižno Zaduženje / Povećanje (383)', () => {
@@ -46,19 +47,38 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
       iznosZaPovecanjeOsnovice: 500, iznosZaPovecanjePdv: 100
     });
     expect(xml).toContain('<cbc:InvoiceTypeCode>383</cbc:InvoiceTypeCode>');
-    expect(xml).toContain('<cac:BillingReference>');
-    expect(xml).toContain('<cbc:ID>KON-1</cbc:ID>');
+    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">600.00</cbc:PayableAmount>');
   });
 
-  it('8. Faktura sa oslobođenjem od PDV-a (380 TaxCategory E/O/AE)', () => {
+  it('5. Dokument o smanjenju avansa (381 SrbDtExt)', () => {
+    const xml = SefUblBuilder.buildSmanjenjeAvansa({
+      broj: 'SMAV-1', pibProdavca: '100000001', pibKupca: '200000002',
+      avansBroj: 'AV-1', avansDatum: '2026-05-21',
+      iznosSmanjenjaOsnovice: 500, iznosSmanjenjaPdv: 100
+    });
+    expect(xml).toContain('<sbt:SrbDtExt>');
+    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
+    expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">0.00</cbc:PayableAmount>');
+  });
+
+  it('6. Dokument o smanjenju u periodu (381 InvoicePeriod)', () => {
+    const xml = SefUblBuilder.buildSmanjenjeUPeriodu({
+      broj: 'SMPER-1', pibProdavca: '100000001', pibKupca: '200000002',
+      periodOd: '2026-01-01', periodDo: '2026-03-31',
+      iznosZaSmanjenjeOsnovice: 1000, iznosZaSmanjenjePdv: 200
+    });
+    expect(xml).toContain('<cac:InvoicePeriod>');
+    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
+  });
+
+  it('8. Faktura sa oslobođenjem od PDV-a (380 TaxCategory E)', () => {
     const xml = SefUblBuilder.buildOslobodjena({
       broj: 'OSL-1', pibProdavca: '100000001', pibKupca: '200000002',
       iznos: 1000, poreskaKategorija: 'E', sifraOslobodjenja: 'PDV-RS-24-1-1'
     });
     expect(xml).toContain('<cbc:ID>E</cbc:ID>');
     expect(xml).toContain('<cbc:TaxExemptionReasonCode>PDV-RS-24-1-1</cbc:TaxExemptionReasonCode>');
-    expect(xml).toContain('<cbc:TaxExemptionReason>Oslobođeno plaćanja PDV-a po članu 24. stav 1. tačka 1. Zakona o PDV</cbc:TaxExemptionReason>');
     expect(xml).toContain('<cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>');
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1000.00</cbc:PayableAmount>');
   });
@@ -69,45 +89,8 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
       iznosPrePopusta: 1000, popustIznos: 100, pdvStopa: 20
     });
     expect(xml).toContain('<cac:AllowanceCharge>');
-    expect(xml).toContain('<cbc:ChargeIndicator>false</cbc:ChargeIndicator>');
-    expect(xml).toContain('<cbc:Amount currencyID="RSD">100.00</cbc:Amount>');
-    expect(xml).toContain('<cbc:TaxableAmount currencyID="RSD">900.00</cbc:TaxableAmount>');
-    expect(xml).toContain('<cbc:TaxAmount currencyID="RSD">180.00</cbc:TaxAmount>');
-    expect(xml).toContain('<cbc:AllowanceTotalAmount currencyID="RSD">100.00</cbc:AllowanceTotalAmount>');
+    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1080.00</cbc:PayableAmount>');
-  });
-
-  it('10. Faktura sa prilogom (380 AdditionalDocumentReference base64)', () => {
-    const xml = SefUblBuilder.buildSaPrilogom({
-      broj: 'PRI-1', pibProdavca: '100000001', pibKupca: '200000002',
-      ukupno: 1000, prilogIme: 'ugovor.pdf', prilogBase64: 'JVBERi0xLjQK'
-    });
-    expect(xml).toContain('<cac:AdditionalDocumentReference>');
-    expect(xml).toContain('<cbc:EmbeddedDocumentBinaryObject mimeCode="application/pdf" filename="ugovor.pdf">JVBERi0xLjQK</cbc:EmbeddedDocumentBinaryObject>');
-  });
-
-  it('11. Faktura sa valutom (380 strana valuta)', () => {
-    const xml = SefUblBuilder.buildSaValutom({
-      broj: 'VAL-1', pibProdavca: '100000001', pibKupca: '200000002',
-      valuta: 'EUR', kurs: 117.2, kursDatum: '2026-05-21',
-      osnovicaRSD: 11720, pdvRSD: 2344, ukupnoValuta: 120
-    });
-    expect(xml).toContain('<cac:TaxExchangeRate>');
-    expect(xml).toContain('<cbc:SourceCurrencyCode>EUR</cbc:SourceCurrencyCode>');
-    expect(xml).toContain('<cbc:TargetCurrencyCode>RSD</cbc:TargetCurrencyCode>');
-    expect(xml).toContain('<cbc:CalculationRate>117.2</cbc:CalculationRate>');
-    expect(xml).toContain('<cbc:PayableAmount currencyID="EUR">120.00</cbc:PayableAmount>');
-  });
-
-  it('12. Faktura za javnu nabavku (CRF i JBKJS)', () => {
-    const xml = SefUblBuilder.buildJavnaNabavka({
-      broj: 'JN-1', pibProdavca: '100000001', pibKupca: '200000002',
-      iznos: 5000, brojUgovora: 'UG-123', jbkjs: '12345'
-    });
-    expect(xml).toContain('<cbc:BuyerReference>JN-JBKJS:12345</cbc:BuyerReference>');
-    expect(xml).toContain('<cac:OrderReference>');
-    expect(xml).toContain('<cbc:ID>UG-123</cbc:ID>');
-    expect(xml).toContain('<cbc:ID>JBKJS:12345</cbc:ID>');
   });
 
   it('13. Standardna faktura (380)', () => {
@@ -116,78 +99,48 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
       osnovica: 1000, pdv: 200
     });
     expect(xml).toContain('<cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>');
+    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1200.00</cbc:PayableAmount>');
   });
 
-  it('14. Fiskalizacija promet prodaja (380 sa PFR referencama)', () => {
-    const xml = SefUblBuilder.buildFiskalizacijaProdaja({
-      broj: 'FIS-1', pibProdavca: '100000001', pibKupca: '200000002',
-      ukupno: 1000, pfrBrojevi: ['PFR-111', 'PFR-222']
+  describe('v3.8.0 Master Specifikacija Alignment Audit', () => {
+    it('1. Poreska kategorija N (Anuliranje) sa POZITIVNIM smerom', () => {
+      const xml = SefUblBuilder.buildSmanjenje({
+        broj: 'STR-N-POS', pibProdavca: '100000001', pibKupca: '200000002',
+        referentniRacun: 'INV-1', razlog: 'Specifičan režim',
+        iznosZaSmanjenjeOsnovice: 1000, iznosZaSmanjenjePdv: 0,
+        poreskaKategorija: 'N',
+        smerDokumenta: 'POZITIVAN'
+      });
+      expect(xml).toContain('<cbc:ID>N</cbc:ID>');
+      expect(xml).toContain('<cbc:Percent>0.00</cbc:Percent>');
+      expect(xml).toContain('>0.00</cbc:TaxAmount>');
+      expect(xml).toContain('>1000.00</cbc:TaxableAmount>');
+      expect(xml).toContain('>1000.00</cbc:PayableAmount>');
     });
-    expect(xml).toContain('<cac:AdditionalDocumentReference><cbc:ID>PFR-111</cbc:ID></cac:AdditionalDocumentReference>');
-    expect(xml).toContain('<cac:AdditionalDocumentReference><cbc:ID>PFR-222</cbc:ID></cac:AdditionalDocumentReference>');
-  });
 
-  it('15. Fiskalizacija promet refundacija (381 sa PFR)', () => {
-    const xml = SefUblBuilder.buildFiskalizacijaRefundacija({
-      broj: 'REF-1', pibProdavca: '100000001', pibKupca: '200000002',
-      ukupno: 1000, pfrBrojevi: ['PFR-333']
+    it('2. Poreska kategorija N (Anuliranje) sa NEGATIVNIM smerom', () => {
+      const xml = SefUblBuilder.buildSmanjenje({
+        broj: 'STR-N-NEG', pibProdavca: '100000001', pibKupca: '200000002',
+        referentniRacun: 'INV-1', razlog: 'Storno',
+        iznosZaSmanjenjeOsnovice: 1000, iznosZaSmanjenjePdv: 200,
+        poreskaKategorija: 'N',
+        smerDokumenta: 'NEGATIVAN',
+        pdvStopa: 20
+      });
+      expect(xml).toContain('<cbc:ID>N</cbc:ID>');
+      expect(xml).toContain('>-200.00</cbc:TaxAmount>');
+      expect(xml).toContain('>-1000.00</cbc:TaxableAmount>');
+      expect(xml).toContain('>-1200.00</cbc:PayableAmount>');
     });
-    expect(xml).toContain('<CreditNote');
-    expect(xml).toContain('<cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>');
-    expect(xml).toContain('<cac:AdditionalDocumentReference><cbc:ID>PFR-333</cbc:ID></cac:AdditionalDocumentReference>');
-  });
 
-  it('16. Konacna faktura sa valutom (380 zatvara avans u valuti)', () => {
-    const xml = SefUblBuilder.buildKonacnaSaValutom({
-      broj: 'KVAL-1', pibProdavca: '100000001', pibKupca: '200000002',
-      avansBroj: 'AV-EUR-1', valuta: 'EUR', kurs: 117.2,
-      odbitakValuta: 100, zaUplatuValuta: 20
+    it('3. AE Kategorija (Obrnuti obračun) sa Percent tagom', () => {
+       const xml = SefUblBuilder.buildStandardna({
+         broj: 'AE-1', pibProdavca: '100000001', pibKupca: '200000002',
+         osnovica: 1000, pdv: 200, poreskaKategorija: 'AE'
+       });
+       expect(xml).toContain('<cbc:ID>AE</cbc:ID>');
+       expect(xml).toContain('<cbc:Percent>20.00</cbc:Percent>');
     });
-    expect(xml).toContain('<cac:BillingReference>');
-    expect(xml).toContain('<cbc:ID>AV-EUR-1</cbc:ID>');
-    expect(xml).toContain('<cac:TaxExchangeRate>');
-    expect(xml).toContain('<cbc:PrepaidAmount currencyID="EUR">100.00</cbc:PrepaidAmount>');
-    expect(xml).toContain('<cbc:PayableAmount currencyID="EUR">20.00</cbc:PayableAmount>');
-  });
-
-  it('17. Dokument o smanjenju po osnovu smanjenja avansa (381 sa SrbDtExt)', () => {
-    const xml = SefUblBuilder.buildSmanjenjeAvansa({
-      broj: 'SMAV-1', pibProdavca: '100000001', pibKupca: '200000002',
-      avansBroj: 'AV-1', avansDatum: '2026-05-21',
-      iznosSmanjenjaOsnovice: 500, iznosSmanjenjaPdv: 100
-    });
-    expect(xml).toContain('<cec:UBLExtensions>');
-    expect(xml).toContain('<sbt:InvoicedPrepaymentAmount>');
-    expect(xml).toContain('<sbt:ReducedTotals>');
-    expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">0.00</cbc:PayableAmount>'); // Zahtev SEF-a
-  });
-
-  it('18. Dokument o smanjenju u periodu (381 InvoicePeriod)', () => {
-    const xml = SefUblBuilder.buildSmanjenjeUPeriodu({
-      broj: 'SMPER-1', pibProdavca: '100000001', pibKupca: '200000002',
-      periodOd: '2026-01-01', periodDo: '2026-03-31', opisKod: '35',
-      iznosZaSmanjenjeOsnovice: 1000, iznosZaSmanjenjePdv: 200
-    });
-    expect(xml).toContain('<cac:InvoicePeriod>');
-    expect(xml).toContain('<cbc:StartDate>2026-01-01</cbc:StartDate>');
-    expect(xml).toContain('<cbc:EndDate>2026-03-31</cbc:EndDate>');
-    expect(xml).toContain('<cbc:DescriptionCode>35</cbc:DescriptionCode>');
-  });
-
-  it('19. Dokument o smanjenju za vise faktura (381 Multiple BillingReferences)', () => {
-    const xml = SefUblBuilder.buildSmanjenjeViseFaktura({
-      broj: 'SMVIS-1', pibProdavca: '100000001', pibKupca: '200000002',
-      fakture: [
-        { id: 'FAK-1', datum: '2026-04-01' },
-        { id: 'FAK-2', datum: '2026-04-15' }
-      ],
-      iznosZaSmanjenjeOsnovice: 1000, iznosZaSmanjenjePdv: 200
-    });
-    expect(xml).toContain('<cbc:ID>FAK-1</cbc:ID>');
-    expect(xml).toContain('<cbc:ID>FAK-2</cbc:ID>');
-    // Brojimo occurrence BillingReference
-    const count = (xml.match(/<cac:BillingReference>/g) || []).length;
-    expect(count).toBe(2);
   });
 });

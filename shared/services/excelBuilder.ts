@@ -56,14 +56,14 @@ export class SefExcelBuilder {
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">OBRAČUNATI PDV</Data></Cell>
    </Row>
    <Row>
-    <Cell><Data ss:Type="String">001 - Promet po opštoj stopi (20%)</Data></Cell>
-    <Cell ss:StyleID="DecimalStyle"><Data ss:Type="Number">${summary.pozicija001_osnovica20}</Data></Cell>
-    <Cell ss:StyleID="DecimalStyle"><Data ss:Type="Number">${summary.pozicija101_pdv20}</Data></Cell>
+    <Cell><Data ss:Type="String">001 - Promet po opštoj stopi</Data></Cell>
+    <Cell ss:StyleID="DecimalStyle"><Data ss:Type="Number">${summary.pozicija001_osnovicaOpsta}</Data></Cell>
+    <Cell ss:StyleID="DecimalStyle"><Data ss:Type="Number">${summary.pozicija101_pdvOpsta}</Data></Cell>
    </Row>
    <Row>
-    <Cell><Data ss:Type="String">002 - Promet po posebnoj stopi (10%)</Data></Cell>
-    <Cell ss:StyleID="DecimalStyle"><Data ss:Type="Number">${summary.pozicija002_osnovica10}</Data></Cell>
-    <Cell ss:StyleID="DecimalStyle"><Data ss:Type="Number">${summary.pozicija102_pdv10}</Data></Cell>
+    <Cell><Data ss:Type="String">002 - Promet po posebnoj stopi</Data></Cell>
+    <Cell ss:StyleID="DecimalStyle"><Data ss:Type="Number">${summary.pozicija002_osnovicaPosebna}</Data></Cell>
+    <Cell ss:StyleID="DecimalStyle"><Data ss:Type="Number">${summary.pozicija102_pdvPosebna}</Data></Cell>
    </Row>
    <Row>
     <Cell><Data ss:Type="String">003 - Promet oslobođen PDV-a</Data></Cell>
@@ -108,8 +108,8 @@ export class SefExcelBuilder {
     <Cell><Data ss:Type="String">${row.broj_fakture}</Data></Cell>
     <Cell><Data ss:Type="String">${row.datum_racuna}</Data></Cell>
     <Cell><Data ss:Type="String">${row.naziv_kupca}</Data></Cell>
-    <Cell ss:StyleID="DecimalStyle"><Data ss:Type="Number">${row.osnovica20 + row.osnovica10}</Data></Cell>
-    <Cell ss:StyleID="DecimalStyle"><Data ss:Type="Number">${row.pdv20 + row.pdv10}</Data></Cell>
+    <Cell ss:StyleID="DecimalStyle"><Data ss:Type="Number">${row.osnovicaOpsta + row.osnovicaPosebna}</Data></Cell>
+    <Cell ss:StyleID="DecimalStyle"><Data ss:Type="Number">${row.pdvOpsta + row.pdvPosebna}</Data></Cell>
     <Cell><Data ss:Type="String">${row.tipKupca}</Data></Cell>
    </Row>`;
     }

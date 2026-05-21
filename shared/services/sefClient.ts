@@ -174,6 +174,7 @@ export class SefClient {
 
   /**
    * Downloads the raw UBL XML for a specific purchase invoice.
+   * v3.8.0: Handles Base64 response from state servers.
    */
   async downloadPurchaseInvoiceXml(purchaseInvoiceId: number): Promise<string | null> {
     const endpoint = `${this.baseUrl}/purchase-invoice/xml?invoiceId=${purchaseInvoiceId}`;
@@ -181,20 +182,60 @@ export class SefClient {
     try {
       const response = await this.fetchWithTimeout(endpoint, {
         method: 'GET',
-        headers: {
-          'ApiKey': this.apiKey,
-          'Accept': 'application/xml',
-          'User-Agent': 'SEF-Bridge-Edge-Tank/2.0'
-        }
+        headers: this.getHeaders('application/xml'),
       }, 15000);
 
       if (!response.ok) {
         console.error(`[SEF Mreža] Neuspešno preuzimanje XML-a za fakturu ${purchaseInvoiceId}. Status: ${response.status}`);
         return null;
       }
-      return await response.text();
+
+      const text = await response.text();
+      // OKLOP: Ako odgovor počinje sa Base64 oznakom ili je JSON omotač
+      if (text.trim().startsWith('{')) {
+        const json = JSON.parse(text);
+        if (json.Base64Xml) return atob(json.Base64Xml);
+      }
+      
+      // Provera da li je ceo text zapravo Base64 (bez razmaka)
+      if (text.length > 20 && !text.includes('<') && /^[A-Za-z0-9+/=]+$/.test(text.trim())) {
+        return atob(text.trim());
+      }
+
+      return text;
     } catch (err) {
       console.error(`[SEF Mreža] Izuzetak pri preuzimanju XML-a fakture ${purchaseInvoiceId}:`, err);
+      return null;
+    }
+  }
+
+  /**
+   * Downloads the signed UBL XML for a specific sales invoice.
+   * v3.8.0: Required for legal archival.
+   */
+  async downloadSignedInvoice(salesInvoiceId: number): Promise<string | null> {
+    const endpoint = `${this.baseUrl}/sales-invoice/signed-xml?invoiceId=${salesInvoiceId}`;
+
+    try {
+      const response = await this.fetchWithTimeout(endpoint, {
+        method: 'GET',
+        headers: this.getHeaders('application/xml'),
+      }, 15000);
+
+      if (!response.ok) return null;
+      const text = await response.text();
+      
+      if (text.trim().startsWith('{')) {
+        const json = JSON.parse(text);
+        if (json.Base64Xml) return atob(json.Base64Xml);
+      }
+      
+      if (text.length > 20 && !text.includes('<') && /^[A-Za-z0-9+/=]+$/.test(text.trim())) {
+        return atob(text.trim());
+      }
+      
+      return text;
+    } catch (err) {
       return null;
     }
   }
@@ -254,6 +295,25 @@ export class SefClient {
       return text;
     } catch (err) {
       console.error('[SEF Mreža] Fatalna greška pri preuzimanju centralnog registra kompanija:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Fetches official unit measures from SEF Public API.
+   */
+  async getUnitMeasures(): Promise<string[] | null> {
+    const endpoint = `${this.baseUrl}/publicApi/get-unit-measures`;
+    try {
+      const response = await this.fetchWithTimeout(endpoint, {
+        method: 'GET',
+        headers: this.getHeaders()
+      });
+      if (!response.ok) return null;
+      const data = await response.json() as Array<{ Code: string }>;
+      return data.map(m => m.Code);
+    } catch (err) {
+      console.error('[SEF Mreža] Greška pri povlačenju jedinica mera:', err);
       return null;
     }
   }

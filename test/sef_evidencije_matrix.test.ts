@@ -6,10 +6,10 @@ describe('SEF Bridge v3.4.0 — EEO & EPP (Evidencije) JSON Audit', () => {
   it('EEO Provera: Zbirna evidencija obračuna mora imati ispravan JSON format', () => {
     const data = {
       poreskiPeriod: '2026-05',
-      osnovica20: 100000,
-      pdv20: 20000,
-      osnovica10: 50000,
-      pdv10: 5000
+      osnovicaOpsta: 100000,
+      pdvOpsta: 20000,
+      osnovicaPosebna: 50000,
+      pdvPosebna: 5000
     };
 
     const payload = SefPoreskiJsonBuilder.buildZbirniEeoPayload(data);
@@ -39,7 +39,7 @@ describe('SEF Bridge v3.4.0 — EEO & EPP (Evidencije) JSON Audit', () => {
   });
 
   it('Generic Build: Mora vratiti JSON string za EEO i EPP tipove', () => {
-    const eeoJson = SefUblBuilder.build({ TipZapisa: 'EEO', poreskiPeriod: '2026-05', osnovica20: 100, pdv20: 20, osnovica10: 0, pdv10: 0 });
+    const eeoJson = SefUblBuilder.build({ TipZapisa: 'EEO', poreskiPeriod: '2026-05', osnovicaOpsta: 100, pdvOpsta: 20, osnovicaPosebna: 0, pdvPosebna: 0 });
     const parsed = JSON.parse(eeoJson);
     expect(parsed.Year).toBe(2026);
 

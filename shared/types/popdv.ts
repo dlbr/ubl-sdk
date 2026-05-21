@@ -8,8 +8,8 @@ export const PopdvDeo8RecordSchema = v.object({
   brojRacuna: v.string(),
   datumRacuna: v.string(), // YYYY-MM-DD
   iznosBezPdv: v.number(), // Osnovica
-  iznosPdv20: v.number(),  // PDV po opštoj stopi
-  iznosPdv10: v.number(),  // PDV po posebnoj stopi
+  iznosPdvOpsta: v.number(),  // PDV po opštoj stopi
+  iznosPdvPosebna: v.number(),  // PDV po posebnoj stopi
   iznosKojiSeNeOdbija: v.number(),
 });
 
@@ -23,10 +23,10 @@ export const PopdvDeo3RecordSchema = v.object({
   nazivKupca: v.string(),
   brojRacuna: v.string(),
   datumRacuna: v.string(),
-  osnovica20: v.number(),
-  pdv20: v.number(),
-  osnovica10: v.number(),
-  pdv10: v.number(),
+  osnovicaOpsta: v.number(),
+  pdvOpsta: v.number(),
+  osnovicaPosebna: v.number(),
+  pdvPosebna: v.number(),
   oslobodjenPromet: v.number(), // Iznos prometa bez PDV-a po članovima 24 i 25
   tipKupca: v.picklist(['OBVEZNIK', 'NEOBVEZNIK']) // Za interno razvrstavanje na 3.1 i 3.2
 });

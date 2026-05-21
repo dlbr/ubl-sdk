@@ -6,7 +6,7 @@
 import * as v from 'valibot';
 
 export type SefInvoiceType = '380' | '386' | '381' | '383';
-export type SefVatCategory = 'S' | 'E' | 'AE' | 'Z' | 'OE' | 'R' | 'G' | 'O';
+export type SefVatCategory = 'S' | 'E' | 'AE' | 'Z' | 'OE' | 'R' | 'G' | 'O' | 'N' | 'S20' | 'S10' | 'AE20' | 'AE10';
 export type SefCurrency = 'RSD' | 'EUR';
 
 const DateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -34,6 +34,7 @@ export const SefInvoiceSchema = v.object({
   ActualDeliveryDate: v.optional(v.pipe(v.string(), v.regex(DateRegex, 'Datum mora biti u formatu YYYY-MM-DD'))),
   InvoiceTypeCode: v.picklist(['380', '381', '383', '386']),
   DocumentCurrencyCode: v.picklist(['RSD', 'EUR']),
+  smerDokumenta: v.optional(v.picklist(['POZITIVAN', 'NEGATIVAN'])),
   Note: v.optional(v.string()),
   
   InvoicePeriod: v.optional(v.object({
@@ -62,7 +63,7 @@ export const SefInvoiceSchema = v.object({
     LineExtensionAmount: v.number(),
     Price: v.number(),
     ItemName: v.string(),
-    VatCategory: v.picklist(['S', 'E', 'AE', 'Z', 'OE', 'R', 'G', 'O']),
+    VatCategory: v.picklist(['S', 'E', 'AE', 'Z', 'OE', 'R', 'G', 'O', 'N', 'S20', 'S10', 'AE20', 'AE10']),
     VatPercent: v.number(),
     AllowanceCharge: v.optional(v.object({
       ChargeIndicator: v.boolean(),
@@ -71,6 +72,18 @@ export const SefInvoiceSchema = v.object({
     })),
     ItemIdentification: v.optional(v.string()),
   })),
+
+  TaxTotals: v.optional(v.array(v.object({
+    TaxAmount: v.number(),
+    Subtotals: v.array(v.object({
+      TaxableAmount: v.number(),
+      TaxAmount: v.number(),
+      Category: v.picklist(['S', 'E', 'AE', 'Z', 'OE', 'R', 'G', 'O', 'N', 'S20', 'S10', 'AE20', 'AE10']),
+      Percent: v.number(),
+      ExemptionReasonCode: v.optional(v.string()),
+      ExemptionReason: v.optional(v.string()),
+    }))
+  }))),
 });
 
 export const SefWebhookSchema = v.object({

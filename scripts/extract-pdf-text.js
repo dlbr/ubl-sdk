@@ -1,0 +1,40 @@
+const fs = require('fs');
+const https = require('https');
+const pdf = require('pdf-parse');
+
+async function downloadAndExtract() {
+  const url = process.argv[2];
+  if (!url) {
+    console.error('URL is required');
+    process.exit(1);
+  }
+
+  const tmpFile = '/tmp/sef_hotfix.pdf';
+  
+  console.log(`Downloading PDF from ${url}...`);
+  
+  const file = fs.createWriteStream(tmpFile);
+  https.get(url, function(response) {
+    response.pipe(file);
+    file.on('finish', async function() {
+      file.close();
+      console.log('Download complete. Extracting text...');
+      
+      try {
+        const dataBuffer = fs.readFileSync(tmpFile);
+        const data = await pdf(dataBuffer);
+        
+        console.log(data.text);
+      } catch (err) {
+        console.error('PDF Extraction failed:', err);
+        process.exit(1);
+      }
+    });
+  }).on('error', function(err) {
+    fs.unlink(tmpFile, () => {});
+    console.error('Download failed:', err.message);
+    process.exit(1);
+  });
+}
+
+downloadAndExtract();
