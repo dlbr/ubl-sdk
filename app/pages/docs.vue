@@ -99,7 +99,30 @@ const { klijentId } = useSefAuth()
               </div>
             </section>
 
-            <!-- 3. API Reference -->
+            <!-- 3. Open Source Inicijativa -->
+            <section id="open-source" class="bg-gradient-to-br from-gray-900 to-blue-900 rounded-3xl p-8 md:p-12 text-white shadow-2xl overflow-hidden relative group">
+              <div class="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+                <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.44-1.304.759-1.607-2.665-.304-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.841 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+              </div>
+              <div class="relative z-10">
+                <h2 class="text-3xl font-black mb-6 uppercase tracking-tight">Verujemo u Open Source</h2>
+                <p class="text-blue-100 text-lg mb-8 leading-relaxed max-w-2xl">
+                  Srž našeg sistema — <strong>Matrix XML Builder</strong> — je potpuno otvoren i besplatan alat. 
+                  Programeri mogu samostalno koristiti našu biblioteku za generisanje forenzički tačnog UBL 2.1 XML-a.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4">
+                  <a href="https://github.com/dlbr/sef-ubl-builder" target="_blank" class="inline-flex items-center justify-center px-6 py-3 bg-white text-blue-900 font-black rounded-xl hover:bg-blue-50 transition shadow-xl uppercase text-xs tracking-widest gap-2">
+                    <span>GitHub Repozitorijum</span>
+                    <span class="text-base">➔</span>
+                  </a>
+                  <div class="px-6 py-3 border border-blue-400/30 rounded-xl text-blue-200 text-xs font-bold uppercase tracking-widest flex items-center bg-blue-950/20">
+                    MIT Licenca
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- 4. API Reference -->
             <section id="api-reference">
               <h2 class="text-2xl font-black text-gray-900 mb-8 flex items-center gap-3 text-blue-600">
                 <span class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-sm">3</span>
@@ -128,7 +151,7 @@ const { klijentId } = useSefAuth()
               </div>
             </section>
 
-            <!-- 4. Webhook Idempotency -->
+            <!-- 5. Webhook Idempotency -->
             <section id="webhooks">
               <h2 class="text-2xl font-black text-gray-900 mb-6 flex items-center gap-3 text-blue-600">
                 <span class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-sm">4</span>

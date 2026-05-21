@@ -7,4 +7,7 @@ export default defineConfig({
       wrangler: { configPath: './wrangler.toml' },
     }),
   ],
+  test: {
+    include: ['worker/**/*.{test,spec}.ts', 'server/**/*.{test,spec}.ts', 'packages/**/*.{test,spec}.ts', 'test/**/*.{test,spec}.ts'],
+  }
 });

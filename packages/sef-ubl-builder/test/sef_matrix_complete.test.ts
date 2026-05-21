@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { SefMatrixXmlBuilder } from '../worker/sef_matrix_xml_builder';
+import { SefUblBuilder } from '../src/index';
 
 describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
 
   it('1. Avansna Faktura (386) sa obračunatim PDV-om', () => {
-    const xml = SefMatrixXmlBuilder.buildAvansni({
+    const xml = SefUblBuilder.buildAvansni({
       broj: 'AV-1', pibProdavca: '100000001', pibKupca: '200000002', osnovica: 1000, pdv: 200
     });
     expect(xml).toContain('<cbc:InvoiceTypeCode>386</cbc:InvoiceTypeCode>');
@@ -14,7 +14,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('2. Konačna faktura sa zatvaranjem avansa (380)', () => {
-    const xml = SefMatrixXmlBuilder.buildKonacniSaAvansom({
+    const xml = SefUblBuilder.buildKonacniSaAvansom({
       broj: 'KON-1', pibProdavca: '100000001', pibKupca: '200000002',
       avansBroj: 'AV-1', avansDatum: '2026-05-21',
       ukupnaOsnovica: 2000, ukupniPdv: 400, odbitakAvansaSaPdv: 1200
@@ -27,7 +27,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('3. Knjižno Odobrenje / Storno (381)', () => {
-    const xml = SefMatrixXmlBuilder.buildSmanjenje({
+    const xml = SefUblBuilder.buildSmanjenje({
       broj: 'STO-1', pibProdavca: '100000001', pibKupca: '200000002',
       referentniRacun: 'KON-1', razlog: 'Greška u ceni',
       iznosZaSmanjenjeOsnovice: 1000, iznosZaSmanjenjePdv: 200
@@ -40,7 +40,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('4. Knjižno Zaduženje / Povećanje (383)', () => {
-    const xml = SefMatrixXmlBuilder.buildPovecanje({
+    const xml = SefUblBuilder.buildPovecanje({
       broj: 'ZAD-1', pibProdavca: '100000001', pibKupca: '200000002',
       referentniRacun: 'KON-1', datumReferentnog: '2026-05-21',
       iznosZaPovecanjeOsnovice: 500, iznosZaPovecanjePdv: 100
@@ -52,7 +52,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('8. Faktura sa oslobođenjem od PDV-a (380 TaxCategory E/O/AE)', () => {
-    const xml = SefMatrixXmlBuilder.buildOslobodjena({
+    const xml = SefUblBuilder.buildOslobodjena({
       broj: 'OSL-1', pibProdavca: '100000001', pibKupca: '200000002',
       iznos: 1000, poreskaKategorija: 'E', sifraOslobodjenja: 'PDV-RS-24-1-1'
     });
@@ -64,7 +64,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('9. Faktura sa popustom (380 AllowanceCharge)', () => {
-    const xml = SefMatrixXmlBuilder.buildSaPopustom({
+    const xml = SefUblBuilder.buildSaPopustom({
       broj: 'POP-1', pibProdavca: '100000001', pibKupca: '200000002',
       iznosPrePopusta: 1000, popustIznos: 100, pdvStopa: 20
     });
@@ -78,7 +78,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('10. Faktura sa prilogom (380 AdditionalDocumentReference base64)', () => {
-    const xml = SefMatrixXmlBuilder.buildSaPrilogom({
+    const xml = SefUblBuilder.buildSaPrilogom({
       broj: 'PRI-1', pibProdavca: '100000001', pibKupca: '200000002',
       ukupno: 1000, prilogIme: 'ugovor.pdf', prilogBase64: 'JVBERi0xLjQK'
     });
@@ -87,7 +87,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('11. Faktura sa valutom (380 strana valuta)', () => {
-    const xml = SefMatrixXmlBuilder.buildSaValutom({
+    const xml = SefUblBuilder.buildSaValutom({
       broj: 'VAL-1', pibProdavca: '100000001', pibKupca: '200000002',
       valuta: 'EUR', kurs: 117.2, kursDatum: '2026-05-21',
       osnovicaRSD: 11720, pdvRSD: 2344, ukupnoValuta: 120
@@ -100,7 +100,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('12. Faktura za javnu nabavku (CRF i JBKJS)', () => {
-    const xml = SefMatrixXmlBuilder.buildJavnaNabavka({
+    const xml = SefUblBuilder.buildJavnaNabavka({
       broj: 'JN-1', pibProdavca: '100000001', pibKupca: '200000002',
       iznos: 5000, brojUgovora: 'UG-123', jbkjs: '12345'
     });
@@ -111,7 +111,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('13. Standardna faktura (380)', () => {
-    const xml = SefMatrixXmlBuilder.buildStandardna({
+    const xml = SefUblBuilder.buildStandardna({
       broj: 'STD-1', pibProdavca: '100000001', pibKupca: '200000002',
       osnovica: 1000, pdv: 200
     });
@@ -120,7 +120,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('14. Fiskalizacija promet prodaja (380 sa PFR referencama)', () => {
-    const xml = SefMatrixXmlBuilder.buildFiskalizacijaProdaja({
+    const xml = SefUblBuilder.buildFiskalizacijaProdaja({
       broj: 'FIS-1', pibProdavca: '100000001', pibKupca: '200000002',
       ukupno: 1000, pfrBrojevi: ['PFR-111', 'PFR-222']
     });
@@ -129,7 +129,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('15. Fiskalizacija promet refundacija (381 sa PFR)', () => {
-    const xml = SefMatrixXmlBuilder.buildFiskalizacijaRefundacija({
+    const xml = SefUblBuilder.buildFiskalizacijaRefundacija({
       broj: 'REF-1', pibProdavca: '100000001', pibKupca: '200000002',
       ukupno: 1000, pfrBrojevi: ['PFR-333']
     });
@@ -139,7 +139,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('16. Konacna faktura sa valutom (380 zatvara avans u valuti)', () => {
-    const xml = SefMatrixXmlBuilder.buildKonacnaSaValutom({
+    const xml = SefUblBuilder.buildKonacnaSaValutom({
       broj: 'KVAL-1', pibProdavca: '100000001', pibKupca: '200000002',
       avansBroj: 'AV-EUR-1', valuta: 'EUR', kurs: 117.2,
       odbitakValuta: 100, zaUplatuValuta: 20
@@ -152,7 +152,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('17. Dokument o smanjenju po osnovu smanjenja avansa (381 sa SrbDtExt)', () => {
-    const xml = SefMatrixXmlBuilder.buildSmanjenjeAvansa({
+    const xml = SefUblBuilder.buildSmanjenjeAvansa({
       broj: 'SMAV-1', pibProdavca: '100000001', pibKupca: '200000002',
       avansBroj: 'AV-1', avansDatum: '2026-05-21',
       iznosSmanjenjaOsnovice: 500, iznosSmanjenjaPdv: 100
@@ -164,7 +164,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('18. Dokument o smanjenju u periodu (381 InvoicePeriod)', () => {
-    const xml = SefMatrixXmlBuilder.buildSmanjenjeUPeriodu({
+    const xml = SefUblBuilder.buildSmanjenjeUPeriodu({
       broj: 'SMPER-1', pibProdavca: '100000001', pibKupca: '200000002',
       periodOd: '2026-01-01', periodDo: '2026-03-31', opisKod: '35',
       iznosZaSmanjenjeOsnovice: 1000, iznosZaSmanjenjePdv: 200
@@ -176,7 +176,7 @@ describe('SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
   });
 
   it('19. Dokument o smanjenju za vise faktura (381 Multiple BillingReferences)', () => {
-    const xml = SefMatrixXmlBuilder.buildSmanjenjeViseFaktura({
+    const xml = SefUblBuilder.buildSmanjenjeViseFaktura({
       broj: 'SMVIS-1', pibProdavca: '100000001', pibKupca: '200000002',
       fakture: [
         { id: 'FAK-1', datum: '2026-04-01' },

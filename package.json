@@ -1,6 +1,9 @@
 {
   "name": "sef",
   "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "test": "vitest run --pool=cloudflare-workers",
     "dev": "nuxt dev --https",
@@ -22,6 +25,7 @@
     "wrangler": "^4.90.1"
   },
   "dependencies": {
+    "@dlbr/sef-ubl-builder": "workspace:*",
     "valibot": "^1.4.0"
   }
 }

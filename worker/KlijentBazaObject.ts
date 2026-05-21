@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./index";
-import { SefXmlBuilder, type SefInvoiceData, SefInvoiceSchema } from "../shared/types/sef";
+import { type SefInvoiceData, SefInvoiceSchema } from "../shared/types/sef";
+import { SefUblBuilder } from "../packages/sef-ubl-builder/src/index";
 import { SefClient } from "../shared/services/sefClient";
 import { PopdvSefClient } from "../shared/services/popdvClient";
 import { SefExcelBuilder } from "../shared/services/excelBuilder";
@@ -447,6 +448,27 @@ this.app.post('/admin/auto-renew', async ({ req }: RouterContext<Env>) => {
       });
     });
 
+    this.app.post('/api/evidencija/eeo', async ({ req }: RouterContext<Env>) => {
+      const data = await req.json() as any;
+      const id = data.id || `EEO-${Date.now()}`;
+      this.sql.exec(
+        `INSERT OR REPLACE INTO sef_poreske_evidencije_eeo (id, poreski_period, tip_evidencije, osnovica_20, pdv_20, osnovica_10, pdv_10, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, data.poreski_period, data.tip_evidencije || 'ZBIRNA', data.osnovica_20 || 0, data.pdv_20 || 0, data.osnovica_10 || 0, data.pdv_10 || 0, data.status || 'DRAFT'
+      );
+      return Response.json({ success: true, id });
+    });
+
+    this.app.post('/api/evidencija/epp', async ({ req }: RouterContext<Env>) => {
+      const data = await req.json() as any;
+      const poreski_period = data.poreski_period;
+      if (!poreski_period) return Response.json({ error: "Missing period" }, { status: 400 });
+      this.sql.exec(
+        `INSERT OR REPLACE INTO sef_poreske_evidencije_epp (poreski_period, carinski_pdv, interni_obracun_stranci, status) VALUES (?, ?, ?, ?)`,
+        poreski_period, data.carinski_pdv || 0, data.interni_obracun_stranci || 0, data.status || 'DRAFT'
+      );
+      return Response.json({ success: true, poreski_period });
+    });
+
     this.app.get('/stats', async () => {
       const stats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM fakture GROUP BY status`).toArray();
       const pStats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM sef_purchase_invoices GROUP BY status`).toArray();
@@ -608,6 +630,8 @@ this.app.post('/admin/auto-renew', async ({ req }: RouterContext<Env>) => {
       this.sql.exec(`CREATE TABLE IF NOT EXISTS istorija_statusa (id INTEGER PRIMARY KEY AUTOINCREMENT, faktura_id TEXT NOT NULL, status TEXT NOT NULL, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(faktura_id) REFERENCES fakture(internal_id) ON DELETE CASCADE);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS error_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, internal_id TEXT, sef_id TEXT, error_message TEXT NOT NULL, status_code INTEGER, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS procesuirani_webhook_id (sef_faktura_id TEXT PRIMARY KEY, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP);`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_poreske_evidencije_eeo (id TEXT PRIMARY KEY, poreski_period TEXT, tip_evidencije TEXT, osnovica_20 REAL, pdv_20 REAL, osnovica_10 REAL, pdv_10 REAL, status TEXT);`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_poreske_evidencije_epp (poreski_period TEXT PRIMARY KEY, carinski_pdv REAL DEFAULT 0.00, interni_obracun_stranci REAL DEFAULT 0.00, status TEXT);`);
     });
   }
 
@@ -717,7 +741,7 @@ this.app.post('/admin/auto-renew', async ({ req }: RouterContext<Env>) => {
           environment: config.environment,
           baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs/api' : 'https://demoefaktura.mfin.gov.rs/api')
         });
-        const result = await client.sendInvoice(SefXmlBuilder.build(JSON.parse(next[0].raw_data)), next[0].internal_id);
+        const result = await client.sendInvoice(SefUblBuilder.build(JSON.parse(next[0].raw_data)), next[0].internal_id);
         if (result.success) {
           this.sql.exec(`UPDATE fakture SET sef_id = ?, status = 'Sent' WHERE internal_id = ?`, result.salesInvoiceId?.toString(), next[0].internal_id);
         } else {
