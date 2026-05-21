@@ -35,7 +35,8 @@ export class SefClient {
 
   constructor(config: SefClientConfig) {
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl || '').replace(/\/+$/, '');
+    this.baseUrl = (config.baseUrl || '').trim().replace(/\/$/, "");
+    console.log(`[SefClient] Inicijalizovan API URL: ${this.baseUrl}`);
   }
 
   /**
@@ -71,7 +72,7 @@ export class SefClient {
    * Sends generated UBL XML to SEF API.
    */
   async sendInvoice(xml: string, requestId: string): Promise<SefSendResponse> {
-    const endpoint = `${this.baseUrl}/sales-invoice/ubl?requestId=${encodeURIComponent(requestId)}`;
+    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/ubl?requestId=${encodeURIComponent(requestId)}`;
 
     try {
       const response = await this.fetchWithTimeout(endpoint, {
@@ -121,7 +122,7 @@ export class SefClient {
    * Checks the status of a specific invoice.
    */
   async getInvoiceStatus(salesInvoiceId: number): Promise<SefStatusResponse | null> {
-    const endpoint = `${this.baseUrl}/sales-invoice/${salesInvoiceId}`;
+    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/${salesInvoiceId}`;
 
     try {
       const response = await this.fetchWithTimeout(endpoint, {
@@ -145,7 +146,7 @@ export class SefClient {
    * Fetches purchase invoice changes for a given range (v3 endpoint).
    */
   async getPurchaseInvoiceChanges(dateFrom: string, dateTo: string, page: number = 1): Promise<SefChangesResponse | null> {
-    const endpoint = `${this.baseUrl}/purchase-invoice/v3/changes?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}&page=${page}`;
+    const endpoint = `${this.baseUrl}/api/publicApi/purchase-invoice/v3/changes?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}&page=${page}`;
 
     try {
       const response = await this.fetchWithTimeout(endpoint, {
@@ -177,7 +178,7 @@ export class SefClient {
    * v3.8.0: Handles Base64 response from state servers.
    */
   async downloadPurchaseInvoiceXml(purchaseInvoiceId: number): Promise<string | null> {
-    const endpoint = `${this.baseUrl}/purchase-invoice/xml?invoiceId=${purchaseInvoiceId}`;
+    const endpoint = `${this.baseUrl}/api/publicApi/purchase-invoice/xml?invoiceId=${purchaseInvoiceId}`;
 
     try {
       const response = await this.fetchWithTimeout(endpoint, {
@@ -214,7 +215,7 @@ export class SefClient {
    * v3.8.0: Required for legal archival.
    */
   async downloadSignedInvoice(salesInvoiceId: number): Promise<string | null> {
-    const endpoint = `${this.baseUrl}/sales-invoice/signed-xml?invoiceId=${salesInvoiceId}`;
+    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/signed-xml?invoiceId=${salesInvoiceId}`;
 
     try {
       const response = await this.fetchWithTimeout(endpoint, {
@@ -246,7 +247,7 @@ export class SefClient {
    */
   async downloadAllCompanies(): Promise<string | null> {
     // Koristimo getAllCompanies koji je po preporuci korisnika stabilniji
-    const endpoint = `${this.baseUrl}/publicApi/getAllCompanies?includeAllStatuses=false`;
+    const endpoint = `${this.baseUrl}/api/publicApi/getAllCompanies?includeAllStatuses=false`;
 
     try {
       const response = await this.fetchWithTimeout(endpoint, {
@@ -303,7 +304,7 @@ export class SefClient {
    * Fetches official unit measures from SEF Public API.
    */
   async getUnitMeasures(): Promise<string[] | null> {
-    const endpoint = `${this.baseUrl}/publicApi/get-unit-measures`;
+    const endpoint = `${this.baseUrl}/api/publicApi/get-unit-measures`;
     try {
       const response = await this.fetchWithTimeout(endpoint, {
         method: 'GET',

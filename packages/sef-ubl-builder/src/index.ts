@@ -614,7 +614,26 @@ ${extension}
     const taxCat = data.poreskaKategorija || 'S';
     const stopa = data.pdvStopa || 20.00;
     const ukupno = (data.osnovica || 0) + (data.pdv || 0);
-    const xml = this.buildBaseInvoice(data, '380');
+
+    const lineXml = `
+  <cac:InvoiceLine>
+    <cbc:ID>1</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:LineExtensionAmount>
+    <cac:Item>
+      <cbc:Name>Promet dobara i usluga</cbc:Name>
+      <cac:ClassifiedTaxCategory>
+        <cbc:ID>${taxCat}</cbc:ID>
+        <cbc:Percent>${stopa.toFixed(2)}</cbc:Percent>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:ClassifiedTaxCategory>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:PriceAmount>
+    </cac:Price>
+  </cac:InvoiceLine>`;
+
+    const xml = this.buildBaseInvoice(data, '380', 'Invoice', lineXml);
     return xml + `
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="RSD">${this.formatAmount(data.pdv, smer)}</cbc:TaxAmount>
@@ -625,6 +644,9 @@ ${extension}
     </cac:TaxSubtotal>
   </cac:TaxTotal>
   <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="RSD">${this.formatAmount(ukupno, smer)}</cbc:TaxInclusiveAmount>
     <cbc:PayableAmount currencyID="RSD">${this.formatAmount(ukupno, smer)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
 </Invoice>`.trim();
