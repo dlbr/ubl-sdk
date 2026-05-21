@@ -526,15 +526,32 @@ ${extension}
   // 10. Faktura sa prilogom (380 AdditionalDocumentReference base64)
   static buildSaPrilogom(data: PrilogData) {
     const smer = data.smerDokumenta || 'POZITIVAN';
+    const taxCat = (data as any).poreskaKategorija || 'S';
+    const stopa = (data as any).pdvStopa || 20.00;
+    const osnovica = (data as any).osnovica || data.ukupno / (1 + (stopa / 100));
+    const pdv = (data as any).pdv || (data.ukupno - osnovica);
+
     const extraNodes = `  <cac:AdditionalDocumentReference>
     <cbc:ID>${data.prilogIme}</cbc:ID>
     <cac:Attachment>
       <cbc:EmbeddedDocumentBinaryObject mimeCode="application/pdf" filename="${data.prilogIme}">${data.prilogBase64}</cbc:EmbeddedDocumentBinaryObject>
     </cac:Attachment>
   </cac:AdditionalDocumentReference>`;
+
     const xml = this.buildBaseInvoice(data, '380', 'Invoice', extraNodes);
     return xml + `
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdv, smer)}</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="RSD">${this.formatAmount(osnovica, smer)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdv, smer)}</cbc:TaxAmount>
+      <cac:TaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa.toFixed(2)}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
   <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(osnovica, smer)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="RSD">${this.formatAmount(osnovica, smer)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="RSD">${this.formatAmount(data.ukupno, smer)}</cbc:TaxInclusiveAmount>
     <cbc:PayableAmount currencyID="RSD">${this.formatAmount(data.ukupno, smer)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
 </Invoice>`.trim();
@@ -545,12 +562,14 @@ ${extension}
     const smer = data.smerDokumenta || 'POZITIVAN';
     const taxCat = data.poreskaKategorija || 'S';
     const stopa = data.pdvStopa || 20.00;
+    
     const extraNodes = `  <cac:TaxExchangeRate>
     <cbc:SourceCurrencyCode>${data.valuta}</cbc:SourceCurrencyCode>
     <cbc:TargetCurrencyCode>RSD</cbc:TargetCurrencyCode>
     <cbc:CalculationRate>${data.kurs}</cbc:CalculationRate>
     <cbc:Date>${data.kursDatum}</cbc:Date>
   </cac:TaxExchangeRate>`;
+
     const xml = this.buildBaseInvoice(data, '380', 'Invoice', extraNodes);
     return xml + `
   <cac:TaxTotal>
@@ -562,6 +581,9 @@ ${extension}
     </cac:TaxSubtotal>
   </cac:TaxTotal>
   <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="${data.valuta}">${this.formatAmount(data.ukupnoValuta / (1 + (stopa / 100)), smer)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="${data.valuta}">${this.formatAmount(data.ukupnoValuta / (1 + (stopa / 100)), smer)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="${data.valuta}">${this.formatAmount(data.ukupnoValuta, smer)}</cbc:TaxInclusiveAmount>
     <cbc:PayableAmount currencyID="${data.valuta}">${this.formatAmount(data.ukupnoValuta, smer)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
 </Invoice>`.trim();
