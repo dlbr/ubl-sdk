@@ -1,9 +1,16 @@
 import { defineEventHandler, readBody, createError, setCookie } from 'h3';
-import { SefClient } from '@@/shared/services/sefClient';
+import { SefClient } from '../../../shared/services/sefClient';
+import { SessionEngine } from '../../../shared/services/session';
 
+/**
+ * POST /api/auth/login
+ * Edge-Native Login & Activation Handler sa ugrađenom proverom rotacije API ključeva.
+ * Autentifikuje klijenta, komunicira sa izolovanim DO Ledger-om i izdaje __Host- kolačić.
+ */
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event) as { pib: string; api_key: string; operater: string };
+  const body = await readBody(event) as { pib: string; api_key: string; operater: string; naziv?: string };
 
+  // 1. Rigorozna ulazna validacija
   if (!body || !body.pib || !body.api_key) {
     throw createError({ statusCode: 400, statusMessage: 'PIB i API ključ su obavezni.' });
   }
@@ -11,20 +18,20 @@ export default defineEventHandler(async (event) => {
   const env = event.context.cloudflare.env;
   
   try {
-    // 1. REGISTRACIJA U CENTRALNOM REGISTRU (D1)
-    // OKLOP: Osiguravamo da je klijent zapisan u globalnom indeksu pre nego što mu dodelimo DO
+    // 2. REGISTRACIJA U CENTRALNOM REGISTRU (D1)
+    // OKLOP: Osiguravamo da je klijent zapisan u globalnom indeksu pre dodele DO instance
     await env.REGISTAR_DB.prepare(
       `INSERT INTO klijenti (klijent_id, naziv, ima_aktivne_fakture, poslednji_sync) 
        VALUES (?, ?, 0, CURRENT_TIMESTAMP)
        ON CONFLICT(klijent_id) DO UPDATE SET naziv = excluded.naziv`
     ).bind(`klijent_${body.pib}`, body.naziv || `klijent_${body.pib}`).run();
 
-    // 2. Generisanje determinističkog imena za Durable Object na osnovu PIB-a
+    // 3. Generisanje determinističkog imena za Durable Object na osnovu PIB-a
     const klijentBaseName = `klijent_${body.pib}`;
     const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentBaseName);
     const doStub = env.KLIJENT_BAZA_OBJECT.get(doId);
 
-    // 3. Provera i sinhronizacija konfiguracije unutar izolovanog Durable Object-a
+    // 4. Provera postojeće konfiguracije unutar izolovanog Durable Object-a
     const verifyRes = await doStub.fetch('http://durableobject/config');
     let dbConfig: any = {};
     
@@ -32,22 +39,18 @@ export default defineEventHandler(async (event) => {
       dbConfig = await verifyRes.json();
     }
 
-    // BEZBEDNOSNI OKLOP: Pametno rukovanje promenom API ključa (Key Rotation)
+    // 5. OKLOP ZA ROTACIJU KLJUČA (Key Rotation Protocol)
     if (dbConfig && dbConfig.sef_api_key && dbConfig.sef_api_key !== body.api_key) {
-      // Ako se ključevi ne poklapaju, vršimo proveru validnosti novog ključa direktno na SEF-u
       const checkClient = new SefClient({ 
         apiKey: body.api_key, 
         baseUrl: env.SEF_API_URL || 'https://efaktura.mfin.gov.rs/api', 
         environment: dbConfig.environment || 'production' 
       });
       
-      // Pokušavamo lažni "ping" (povlačenje promena za današnji dan) da verifikujemo ključ
       const danas = new Date().toISOString().split('T')[0]!;
       const testChanges = await checkClient.getPurchaseInvoiceChanges(danas, danas, 1);
 
       if (testChanges !== null) {
-        // Ključ je prošao živu proveru na državnom serveru! Vršimo automatsko ažuriranje u Ledger-u.
-        console.log(`[Auth Edge] Detektovana validna rotacija API ključa za PIB ${body.pib}. Osvežavam Durable Object...`);
         const updateRes = await doStub.fetch('http://durableobject/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -57,14 +60,13 @@ export default defineEventHandler(async (event) => {
           })
         });
 
-        if (!updateRes.ok) throw createError({ statusCode: 500, statusMessage: 'Neuspešno osvežavanje API ključa u DO Ledgeru.' });
+        if (!updateRes.ok) throw createError({ statusCode: 500, statusMessage: 'Neuspešno osvežavanje API ključa.' });
       } else {
-        // Ključ je odbijen od strane državnog API gateway-a
-        throw createError({ statusCode: 401, statusMessage: 'Nevalidan API ključ. Državni SEF server je odbio autorizaciju.' });
+        throw createError({ statusCode: 401, statusMessage: 'Pogrešan API ključ. Državni SEF portal je odbio autorizaciju.' });
       }
     }
 
-    // Ako je u pitanju prva registracija (prazna konfiguracija), vršimo inicijalizaciju
+    // 6. Prva registracija (prazna konfiguracija)
     if (!dbConfig || !dbConfig.sef_api_key) {
       const initRes = await doStub.fetch('http://durableobject/config', {
         method: 'POST',
@@ -81,42 +83,24 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // 3. PAKOVANJE ZATVORENOG KOVČEGA (Edge-Native Web API implementacija)
+    // 7. PAKOVANJE ZATVORENOG KOVČEGA (Titanium Sealed Session - AES-256-GCM)
     const sessionPayload = {
-      klijentId: doId.toString(), // 64-karakterna čista heksadecimalna vrednost
+      klijentId: doId.toString(),
       pib: body.pib,
       operater: body.operater || 'Sistemski Operater',
       createdAt: Date.now()
     };
 
-    // Pretvaramo JSON tekst u UTF-8 niz bajtova kompatibilan sa V8 / Cloudflare Workers
-    const jsonText = JSON.stringify(sessionPayload);
-    const bytes = new TextEncoder().encode(jsonText);
-    
-    let binaryString = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binaryString += String.fromCharCode(bytes[i]);
-    }
-    const sessionString = btoa(binaryString);
+    // "Zapečatimo" sesiju koristeći SESSION_SECRET
+    const sealedCookieValue = await SessionEngine.seal(sessionPayload, env.SESSION_SECRET);
 
-    // Generisanje bezbednog mock IV segmenta
-    const ivBytes = new TextEncoder().encode(Date.now().toString());
-    let ivBinary = '';
-    for (let i = 0; i < ivBytes.byteLength; i++) {
-      ivBinary += String.fromCharCode(ivBytes[i]);
-    }
-    const mockIv = btoa(ivBinary).substring(0, 8);
-    
-    const sealedCookieValue = `${mockIv}.${sessionString}`;
-
-    // 4. POSTAVLJANJE RIGOROZNOG MDN-COMPLIANT KOLAČIĆA
-    // Svi atributi podešeni po najvišoj defanzivnoj specifikaciji
+    // 8. IZDAVANJE RIGOROZNOG MDN-COMPLIANT KOLAČIĆA
     setCookie(event, '__Host-sef_bridge_session', sealedCookieValue, {
       httpOnly: true,
-      secure: true,       // Obavezno za __Host- prefiks
-      sameSite: 'strict', // Apsolutna zaštita od CSRF napada na finansijskim klijentima
-      path: '/',          // Obavezno za __Host- (mora pokrivati koren)
-      maxAge: 60 * 60 * 8 // Trajanje sesije: Tačno jedno radno vreme (8 sati)
+      secure: true,
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 60 * 60 * 8 // 8 sati
     });
 
     return { 
@@ -128,7 +112,7 @@ export default defineEventHandler(async (event) => {
   } catch (err: any) {
     throw createError({ 
       statusCode: err.statusCode || 500, 
-      statusMessage: err.message || 'Fatalna greška na sistemu autentifikacije.' 
+      statusMessage: err.statusMessage || err.message || 'Fatalna greška na sistemu autentifikacije.' 
     });
   }
 });

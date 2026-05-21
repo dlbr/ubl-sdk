@@ -166,8 +166,12 @@ app.post('/api/admin/debug-csv', async ({ req, env }: RouterContext<Env>) => {
   });
 });
 
-// Pomoćna funkcija za brzo dešifrovanje kolačića na ivici (Web Crypto kompatibilno)
-function preuzmiSesijuIzKolacica(cookieString: string | null): { klijentId: string; operater: string } | null {
+import { SessionEngine } from '../shared/services/session';
+
+// ... (zadržavamo postojeće importe)
+
+// Pomoćna funkcija za brzo dešifrovanje kolačića na ivici (Titanium Unseal)
+async function preuzmiSesijuIzKolacica(cookieString: string | null, env: Env): Promise<{ klijentId: string; operater: string } | null> {
   if (!cookieString) return null;
   try {
     // Tražimo naš __Host- prefiksirani kolačić
@@ -177,19 +181,11 @@ function preuzmiSesijuIzKolacica(cookieString: string | null): { klijentId: stri
     let rawValue = mece.split('=')[1];
     if (!rawValue) return null;
 
-    // OKLOP: Dekodiramo URL-encoded karaktere (npr. %2E za tačku) pre splitovanja
+    // OKLOP: Dekodiramo URL-encoded karaktere pre otključavanja
     rawValue = decodeURIComponent(rawValue);
 
-    const [iv, payload] = rawValue.split('.');
-    if (!payload) return null;
-
-    // Edge-native dekodiranje za UTF-8 podršku bez Node.js Buffer-a
-    const binaryString = atob(payload);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return JSON.parse(new TextDecoder().decode(bytes));
+    // Korišćenje Titanium Session Engine za dešifrovanje (AES-256-GCM)
+    return await SessionEngine.unseal(rawValue, env.SESSION_SECRET);
   } catch {
     return null;
   }
@@ -206,7 +202,7 @@ const auth = (handler: (c: RouterContext<Env> & { klijentId?: string, operater?:
     }
 
     const cookieHeader = c.req.headers.get('Cookie');
-    const session = preuzmiSesijuIzKolacica(cookieHeader);
+    const session = await preuzmiSesijuIzKolacica(cookieHeader, c.env);
 
     if (!session || !session.klijentId) {
       return Response.json({ error: 'Nedostaje autorizacija: Sesija je nevažeća ili je istekla.' }, { status: 401 });
@@ -221,6 +217,35 @@ const auth = (handler: (c: RouterContext<Env> & { klijentId?: string, operater?:
 // ==========================================
 // 1. ONBOARDING & REGISTRACIJA
 // ==========================================
+app.post('/api/register', async ({ req, env }: RouterContext<Env>) => {
+  const { pib, naziv, sef_api_key } = await req.json() as { pib: string, naziv: string, sef_api_key: string };
+  if (!pib || !sef_api_key) return Response.json({ error: 'PIB i SEF API Key su obavezni' }, { status: 400 });
+
+  // Deterministički klijent ID usklađen sa novom strukturom
+  const klijentId = `klijent_${pib}`;
+
+  await env.REGISTAR_DB.prepare(
+    `INSERT INTO klijenti (klijent_id, naziv, ima_aktivne_fakture, poslednji_sync) VALUES (?, ?, 0, CURRENT_TIMESTAMP)
+     ON CONFLICT(klijent_id) DO UPDATE SET naziv = excluded.naziv`
+  ).bind(klijentId, naziv || klijentId).run();
+
+  // OKLOP: Korišćenje idFromName za determinističke hešove
+  const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
+  const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
+  
+  await klijentDO.fetch(new Request('http://durableobject/config', {
+    method: 'POST',
+    body: JSON.stringify({ sef_api_key, plan: 'Micro', limit: 50 }),
+    headers: { 'Content-Type': 'application/json' }
+  }));
+
+  return Response.json({ 
+    success: true, 
+    klijent_id: klijentId,
+    message: 'Onboarding uspešan. Aktivan paket: Micro (50 faktura/mesečno).'
+  });
+});
+
 app.get('/api/onboarding/search', async ({ req, env }: RouterContext<Env>) => {
   const url = new URL(req.url);
   const query = url.searchParams.get('q')?.trim() || '';

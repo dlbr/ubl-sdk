@@ -1,4 +1,5 @@
 import { defineEventHandler, getCookie, createError, getHeader, sendRedirect } from 'h3';
+import { SessionEngine } from '@@/shared/services/session';
 
 /**
  * Edge Auth Middleware - v2 Hardened (Cloudflare Worker Native)
@@ -35,7 +36,6 @@ export default defineEventHandler(async (event) => {
   }
 
   // 3. PREUZIMANJE KLIJENTSKOG KOLAČIĆA
-  // OKLOP: Pokušavamo preko getCookie, ali i direktno iz zaglavlja ako Nitro 'štuca' na Edge-u
   let sessionCookie = getCookie(event, '__Host-sef_bridge_session');
   
   if (!sessionCookie) {
@@ -49,39 +49,25 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!sessionCookie) {
-    // OKLOP: Redirekcija samo za GET zahteve koji su za stranice (HTML)
     const isPageRequest = !path.startsWith('/api/') && getHeader(event, 'accept')?.includes('text/html');
     if (isPageRequest) {
-      console.warn(`[Auth] Redirecting to onboarding from ${path} - session cookie missing.`);
       return sendRedirect(event, '/onboarding');
     }
-    
-    // Za API zahteve bacamo 401
     throw createError({
       statusCode: 401,
       statusMessage: 'Sesija istekla ili ne postoji.',
     });
   }
 
-  // 4. EDGE-NATIVE DEKODIRANJE I PARSIRANJE PAYLOAD-A (Bez Node.js Buffer-a)
+  // 4. TITANIUM UNSEAL: Dešifrovanje i verifikacija sesije (AES-256-GCM)
   try {
-    const delovi = sessionCookie.split('.');
-    const payloadBase64 = delovi[1];
+    const env = event.context.cloudflare.env;
+    const sessionData = await SessionEngine.unseal(sessionCookie, env.SESSION_SECRET);
 
-    if (!payloadBase64 || sessionCookie.includes('KORUMPIRANI')) {
+    if (!sessionData) {
        if (!path.startsWith('/api/')) return sendRedirect(event, '/onboarding');
        throw createError({ statusCode: 401, statusMessage: 'Kompromitovana ili nevalidna sesija.' });
     }
-
-    // Oklop za Cloudflare V8: Dekodiranje Base64 u binarni string preko atob-a
-    const binaryString = atob(payloadBase64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
-    const rawJson = new TextDecoder().decode(bytes);
-    const sessionData = JSON.parse(rawJson) as { klijentId: string; pib: string; operater: string; createdAt: number };
 
     // Bezbednosna provera starosti sesije (Maksimalno 8 sati rada)
     const OSAM_SATI_MS = 1000 * 60 * 60 * 8;
@@ -101,7 +87,6 @@ export default defineEventHandler(async (event) => {
     if (!path.startsWith('/api/')) {
       return sendRedirect(event, '/onboarding');
     }
-    // OKLOP: Prosleđujemo originalnu poruku ako već imamo H3Error, inače fallback
     throw createError({
       statusCode: err.statusCode || 401,
       statusMessage: err.statusMessage || 'Sesija nevalidna.',
