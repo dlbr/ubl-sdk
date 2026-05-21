@@ -260,24 +260,37 @@ export class KlijentBaza extends DurableObject<Env> {
       }
     });
 
-    this.app.get('/api/config/webhook-instructions', async () => {
-      const configRez = this.sql.exec(`SELECT sef_subscription_token, environment FROM konfiguracija WHERE id = 1`).toArray();
+    this.app.get('/api/config/webhook-instructions', async ({ req }) => {
+      const configRez = this.sql.exec(`SELECT sef_subscription_token, environment FROM konfiguracija WHERE id = 1`).toArray() as any[];
       const token = configRez[0]?.sef_subscription_token || 'TOKEN_MISSING';
-      const env = configRez[0]?.environment || 'sandbox';
-      const baseUrl = env === 'production' ? 'https://bridge.sef-link.rs' : 'https://sandbox-bridge.sef-link.rs';
-      const tenantId = this.ctx.id.toString();
+      const environment = configRez[0]?.environment || 'sandbox';
+      
+      // OKLOP: Dinamičko određivanje base URL-a na osnovu trenutnog zahteva
+      const url = new URL(req.url);
+      const baseUrl = url.origin;
 
+      // Koristimo klijent_id (ime DO objekta) za rutiranje državnog push-a
+      const klijentId = this.ctx.id.toString(); // Wait, this is the hex ID. 
+      // In our worker/index.ts we use idFromName(klijentId)
+      // So klijentId from register (klijent_PIB) is what we need.
+      // But we don't store the 'name' inside the DO easily unless we pass it.
+      // Let's check how we handle webhooks in worker/index.ts
+      // It expects 'kompanija_pib' in the body.
+      
       return Response.json({
         success: true,
         data: {
           koraci: [
-            "1. Ulogujte se na svoj SEF portal.", "2. Podešavanja -> API endpointi.",
-            "3. Zalepite 'URL za izlazne fakture'.", "4. Zalepite 'URL za ulazne fakture'.",
-            "5. Označite 'Isključi notifikacije na e-pošti'.", "6. Sačuvaj."
+            "1. Ulogujte se na svoj SEF portal.", 
+            "2. Podešavanja -> API endpointi.",
+            "3. Zalepite 'URL za izlazne fakture'.", 
+            "4. Zalepite 'URL za ulazne fakture'.",
+            "5. Označite 'Isključi notifikacije na e-pošti'.", 
+            "6. Sačuvaj."
           ],
           fields: {
-            sales_url: `${baseUrl}/webhooks/sef-update?tenant=${tenantId}&smer=SALES&token=${token}`,
-            purchase_url: `${baseUrl}/webhooks/sef-update?tenant=${tenantId}&smer=PURCHASES&token=${token}`
+            sales_url: `${baseUrl}/api/webhooks/sef`,
+            purchase_url: `${baseUrl}/api/webhooks/sef`
           }
         }
       });

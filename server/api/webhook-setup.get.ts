@@ -18,19 +18,17 @@ export default defineEventHandler(async (event) => {
   
   let doStub;
   try {
-    // Defanzivno parsiranje: Pretpostavljamo da koristimo stroge 64-karakterne DO heš stringove (idFromString)
-    // Ako tvoj sistem koristi proizvoljna tekstualna imena, vrati na idFromName(klijentId)
-    const doId = env.KLIJENT_BAZA.idFromString(klijentId);
-    doStub = env.KLIJENT_BAZA.get(doId);
-  } catch (idError) {
+    // OKLOP: Koristimo idFromName jer je klijentId u našem sistemu zapravo ime objekta (klijent_PIB)
+    const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
+    doStub = env.KLIJENT_BAZA_OBJECT.get(doId);
+  } catch (idError: any) {
     throw createError({
       statusCode: 400,
-      statusMessage: `Malformisan X-Klijent-ID format: ${klijentId}`
+      statusMessage: `Greška pri inicijalizaciji Durable Object-a: ${idError.message}`
     });
   }
 
   // 2. Poziv unutrašnjeg endpointa sa garantovanim rutingom kroz Router
-  // Koristimo fiksni interni domen 'http://durableobject' kako bismo osigurali čistu izolaciju
   const internalUrl = 'http://durableobject/api/config/webhook-instructions';
   
   try {
@@ -38,7 +36,7 @@ export default defineEventHandler(async (event) => {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'X-Nitro-Proxy': 'true' // Forenzički trag za unutrašnji DO log ako zatreba debug
+        'X-Nitro-Proxy': 'true'
       }
     });
     
