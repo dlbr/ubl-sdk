@@ -1,4 +1,4 @@
-# @dlbr/sef-ubl-builder (v4.0.0)
+# @dlbr/sef-ubl-builder (v4.0.0) 🚧 (WIP)
 
 Ultra-brzi, Edge-native TypeScript engine za generisanje UBL 2.1 XML dokumenata usklađenih sa **Master Specifikacijom Ministarstva finansija Republike Srbije (April 2026)**.
 

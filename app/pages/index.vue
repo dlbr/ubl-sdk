@@ -4,6 +4,10 @@ const { klijentId, isAuthenticated } = useSefAuth()
 
 <template>
   <div class="min-h-screen bg-white font-sans text-gray-900">
+    <!-- Demo Banner -->
+    <div class="bg-red-600 text-white text-center py-2 text-xs font-black uppercase tracking-[0.2em] sticky top-0 z-50 shadow-xl">
+      SISTEM JE U DEMO REŽIMU — TRANSAKCIJE SE VRŠE NA DRŽAVNOM SANDBOX-u
+    </div>
     <!-- Navigacija -->
     <nav class="max-w-7xl mx-auto px-6 py-6 flex justify-between items-center">
       <div class="flex items-center gap-2">
