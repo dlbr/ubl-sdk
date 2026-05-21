@@ -444,8 +444,8 @@ export class KlijentBaza extends DurableObject<Env> {
 
       // Zdravstveni indikator: broj grešaka u zadnjih 24h
       const health = this.sql.exec(`SELECT COUNT(*) as broj FROM error_logs WHERE kreirano_u > datetime('now', '-1 day')`).one() as { broj: number };
-      
       return Response.json({ 
+        success: true,
         stats, 
         purchase_stats: pStats, 
         health: health.broj,
@@ -637,7 +637,7 @@ export class KlijentBaza extends DurableObject<Env> {
       const client = new SefClient({ 
         apiKey: config.sef_api_key, 
         environment: config.environment,
-        baseUrl: config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs'
+        baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs/api' : 'https://demoefaktura.mfin.gov.rs/api')
       });
       const result = await client.getPurchaseInvoiceChanges(current.last_successful_date, new Date().toISOString(), current.current_page);
       if (result && result.invoices) {
@@ -677,10 +677,10 @@ export class KlijentBaza extends DurableObject<Env> {
         const config = configRes[0] as any;
         if (!config) break;
         const client = new SefClient({ 
-        apiKey: config.sef_api_key, 
-        environment: config.environment,
-        baseUrl: config.environment === 'production' ? 'https://efaktura.mfin.gov.rs/api' : 'https://demoefaktura.mfin.gov.rs/api'
-      });
+          apiKey: config.sef_api_key, 
+          environment: config.environment,
+          baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs/api' : 'https://demoefaktura.mfin.gov.rs/api')
+        });
         const result = await client.sendInvoice(SefXmlBuilder.build(JSON.parse(next[0].raw_data)), next[0].internal_id);
         if (result.success) {
           this.sql.exec(`UPDATE fakture SET sef_id = ?, status = 'Sent' WHERE internal_id = ?`, result.salesInvoiceId?.toString(), next[0].internal_id);
@@ -792,7 +792,7 @@ export class KlijentBaza extends DurableObject<Env> {
     const client = new SefClient({ 
       apiKey: config.sef_api_key, 
       environment: config.environment,
-      baseUrl: config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs'
+      baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs/api' : 'https://demoefaktura.mfin.gov.rs/api')
     });
     const fakture = this.sql.exec(`SELECT internal_id, sef_id, status FROM fakture WHERE status NOT IN ('Approved', 'Rejected', 'Cancelled') AND sef_id IS NOT NULL`).toArray() as any[];
     for (const f of fakture) {

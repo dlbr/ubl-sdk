@@ -48,9 +48,10 @@ export default defineEventHandler(async (event) => {
       const tryEnvs: Array<'production' | 'sandbox'> = ['production', 'sandbox'];
       
       for (const envType of tryEnvs) {
-        const baseUrl = envType === 'production' 
+        // PRIORITET: Koristimo env.SEF_API_URL ako postoji, inače standardne državne rute
+        const baseUrl = env.SEF_API_URL || (envType === 'production' 
           ? 'https://efaktura.mfin.gov.rs/api' 
-          : 'https://demoefaktura.mfin.gov.rs/api';
+          : 'https://demoefaktura.mfin.gov.rs/api');
 
         const checkClient = new SefClient({ 
           apiKey: body.api_key, 
