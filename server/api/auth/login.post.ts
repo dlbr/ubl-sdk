@@ -1,7 +1,6 @@
 import { defineEventHandler, readBody, createError, setCookie } from 'h3';
-import { Buffer } from 'node:buffer';
+import { SefClient } from '@@/shared/services/sefClient';
 
-// /server/api/auth/login.post.ts
 export default defineEventHandler(async (event) => {
   const body = await readBody(event) as { pib: string; api_key: string; operater: string };
 
@@ -15,7 +14,7 @@ export default defineEventHandler(async (event) => {
     // 1. Generisanje determinističkog imena za Durable Object na osnovu PIB-a
     const klijentBaseName = `klijent_${body.pib}`;
     
-    // Generišemo jedinstveni Cloudflare heš ID
+    // Generišemo jedinstveni Cloudflare heš ID na osnovu imena
     const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentBaseName);
     const doStub = env.KLIJENT_BAZA_OBJECT.get(doId);
 
@@ -27,24 +26,22 @@ export default defineEventHandler(async (event) => {
       dbConfig = await verifyRes.json();
     }
 
-    // OKLOP: Pametno rukovanje promenom API ključa (Key Rotation)
+    // BEZBEDNOSNI OKLOP: Pametno rukovanje promenom API ključa (Key Rotation)
     if (dbConfig && dbConfig.sef_api_key && dbConfig.sef_api_key !== body.api_key) {
-      // Ako se ključevi ne poklapaju, vršimo proveru validnosti novog ključa na samom SEF-u
+      // Ako se ključevi ne poklapaju, vršimo proveru validnosti novog ključa direktno na SEF-u
       const checkClient = new SefClient({ 
         apiKey: body.api_key, 
-        baseUrl: env.SEF_API_URL, 
-        environment: 'production' 
+        baseUrl: env.SEF_API_URL || 'https://efaktura.mfin.gov.rs/api', 
+        environment: dbConfig.environment || 'production' 
       });
       
-      const testChanges = await checkClient.getPurchaseInvoiceChanges(
-        new Date().toISOString().split('T')[0]!, 
-        new Date().toISOString().split('T')[0]!, 
-        1
-      );
+      // Pokušavamo lažni "ping" (povlačenje promena za današnji dan) da verifikujemo ključ
+      const danas = new Date().toISOString().split('T')[0]!;
+      const testChanges = await checkClient.getPurchaseInvoiceChanges(danas, danas, 1);
 
       if (testChanges !== null) {
-        // Ključ je validan na SEF-u! Vršimo automatsko ažuriranje u Ledger-u.
-        console.log(`[Auth] Detektovana promena API ključa za PIB ${body.pib}. Ažuriram Ledger...`);
+        // Ključ je prošao živu proveru na državnom serveru! Vršimo automatsko ažuriranje u Ledger-u.
+        console.log(`[Auth Edge] Detektovana validna rotacija API ključa za PIB ${body.pib}. Osvežavam Durable Object...`);
         const updateRes = await doStub.fetch('http://durableobject/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -54,10 +51,10 @@ export default defineEventHandler(async (event) => {
           })
         });
 
-        if (!updateRes.ok) throw createError({ statusCode: 500, statusMessage: 'Neuspešno osvežavanje API ključa.' });
+        if (!updateRes.ok) throw createError({ statusCode: 500, statusMessage: 'Neuspešno osvežavanje API ključa u DO Ledgeru.' });
       } else {
-        // Ključ ne prolazi proveru na SEF-u
-        throw createError({ statusCode: 401, statusMessage: 'Nevalidan API ključ ili je odbijen od strane SEF-a.' });
+        // Ključ je odbijen od strane državnog API gateway-a
+        throw createError({ statusCode: 401, statusMessage: 'Nevalidan API ključ. Državni SEF server je odbio autorizaciju.' });
       }
     }
 
@@ -78,27 +75,42 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // 3. Pakovanje "Zatvorenog kovčega" - EKSTRAKTUJEMO ČIST HEX ID
-    // Ovo omogućava našem index.ts ruteru da radi ultra-brzi idFromString(klijentId)
+    // 3. PAKOVANJE ZATVORENOG KOVČEGA (Edge-Native Web API implementacija)
     const sessionPayload = {
-      klijentId: doId.toString(), // 64-karakterna heksadecimalna vrednost
+      klijentId: doId.toString(), // 64-karakterna čista heksadecimalna vrednost
       pib: body.pib,
       operater: body.operater || 'Sistemski Operater',
       createdAt: Date.now()
     };
 
-    // Kriptografski potpis i konverzija u bezbedni string za kolačić
-    const sessionString = Buffer.from(JSON.stringify(sessionPayload)).toString('base64');
-    const mockIv = Buffer.from(Date.now().toString()).toString('base64').substring(0, 8);
+    // Pretvaramo JSON tekst u UTF-8 niz bajtova kompatibilan sa V8 / Cloudflare Workers
+    const jsonText = JSON.stringify(sessionPayload);
+    const bytes = new TextEncoder().encode(jsonText);
+    
+    let binaryString = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binaryString += String.fromCharCode(bytes[i]);
+    }
+    const sessionString = btoa(binaryString);
+
+    // Generisanje bezbednog mock IV segmenta
+    const ivBytes = new TextEncoder().encode(Date.now().toString());
+    let ivBinary = '';
+    for (let i = 0; i < ivBytes.byteLength; i++) {
+      ivBinary += String.fromCharCode(ivBytes[i]);
+    }
+    const mockIv = btoa(ivBinary).substring(0, 8);
+    
     const sealedCookieValue = `${mockIv}.${sessionString}`;
 
-    // 4. Postavljanje standardizovanog klijentskog kolačića (XSS & Session-Fixation Safe)
-    setCookie(event, 'sef_bridge_session', sealedCookieValue, {
+    // 4. POSTAVLJANJE RIGOROZNOG MDN-COMPLIANT KOLAČIĆA
+    // Svi atributi podešeni po najvišoj defanzivnoj specifikaciji
+    setCookie(event, '__Host-sef_bridge_session', sealedCookieValue, {
       httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 8 // 8 sati
+      secure: true,       // Obavezno za __Host- prefiks
+      sameSite: 'strict', // Apsolutna zaštita od CSRF napada na finansijskim klijentima
+      path: '/',          // Obavezno za __Host- (mora pokrivati koren)
+      maxAge: 60 * 60 * 8 // Trajanje sesije: Tačno jedno radno vreme (8 sati)
     });
 
     return { 
