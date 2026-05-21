@@ -37,20 +37,23 @@ export interface SefFaktureResponse {
 }
 
 export const useSefAuth = () => {
-  // Čuvanje klijent ID-a u cookie-ju radi perzistentnosti na klijentu
+  // Pomoćni klijentski kolačić (samo za pamćenje PIB-a u UI-ju, nema autorizacionu moć)
   const klijentId = useCookie('sef_klijent_id', {
     maxAge: 60 * 60 * 24 * 30, // 30 dana
     sameSite: 'lax'
   })
 
+  // Autorizacija se proverava na backendu preko __Host-sef_bridge_session
   const isAuthenticated = computed(() => !!klijentId.value)
 
   const login = (id: string) => {
     klijentId.value = id
   }
 
-  const logout = () => {
+  const logout = async () => {
     klijentId.value = null
+    // Pozivamo logout na backendu da obriše __Host- kolačić
+    await $fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
     navigateTo('/')
   }
 
@@ -77,11 +80,11 @@ export const useSefApi = () => {
     })
   }
 
-  // ONBOARDING: Registracija klijenta
-  const register = async (pib: string, naziv: string, sef_api_key: string) => {
-    return await $fetch(`/api/register`, {
+  // ONBOARDING: Aktivacija klijenta i kreiranje sesije
+  const activate = async (pib: string, naziv: string, sef_api_key: string, operater: string = 'Sistemski Operater') => {
+    return await $fetch(`/api/auth/login`, {
       method: 'POST',
-      body: { pib, naziv, sef_api_key }
+      body: { pib, naziv, api_key: sef_api_key, operater }
     })
   }
 
@@ -128,7 +131,7 @@ export const useSefApi = () => {
   }
 
   return {
-    register,
+    activate,
     getStats,
     getLogs,
     getFakture,

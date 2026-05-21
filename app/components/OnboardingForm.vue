@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 
 const { query, results, isLoading } = useSefSearch()
-const { register } = useSefApi()
+const { activate } = useSefApi()
 const { login } = useSefAuth()
 
 const izabranaFirma = ref<any>(null)
@@ -32,13 +32,14 @@ const handleRegister = async () => {
   error.value = ''
   
   try {
-    const res = await register(izabranaFirma.value.pib, izabranaFirma.value.naziv_firme, sefKey.value) as any
+    const res = await activate(izabranaFirma.value.pib, izabranaFirma.value.naziv_firme, sefKey.value) as any
     if (res.success) {
-      login(res.klijent_id)
+      // Inicijalizujemo lokalni state (ali sesija je već u __Host- kolačiću)
+      login(`klijent_${izabranaFirma.value.pib}`)
       navigateTo('/dashboard')
     }
   } catch (e: any) {
-    error.value = e.data?.error || 'Greška prilikom aktivacije sefa.'
+    error.value = e.data?.statusMessage || 'Greška prilikom aktivacije sefa.'
   } finally {
     isSubmitting.value = false
   }

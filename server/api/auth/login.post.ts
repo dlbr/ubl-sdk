@@ -11,14 +11,20 @@ export default defineEventHandler(async (event) => {
   const env = event.context.cloudflare.env;
   
   try {
-    // 1. Generisanje determinističkog imena za Durable Object na osnovu PIB-a
+    // 1. REGISTRACIJA U CENTRALNOM REGISTRU (D1)
+    // OKLOP: Osiguravamo da je klijent zapisan u globalnom indeksu pre nego što mu dodelimo DO
+    await env.REGISTAR_DB.prepare(
+      `INSERT INTO klijenti (klijent_id, naziv, ima_aktivne_fakture, poslednji_sync) 
+       VALUES (?, ?, 0, CURRENT_TIMESTAMP)
+       ON CONFLICT(klijent_id) DO UPDATE SET naziv = excluded.naziv`
+    ).bind(`klijent_${body.pib}`, body.naziv || `klijent_${body.pib}`).run();
+
+    // 2. Generisanje determinističkog imena za Durable Object na osnovu PIB-a
     const klijentBaseName = `klijent_${body.pib}`;
-    
-    // Generišemo jedinstveni Cloudflare heš ID na osnovu imena
     const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentBaseName);
     const doStub = env.KLIJENT_BAZA_OBJECT.get(doId);
 
-    // 2. Provera i sinhronizacija konfiguracije unutar izolovanog Durable Object-a
+    // 3. Provera i sinhronizacija konfiguracije unutar izolovanog Durable Object-a
     const verifyRes = await doStub.fetch('http://durableobject/config');
     let dbConfig: any = {};
     

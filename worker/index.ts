@@ -255,33 +255,6 @@ app.get('/api/onboarding/search', async ({ req, env }: RouterContext<Env>) => {
   }
 });
 
-app.post('/api/register', async ({ req, env }: RouterContext<Env>) => {
-  const { pib, naziv, sef_api_key } = await req.json() as { pib: string, naziv: string, sef_api_key: string };
-  if (!pib || !sef_api_key) return Response.json({ error: 'PIB i SEF API Key su obavezni' }, { status: 400 });
-
-  const klijentId = `klijent_${pib}`;
-
-  await env.REGISTAR_DB.prepare(
-    `INSERT INTO klijenti (klijent_id, naziv, ima_aktivne_fakture, poslednji_sync) VALUES (?, ?, 0, CURRENT_TIMESTAMP)
-     ON CONFLICT(klijent_id) DO UPDATE SET naziv = excluded.naziv`
-  ).bind(klijentId, naziv || klijentId).run();
-
-  const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
-  const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
-  
-  await klijentDO.fetch(new Request('http://durableobject/config', {
-    method: 'POST',
-    body: JSON.stringify({ sef_api_key, plan: 'Micro', limit: 50 }),
-    headers: { 'Content-Type': 'application/json' }
-  }));
-
-  return Response.json({ 
-    success: true, 
-    klijent_id: klijentId,
-    message: 'Onboarding uspešan. Aktivan paket: Micro (50 faktura/mesečno).'
-  });
-});
-
 // ==========================================
 // 2. GLOBALNI WEBHOOK PRIJEMNIK (DRŽAVNI PUSH)
 // ==========================================
