@@ -162,7 +162,11 @@ app.post('/api/admin/debug-csv', async ({ req, env }: RouterContext<Env>) => {
   });
 });
 
-// Pomoćna funkcija za brzo dešifrovanje kolačića na ivici (Web Crypto kompatibilno)
+import { Buffer } from 'node:buffer';
+
+// ... (zadržavamo postojeće importe)
+
+// Pomoćna funkcija za brzo dešifrovanje kolačića na ivici
 function preuzmiSesijuIzKolacica(cookieString: string | null): { klijentId: string; operater: string } | null {
   if (!cookieString) return null;
   try {
@@ -174,13 +178,9 @@ function preuzmiSesijuIzKolacica(cookieString: string | null): { klijentId: stri
     const [iv, payload] = rawValue.split('.');
     if (!payload) return null;
 
-    // Edge-native dekodiranje za UTF-8 podršku bez Node.js Buffer-a
-    const binaryString = atob(payload);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return JSON.parse(new TextDecoder().decode(bytes));
+    // Korišćenje Buffer-a zahvaljujući nodejs_compat
+    const decodedPayload = Buffer.from(payload, 'base64').toString('utf8');
+    return JSON.parse(decodedPayload);
   } catch {
     return null;
   }

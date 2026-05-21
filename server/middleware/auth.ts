@@ -1,5 +1,6 @@
 // /server/middleware/auth.ts
 import { defineEventHandler, getCookie, createError, getHeader, sendRedirect } from 'h3';
+import { Buffer } from 'node:buffer';
 
 /**
  * Edge Auth Middleware - v2 Hardened (Cloudflare Worker Native)
@@ -58,14 +59,8 @@ export default defineEventHandler(async (event) => {
        throw createError({ statusCode: 401, statusMessage: 'Kompromitovana ili nevalidna sesija.' });
     }
 
-    // Oklop za Cloudflare V8: Dekodiranje Base64 u binarni string preko atob-a
-    const binaryString = atob(payloadBase64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
-    const rawJson = new TextDecoder().decode(bytes);
+    // 4. DEKODIRANJE PAYLOAD-A POMOĆU BUFFER-A (nodejs_compat omogućen)
+    const rawJson = Buffer.from(payloadBase64, 'base64').toString('utf8');
     const sessionData = JSON.parse(rawJson) as { klijentId: string; pib: string; operater: string; createdAt: number };
 
     // Bezbednosna provera starosti sesije (Maksimalno 8 sati rada)
