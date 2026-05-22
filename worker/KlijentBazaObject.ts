@@ -147,6 +147,30 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json(config);
     });
 
+    this.app.get('/api/config/webhook-instructions', async () => {
+      const config = this.sql.exec(`SELECT klijent_id, environment FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
+      if (!config) return Response.json({ error: "Firma nije konfigurisana" }, { status: 404 });
+      
+      // OKLOP: Safe host detection
+      let host = 'sef.dlbr.cloud';
+      const websiteUrl = (this.env as any).WEBSITE_URL;
+      if (websiteUrl) {
+        try { host = new URL(websiteUrl).host; } catch(e) {}
+      }
+      
+      const webhookBase = `https://${host}/api/webhooks/sef`;
+      
+      return Response.json({
+        success: true,
+        instructions: {
+          sales_url: `${webhookBase}?smer=SALES`,
+          purchase_url: `${webhookBase}?smer=PURCHASES`,
+          token_header: "X-SEF-Token",
+          environment: config.environment
+        }
+      });
+    });
+
     this.app.post('/config', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
       const oldConfig = this.sql.exec(`SELECT status_pretplate, limit_faktura, billing_period, licenca_od_datuma, licenca_istice_timestamp, avans_za_obnovu_poslat, limit_faktura_godisnje, poreski_period_tip FROM konfiguracija WHERE id = 1`).toArray()[0] as any;

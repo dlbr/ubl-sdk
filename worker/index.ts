@@ -360,6 +360,19 @@ app.post('/api/webhooks/sef', validateJson(SefWebhookSchema, async (c: RouterCon
   return new Response(JSON.stringify({ uspeh: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }));
 
+app.get('/api/auth/session', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
+  return Response.json({
+    success: true,
+    klijentId: c.klijentId,
+    timestamp: Date.now()
+  });
+}));
+
+app.get('/api/webhook-setup', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
+  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/api/config/webhook-instructions'));
+}));
+
 app.get('/api/dashboard/stats', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/stats'));
