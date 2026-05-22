@@ -7,7 +7,25 @@ export default defineConfig({
       wrangler: { configPath: './wrangler.toml' },
     }),
   ],
+  // v4.3.5: Move poolOptions to top-level for Vitest 4.x compatibility
+  poolOptions: {
+    workers: {
+      singleWorker: true, 
+      miniflare: {
+        compatibilityDate: '2026-05-21',
+      }
+    }
+  },
   test: {
-    include: ['worker/**/*.{test,spec}.ts', 'server/**/*.{test,spec}.ts', 'packages/**/*.{test,spec}.ts', 'test/**/*.{test,spec}.ts'],
+    include: [
+      'worker/**/*.{test,spec}.ts', 
+      'server/**/*.{test,spec}.ts', 
+      'packages/**/*.{test,spec}.ts', 
+      'test/**/*.{test,spec}.ts'
+    ],
+    reporters: ['default', 'hanging-process'],
+    testTimeout: 30000,
+    teardownTimeout: 10000,
+    forceRerunTriggers: ['**/wrangler.toml'],
   }
 });

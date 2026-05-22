@@ -41,6 +41,7 @@ crons = ["0 2 * * *"]
 
 [ai]
 binding = "AI"
+remote = true
 
 [[queues.producers]]
 binding = "SEF_QUEUE"

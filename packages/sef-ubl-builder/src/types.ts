@@ -5,18 +5,36 @@ export type SefPoreskaKategorija =
   | 'AE10' // Obrnuti obračun 10%
   | 'E'    // Oslobođeno bez prava na odbitak
   | 'Z'    // Nulta stopa (Sa pravom na odbitak)
+  | 'R'    // Oslobođeno sa pravom na odbitak / specifično
   | 'N';   // Anuliranje / Specifični režimi
 
 export interface BaseInvoiceData {
   broj: string;
   pibProdavca: string;
   pibKupca: string;
+  nazivProdavca?: string;
+  nazivKupca?: string;
+  maticniBrojProdavca?: string;
+  maticniBrojKupca?: string;
+  adresaProdavca?: string;
+  gradProdavca?: string;
+  postanskiBrojProdavca?: string;
+  adresaKupca?: string;
+  gradKupca?: string;
+  postanskiBrojKupca?: string;
+  note?: string;
   datumIzdavanja?: string;
   datumDospeca?: string;
+  datumPrometa?: string;
   valuta?: string;
   poreskaKategorija?: SefPoreskaKategorija | string;
+  pdvStopa?: number;
   smerDokumenta?: 'POZITIVAN' | 'NEGATIVAN';
-  tipDokumenta?: '380' | '386' | '381';
+  tipDokumenta?: '380' | '386' | '381' | '383';
+  brojNarudzbenice?: string;
+  brojUgovora?: string;
+  jbkjs?: string;
+  buyerReference?: string;
   avansneReference?: {
     brojAvansnogRacuna: string;
     idSefAvansa: string;
@@ -64,11 +82,11 @@ export interface OslobodjenaData extends BaseInvoiceData {
   iznos: number;
   poreskaKategorija: string;
   sifraOslobodjenja: string;
-  zakonskiClan?: string; // OKLOP: Obavezan tekstualni opis zakonskog člana
+  zakonskiClan?: string;
 }
 
 export interface ZbirniEeoData {
-  poreskiPeriod: string; // npr. 2026-05
+  poreskiPeriod: string;
   osnovicaOpsta: number;
   pdvOpsta: number;
   osnovicaPosebna: number;
@@ -81,7 +99,7 @@ export interface EppData {
   nabavkeOdObveznikaPdv: number;
   prethodniPorezOdObveznika: number;
   importPdvCarina: number;
-  gradevinarstvoPorez?: number; // Član 10
+  gradevinarstvoPorez?: number;
 }
 
 export interface JavnaNabavkaData extends BaseInvoiceData {
@@ -93,10 +111,11 @@ export interface JavnaNabavkaData extends BaseInvoiceData {
 export interface PopustData extends BaseInvoiceData {
   iznosPrePopusta: number;
   popustIznos: number;
-  pdvStopa: number;
 }
 
 export interface PrilogData extends BaseInvoiceData {
+  osnovica: number;
+  pdv: number;
   ukupno: number;
   prilogIme: string;
   prilogBase64: string;

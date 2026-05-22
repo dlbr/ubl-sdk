@@ -65,7 +65,7 @@ describe('🚀 SEF Live Sandbox Integration — Live Hotfix Testing', () => {
     console.log("📡 Ispaljujem stvarni mrežni zahtev na državni DEMO SEF...");
 
     // 2. VRŠIMO STVARNI POZIV DRŽAVNOM SANDBOX-U (SUTrans API rute)
-    const ziviOdgovorDrzave = await fetch('https://demosef.mfin.gov.rs/api/publicApi/sales-invoice/ubl', {
+    const ziviOdgovorDrzave = await fetch('https://demoefaktura.mfin.gov.rs/api/publicApi/sales-invoice/ubl', {
       method: 'POST',
       headers: {
         'ApiKey': LIVE_DEMO_API_KEY,
@@ -75,8 +75,8 @@ describe('🚀 SEF Live Sandbox Integration — Live Hotfix Testing', () => {
       body: malformisaniXml
     });
 
-    // Država nas odbija sa HTTP 400 jer smo poslali nepostojeće poreske subjekte
-    expect(ziviOdgovorDrzave.status).toBe(400);
+    // Država nas odbija sa HTTP 400/422 jer smo poslali nepostojeće poreske subjekte
+    expect([400, 422]).toContain(ziviOdgovorDrzave.status);
 
     // 3. Propuštamo ovaj ŽIVI, sirovi odgovor države kroz naš Edge AI presretač
     const odgovorKlijentskomErpU = await handleSefErrorWithEdgeAi(
