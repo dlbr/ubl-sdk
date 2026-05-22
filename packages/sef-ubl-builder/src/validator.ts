@@ -2,6 +2,18 @@
  * SefLiveValidator - Dynamic validation based on state-cached metadata.
  * Uses Cloudflare KV as a fast Edge source for official state codebooks.
  */
+/**
+ * KeyValueStore - Abstraction layer for metadata retrieval.
+ * Allows SEF Bridge logic to be agnostic of the storage provider.
+ */
+export interface KeyValueStore {
+  get(key: string): Promise<any>;
+}
+
+/**
+ * SefLiveValidator - Dynamic validation based on abstract state storage.
+ * Aligned with 2026 MFIN forensic rules.
+ */
 export class SefLiveValidator {
   private static cache: Map<string, any> = new Map();
   private static CACHE_TTL = 300000; // 5 minutes in-memory
@@ -19,17 +31,16 @@ export class SefLiveValidator {
   }
 
   /**
-   * Validates unit measure code against official SEF codebook (e.g., H87, PCE, KGM).
-   * Aligned with 2026 MFIN forensic rules.
+   * Validates unit measure code against the provided store (e.g., H87, PCE, KGM).
    */
-  static async validateUnitMeasure(code: string, env: any): Promise<boolean> {
+  static async validateUnitMeasure(code: string, store: KeyValueStore): Promise<boolean> {
     const cached = this.getCached("unit_measures");
     if (cached) return cached.includes(code);
 
     try {
-      const raw = await env.PORESKI_KV.get("DRZAVNE_JEDINICE_MERA", "json") as string[] | null;
+      const raw = await store.get("DRZAVNE_JEDINICE_MERA") as string[] | null;
       if (!raw) {
-        console.warn("[Validator] KV_MISSING_FALLBACK: Koristim dozvoljene default kodove (H87, PCE, KGM, DAY, HUR).");
+        console.warn("[Validator] STORE_MISSING_FALLBACK: Koristim dozvoljene default kodove (H87, PCE, KGM, DAY, HUR).");
         const defaults = ["H87", "PCE", "KGM", "DAY", "HUR"];
         return defaults.includes(code);
       }
@@ -37,16 +48,15 @@ export class SefLiveValidator {
       this.setCache("unit_measures", raw);
       return raw.includes(code);
     } catch (e) {
-      console.error("[Validator] KV_FETCH_ERROR for units:", e);
-      return true; // Permissive fallback on error to prevent blocking valid invoices
+      console.error("[Validator] STORE_FETCH_ERROR for units:", e);
+      return true; // Permissive fallback
     }
   }
 
   /**
-   * Retrieves live tax rules and configuration from Cloudflare KV.
-   * Enables zero-downtime compliance updates.
+   * Retrieves live tax rules from the provided store.
    */
-  static async getLiveTaxRules(env: any): Promise<any> {
+  static async getLiveTaxRules(store: KeyValueStore): Promise<any> {
     const cached = this.getCached("tax_rules");
     if (cached) return cached;
 
@@ -60,21 +70,21 @@ export class SefLiveValidator {
     };
 
     try {
-      const raw = await env.PORESKI_KV.get("DRZAVNA_PORESKA_PRAVILA_RS", "json");
+      const raw = await store.get("DRZAVNA_PORESKA_PRAVILA_RS");
       const rules = raw || defaults;
       this.setCache("tax_rules", rules);
       return rules;
     } catch (e) {
-      console.error("[Validator] KV_FETCH_ERROR for tax rules:", e);
+      console.error("[Validator] STORE_FETCH_ERROR for tax rules:", e);
       return defaults;
     }
   }
 
   /**
-   * Validates tax category code.
+   * Validates tax category code against the provided store.
    */
-  static async validateTaxCategory(category: string, env: any): Promise<boolean> {
-    const rules = await this.getLiveTaxRules(env);
+  static async validateTaxCategory(category: string, store: KeyValueStore): Promise<boolean> {
+    const rules = await this.getLiveTaxRules(store);
     const allowed = rules.DOZVOLJENE_KATEGORIJE || ["S", "E", "AE", "Z", "OE", "R", "G", "O", "N"];
     return allowed.includes(category);
   }

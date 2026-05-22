@@ -516,9 +516,13 @@ export class KlijentBaza extends DurableObject<Env> {
 
   private async checkLimit(noviBroj: number, invoiceData?: SefInvoiceData): Promise<{ moze: boolean, error?: any }> {
     const config = this.sql.exec(`SELECT plan_name, status_pretplate, limit_faktura FROM konfiguracija WHERE id = 1`).toArray()[0] as any || {};
+    
+    // OKLOP: KV Adapter for DI
+    const kvStore = { get: (k: string) => this.env.PORESKI_KV.get(k, "json") };
+    
     let zakonskiRok = 10;
     try {
-      const kvRules = await this.env.PORESKI_KV.get("DRZAVNA_PORESKA_PRAVILA_RS", "json") as any;
+      const kvRules = await SefLiveValidator.getLiveTaxRules(kvStore);
       if (kvRules?.ZAKONSKI_ROK_DANA) zakonskiRok = kvRules.ZAKONSKI_ROK_DANA;
     } catch (e) {}
     if (config.status_pretplate === 'BLOKIRAN') {
@@ -532,8 +536,8 @@ export class KlijentBaza extends DurableObject<Env> {
     }
     if (invoiceData?.Lines) {
       for (const line of invoiceData.Lines) {
-        if (!(await SefLiveValidator.validateUnitMeasure(line.UnitCode, this.env))) return { moze: false, error: { error: "BAD_REQUEST", poruka: `Jedinica mere '${line.UnitCode}' nije validna prema zvaničnom šifrarniku.` } };
-        if (!(await SefLiveValidator.validateTaxCategory(line.VatCategory, this.env))) return { moze: false, error: { error: "BAD_REQUEST", poruka: `Poreska kategorija '${line.VatCategory}' nije validna na SEF-u.` } };
+        if (!(await SefLiveValidator.validateUnitMeasure(line.UnitCode, kvStore))) return { moze: false, error: { error: "BAD_REQUEST", poruka: `Jedinica mere '${line.UnitCode}' nije validna prema zvaničnom šifrarniku.` } };
+        if (!(await SefLiveValidator.validateTaxCategory(line.VatCategory, kvStore))) return { moze: false, error: { error: "BAD_REQUEST", poruka: `Poreska kategorija '${line.VatCategory}' nije validna na SEF-u.` } };
       }
     }
     if (config.plan_name === 'Enterprise') return { moze: true };
