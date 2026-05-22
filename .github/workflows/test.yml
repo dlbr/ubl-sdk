@@ -1,0 +1,33 @@
+name: SEF Bridge CI
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          
+      - name: Install Dependencies
+        run: npm install --no-audit --no-fund
+        
+      - name: Build UBL Builder
+        run: |
+          cd packages/sef-ubl-builder
+          npm install
+          npx tsc
+          npx esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js
+          cd ../..
+          
+      - name: Run Business Logic Tests
+        run: npm run test:business
+        
+      - name: Run Ultimate Gauntlet (Sequential)
+        run: npx vitest run test/sef_ultimate_gauntlet.test.ts --poolOptions.threads.maxThreads=1
+        env:
+          STAGING_SEF_API_KEY: ${{ secrets.STAGING_SEF_API_KEY }}
+          WEBSITE_URL: https://sef.dlbr.cloud
