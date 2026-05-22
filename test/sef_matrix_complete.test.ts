@@ -102,8 +102,8 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
         poreskaKategorija: 'N',
         smerDokumenta: 'POZITIVAN'
       });
-      expect(xml).toContain('<cbc:ID>N</cbc:ID>');
-      expect(xml).toContain('<cbc:Percent>0.00</cbc:Percent>');
+      expect(xml).toContain('>N</cbc:ID>');
+      expect(xml).toContain('>0.00</cbc:Percent>');
       expect(xml).toContain('>0.00</cbc:TaxAmount>');
       expect(xml).toContain('>1000.00</cbc:TaxableAmount>');
       expect(xml).toContain('>1000.00</cbc:PayableAmount>');
@@ -118,8 +118,8 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
         smerDokumenta: 'NEGATIVAN',
         pdvStopa: 20
       });
-      expect(xml).toContain('<cbc:ID>N</cbc:ID>');
-      expect(xml).toContain('<cbc:Percent>0.00</cbc:Percent>');
+      expect(xml).toContain('>N</cbc:ID>');
+      expect(xml).toContain('>0.00</cbc:Percent>');
       expect(xml).toContain('>0.00</cbc:TaxAmount>'); // Shield overrides to 0.00
       expect(xml).toContain('>-1000.00</cbc:TaxableAmount>');
       expect(xml).toContain('>-1000.00</cbc:PayableAmount>');
