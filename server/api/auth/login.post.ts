@@ -49,10 +49,7 @@ export default defineEventHandler(async (event) => {
       
       for (const envType of tryEnvs) {
         // PRIORITET: Koristimo env.SEF_API_URL ako postoji, inače standardne državne rute
-        const baseUrl = env.SEF_API_URL || (envType === 'production' 
-          ? 'https://efaktura.mfin.gov.rs/api' 
-          : 'https://demoefaktura.mfin.gov.rs/api');
-
+        const baseUrl = env.SEF_API_URL;
         const checkClient = new SefClient({ 
           apiKey: body.api_key, 
           baseUrl, 
@@ -60,19 +57,29 @@ export default defineEventHandler(async (event) => {
         });
 
         try {
-          const testChanges = await checkClient.getPurchaseInvoiceChanges(danas, danas, 1);
-          if (testChanges !== null) {
+          // OKLOP: getUnitMeasures je najpouzdaniji način za provere konekcije i ključa
+          const testMeasures = await checkClient.getUnitMeasures();
+          if (testMeasures !== null) {
             verifiedEnv = envType;
             console.log(`[Auth Edge] Ključ uspešno verifikovan na: ${envType}`);
             break;
           }
-        } catch (e) {
-          console.warn(`[Auth Edge] Verifikacija neuspešna na ${envType}, probam sledeće...`);
+        } catch (e: any) {
+          console.warn(`[Auth Edge] Verifikacija neuspešna na ${envType}: ${e.message}`);
+          if (e.message.includes('Circuit Breaker') || e.message.includes('Timeout') || e.message.includes('offline')) {
+            throw createError({ 
+              statusCode: 503, 
+              statusMessage: 'Državni SEF portal je trenutno nedostupan ili u prekidu. Molimo pokušajte kasnije.' 
+            });
+          }
         }
       }
 
       if (!verifiedEnv) {
-        throw createError({ statusCode: 401, statusMessage: 'Nevalidan SEF API ključ. Provera na državnom portalu nije uspela.' });
+        throw createError({ 
+          statusCode: 401, 
+          statusMessage: 'Nevalidan SEF API ključ ili pogrešan PIB. Provera na državnom portalu nije uspela.' 
+        });
       }
 
       // Ako je uz ključ poslata i nova lozinka, hesiramo je

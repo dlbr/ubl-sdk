@@ -37,10 +37,19 @@ export const Router = <Env = any>(): RouterType<Env> => {
         
         if (route.method !== 'ALL' && route.method !== method.toUpperCase()) continue
 
+        // OKLOP: URLPattern is reliable, but let's be forensic about pathname
         const result = route.pattern.exec(url)
-        if (result) return await route.handler({ req, env, ctx, result })
+        if (result) {
+          try {
+            return await route.handler({ req, env, ctx, result })
+          } catch (handlerErr: any) {
+            console.error(`[Router] Handler Error on ${url.pathname}:`, handlerErr.message);
+            return Response.json({ error: 'Internal Router Error', details: handlerErr.message }, { status: 500 });
+          }
+        }
       }
 
+      console.warn(`[Router] No match for ${method} ${url.pathname}`);
       return new Response('Not Found', { status: 404 })
     },
 
@@ -50,13 +59,14 @@ export const Router = <Env = any>(): RouterType<Env> => {
     },
 
     on: (method: string, path: string, handler: Handler<Env>) => {
+      // Robust path: allow optional trailing slash using URLPattern grouping
+      const patternPath = path.endsWith('/') ? path : `${path}{/}?`;
       routes.push({
-        // Match only by pathname, hostname defaults to '*'
-        pattern: new URLPattern({ pathname: path }),
+        pattern: new URLPattern({ pathname: patternPath }),
         method: method.toUpperCase(),
         handler,
       })
-      return receiverProxy // Omogućava app.get().post().put() lančano vezivanje
+      return receiverProxy
     },
   }
 

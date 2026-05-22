@@ -7,12 +7,9 @@ import { PopdvSefClient } from "../shared/services/popdvClient";
 import { SefExcelBuilder } from "../shared/services/excelBuilder";
 import * as v from 'valibot';
 import { SefUblParser } from "./ublParser";
-import { type PopdvSubmitData, PopdvCorrectionSchema } from '../shared/types/popdv';
+import { type PopdvSubmitData } from '../shared/types/popdv';
 import { Router, type RouterContext } from './router';
-import { AuthEngine } from '../shared/services/auth';
-import { SefPppdvExporter } from '../shared/services/pppdvExporter';
-import { posaljiHotfixTelegramAlarm } from '../shared/services/telegram-notifier';
-import { handleSefErrorWithEdgeAi } from './edge-ai-interceptor';
+import { ErrorShield } from "../shared/services/errorShield";
 
 export interface PppdvSummary {
   period: string;
@@ -58,7 +55,7 @@ export class KlijentBaza extends DurableObject<Env> {
 
     const sefClient = new SefClient({ 
       apiKey: config.sef_api_key, 
-      baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs/api' : 'https://demoefaktura.mfin.gov.rs/api'),
+      baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs'),
       environment: config.environment 
     });
 
@@ -104,7 +101,7 @@ export class KlijentBaza extends DurableObject<Env> {
             // v3.7.0: Arhiviranje ulazne fakture na R2
             const r2Putanja = `tenants/${config.klijent_id}/${new Date().getFullYear()}/purchases/${parsed.ID}_${p.sef_id}.xml`;
             await this.env.SEF_UBL_ARHIVA.put(r2Putanja, xml, {
-              headers: { "Content-Type": "text/xml", "Cache-Control": "public, max-age=31536000, immutable" },
+              httpMetadata: { contentType: "text/xml", cacheControl: "public, max-age=31536000, immutable" },
               customMetadata: { type: "PURCHASE", zakonski_rok_cuvanja: (new Date().getFullYear() + 10).toString() }
             });
             this.sql.exec(`UPDATE sef_purchase_invoices SET arhiva_r2_path = ? WHERE sef_id = ?`, r2Putanja, p.sef_id);
@@ -137,8 +134,8 @@ export class KlijentBaza extends DurableObject<Env> {
         status: config.status_pretplate || 'AKTIVAN', 
         usage: { 
           potroseno: totalSales, 
-          limit: config.limit_faktura, 
-          procenat: (config.limit_faktura || 50) > 0 ? Math.round((totalSales / (config.limit_faktura || 50)) * 100) : 0, 
+          limit: Number(config.limit_faktura || 50), 
+          procenat: Number(config.limit_faktura || 50) > 0 ? Math.round((totalSales / Number(config.limit_faktura || 50)) * 100) : 0, 
           prikazi_brojac: config.plan_name !== 'Enterprise' 
         } 
       });
@@ -292,7 +289,7 @@ export class KlijentBaza extends DurableObject<Env> {
       if (!config?.sef_subscription_token) return Response.json({ error: "No token" }, { status: 401 });
       const client = new PopdvSefClient({ baseUrl: 'https://demoppppdv.mfin.gov.rs/public-api', token: config.sef_subscription_token });
       const res = await client.sendDraft(payload);
-      if (res.success) {
+      if (res.success && res.data) {
         this.sql.exec(`UPDATE sef_popdv_periods SET status = 'DRAFT_ACCEPTED', draft_id = ? WHERE period = ?`, res.data.draftId, period);
         return Response.json({ success: true, draftId: res.data.draftId });
       }
@@ -319,7 +316,7 @@ export class KlijentBaza extends DurableObject<Env> {
       const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
       if (!config) return Response.json({ error: "No config" }, { status: 400 });
 
-      const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs/api' : 'https://demoefaktura.mfin.gov.rs/api') });
+      const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs') });
       const brojRow = this.sql.exec(`SELECT broj_fakture FROM fakture WHERE internal_id = ?`, internalId).toArray()[0] as any;
       
       const result = await client.sendInvoice(xml, internalId);
@@ -357,7 +354,7 @@ export class KlijentBaza extends DurableObject<Env> {
     this.app.post('/sync-sef', async () => {
       const config = this.sql.exec(`SELECT sef_api_key, environment FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
       if (!config) return Response.json({ error: "No config" }, { status: 400 });
-      const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs/api' : 'https://demoefaktura.mfin.gov.rs/api') });
+      const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs') });
       const fakture = this.sql.exec(`SELECT internal_id, sef_id, status FROM fakture WHERE status NOT IN ('Approved', 'Rejected', 'Cancelled') AND sef_id IS NOT NULL`).toArray() as any[];
       for (const f of fakture) {
         const res = await client.getInvoiceStatus(parseInt(f.sef_id));
@@ -428,11 +425,19 @@ export class KlijentBaza extends DurableObject<Env> {
     this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'POTROŠNJA', -1, 'Reservation')`, crypto.randomUUID(), fakturaId, brojFakture);
   }
 
+  private async generisiIAutomatskiPosaljiAvansNaSef(config: any) {
+    console.log(`[Subscription] Generisanje avansa za obnovu za ${config.klijent_id}`);
+    return true; // Stub
+  }
+
   private async arhivirajUblDokument(internalId: string, pib: string, brojFakture: string, xmlSadrzaj: string, tip: "SALE" | "PURCHASE" = "SALE") {
     const godina = new Date().getFullYear();
     const r2Putanja = `tenants/${pib}/${godina}/${tip.toLowerCase()}s/${brojFakture}_${internalId}.xml`;
     try {
-      await this.env.SEF_UBL_ARHIVA.put(r2Putanja, xmlSadrzaj, { headers: { "Content-Type": "text/xml", "Cache-Control": "public, max-age=31536000, immutable" }, customMetadata: { type: tip, zakonski_rok_cuvanja: (godina + 10).toString() } });
+      await this.env.SEF_UBL_ARHIVA.put(r2Putanja, xmlSadrzaj, { 
+        httpMetadata: { contentType: "text/xml", cacheControl: "public, max-age=31536000, immutable" }, 
+        customMetadata: { type: tip, zakonski_rok_cuvanja: (godina + 10).toString() } 
+      });
       const table = tip === "SALE" ? "fakture" : "sef_purchase_invoices";
       const idCol = tip === "SALE" ? "internal_id" : "sef_id";
       this.sql.exec(`UPDATE ${table} SET arhiva_r2_path = ? WHERE ${idCol} = ?`, r2Putanja, internalId);
@@ -440,7 +445,7 @@ export class KlijentBaza extends DurableObject<Env> {
   }
 
   private async checkLimit(noviBroj: number, invoiceData?: SefInvoiceData): Promise<{ moze: boolean, error?: any }> {
-    const config = this.sql.exec(`SELECT plan_name, status_pretplate FROM konfiguracija WHERE id = 1`).toArray()[0] as any || {};
+    const config = this.sql.exec(`SELECT plan_name, status_pretplate, limit_faktura FROM konfiguracija WHERE id = 1`).toArray()[0] as any || {};
     let zakonskiRok = 10;
     try {
       const kvRules = await this.env.PORESKI_KV.get("DRZAVNA_PORESKA_PRAVILA_RS", "json") as any;
@@ -475,7 +480,7 @@ export class KlijentBaza extends DurableObject<Env> {
         const next = this.sql.exec(`SELECT internal_id, raw_data FROM fakture WHERE status = 'Queued' LIMIT 1`).toArray()[0] as any;
         if (!next) break;
         const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
-        const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs/api' : 'https://demoefaktura.mfin.gov.rs/api') });
+        const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs') });
         const invoiceData = JSON.parse(next.raw_data);
         const xml = SefUblBuilder.build(invoiceData);
         const result = await client.sendInvoice(xml, next.internal_id);
@@ -484,22 +489,20 @@ export class KlijentBaza extends DurableObject<Env> {
           this.sql.exec(`UPDATE fakture SET sef_id = ?, status = 'Sent' WHERE internal_id = ?`, result.salesInvoiceId?.toString(), next.internal_id);
           await this.arhivirajUblDokument(next.internal_id, config.klijent_id, invoiceData.ID, xml, "SALE");
         } else {
-          // v4.2.1: Modularized Edge AI Circuit Breaker Integration
-          const fakeRes = new Response(result.error || 'SEF_API_ERROR', { status: 400 });
-          const responseToLog = await handleSefErrorWithEdgeAi(
-            fakeRes,
-            next.internal_id,
-            invoiceData.ID,
-            xml,
+          // v4.15.0: Production-Grade Error Shield Integration
+          const severity = await ErrorShield.handle(
             this.env,
-            this.ctx,
-            config.klijent_id
+            invoiceData.ID,
+            result.statusCode || 500,
+            { message: result.error },
+            xml
           );
-          
-          if (responseToLog.status === 202) {
-             this.sql.exec(`UPDATE fakture SET status = 'Queued_Compliance', error_message = 'Državni portal ukinuo kompatibilnost. Dokument bezbedno parkiran.' WHERE internal_id = ?`, next.internal_id);
+
+          if (severity === 'CRITICAL' || severity === 'SCHEMA_ERR') {
+            this.sql.exec(`UPDATE fakture SET status = 'Failed', error_message = ? WHERE internal_id = ?`, result.error || 'Err', next.internal_id);
           } else {
-             this.sql.exec(`UPDATE fakture SET status = 'Failed', error_message = ? WHERE internal_id = ?`, result.error || 'Err', next.internal_id);
+            // Re-queue or park based on other severities
+            this.sql.exec(`UPDATE fakture SET status = 'Queued_Compliance', error_message = ? WHERE internal_id = ?`, result.error || 'Err', next.internal_id);
           }
         }
         await yieldToEventLoop();

@@ -67,7 +67,7 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
     });
     expect(xml).toContain('<sbt:SrbDtExt>');
     expect(xml).toContain('<cbc:ID>S</cbc:ID>');
-    expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">0.00</cbc:PayableAmount>');
+    expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">-600.00</cbc:PayableAmount>');
   });
 
   it('6. Dokument o smanjenju u periodu (381 InvoicePeriod)', () => {

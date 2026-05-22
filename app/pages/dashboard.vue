@@ -101,11 +101,13 @@ const copyId = async () => {
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <!-- Usage Tracker Oklop -->
       <div class="mb-8">
-        <UsageWidget 
-          :usage="statsData?.usage" 
-          :plan-name="statsData?.plan_name"
-          :billing-period="statsData?.billing_period"
-        />
+        <ClientOnly>
+          <UsageWidget 
+            :usage="statsData?.usage" 
+            :plan-name="statsData?.plan_name"
+            :billing-period="statsData?.billing_period"
+          />
+        </ClientOnly>
       </div>
 
       <!-- Header -->
@@ -136,21 +138,23 @@ const copyId = async () => {
       </div>
 
       <!-- Stats Grid -->
-      <div v-if="!statsPending" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div v-for="stat in statsData?.stats" :key="stat.status" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-          <p class="text-sm text-gray-500 font-medium uppercase tracking-wider">{{ stat.status }}</p>
-          <p class="text-3xl font-bold text-gray-900 mt-1">{{ stat.broj }}</p>
+      <ClientOnly>
+        <div v-if="!statsPending" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div v-for="stat in statsData?.stats" :key="stat.status" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <p class="text-sm text-gray-500 font-medium uppercase tracking-wider">{{ stat.status }}</p>
+            <p class="text-3xl font-bold text-gray-900 mt-1">{{ stat.broj }}</p>
+          </div>
+          <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <p class="text-sm text-gray-500 font-medium uppercase tracking-wider">Greške (24h)</p>
+            <p class="text-3xl font-bold mt-1" :class="(statsData?.health ?? 0) > 0 ? 'text-red-600' : 'text-green-600'">
+              {{ statsData?.health ?? 0 }}
+            </p>
+          </div>
         </div>
-        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-          <p class="text-sm text-gray-500 font-medium uppercase tracking-wider">Greške (24h)</p>
-          <p class="text-3xl font-bold mt-1" :class="(statsData?.health ?? 0) > 0 ? 'text-red-600' : 'text-green-600'">
-            {{ statsData?.health ?? 0 }}
-          </p>
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div v-for="i in 4" :key="i" class="h-24 bg-gray-200 animate-pulse rounded-xl"></div>
         </div>
-      </div>
-      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div v-for="i in 4" :key="i" class="h-24 bg-gray-200 animate-pulse rounded-xl"></div>
-      </div>
+      </ClientOnly>
 
       <!-- Main Content Grid -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -188,7 +192,9 @@ const copyId = async () => {
                       {{ log.error_message }}
                     </td>
                     <td class="px-6 py-4 text-xs text-gray-400 font-mono">
-                      {{ log.kreirano_u ? new Date(log.kreirano_u).toLocaleString('sr-RS') : 'N/A' }}
+                      <ClientOnly>
+                        {{ log.kreirano_u ? new Date(log.kreirano_u).toLocaleString('sr-RS') : 'N/A' }}
+                      </ClientOnly>
                     </td>
                   </tr>
                 </tbody>

@@ -55,8 +55,9 @@ export default {
             }
           },
           text(text) {
-            if (updates.length > 0 && !updates[updates.length - 1].title) {
-              updates[updates.length - 1].title += text.text.trim();
+            const lastUpdate = updates[updates.length - 1];
+            if (lastUpdate && !lastUpdate.title) {
+              lastUpdate.title += text.text.trim();
             }
           }
         })
@@ -70,6 +71,8 @@ export default {
 
       // Analiziramo najnoviju vest
       const latestUpdate = updates[0];
+      if (!latestUpdate) return;
+      
       const criticalKeywords = ["hotfix", "izmena šeme", "prekid rada", "obavezno", "hitno"];
       latestUpdate.isHotfix = criticalKeywords.some(kw => latestUpdate.title.toLowerCase().includes(kw));
 

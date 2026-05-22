@@ -27,6 +27,26 @@ export type UblExtraction = v.InferOutput<typeof UblExtractionSchema>;
 
 export class SefUblParser {
   
+  public static async parseInvoice(xml: string): Promise<any> {
+    const extraction = this.extract(xml, "ASYNC-SYNC");
+    
+    // Map extraction to the structure expected by KlijentBazaObject
+    return {
+      ID: extraction.invoiceId || this.getFlexibleTagValue(xml, 'ID'),
+      SupplierPib: this.getFlexibleTagValue(xml, 'EndpointID'), // Simplistic, but matches current logic
+      IssueDate: this.getFlexibleTagValue(xml, 'IssueDate'),
+      PayableAmount: parseFloat(this.getFlexibleTagValue(xml, 'PayableAmount') || '0'),
+      TaxTotals: [{
+        Subtotals: extraction.taxes.map(t => ({
+          TaxableAmount: t.taxableAmount,
+          TaxAmount: t.taxAmount,
+          Percent: t.taxPercentage,
+          Category: t.taxCategoryCode
+        }))
+      }]
+    };
+  }
+
   public static extract(xml: string, invoiceId: string): UblExtraction {
     const items: v.InferOutput<typeof ParsedItemSchema>[] = [];
     const taxes: v.InferOutput<typeof ParsedTaxSchema>[] = [];

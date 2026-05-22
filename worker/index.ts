@@ -3,13 +3,18 @@ import { validateJson } from './validator';
 import { SefInvoiceSchema, SefWebhookSchema } from '../shared/types/sef';
 import ComplianceWatcher from "./compliance-watcher";
 import { SefClient } from '../shared/services/sefClient';
+import { KVRegistry } from './services/KVRegistry';
+import { posaljiHotfixTelegramAlarm } from '../shared/services/telegram-notifier';
 
 export interface Env extends globalThis.Env {
   ADMIN_API_KEY: string;
   PORESKI_KV: KVNamespace;
   SEF_UBL_ARHIVA: R2Bucket;
+  INVOICE_QUEUE: Queue;
   AI: any;
   SEF_QUEUE: Queue;
+  TELEGRAM_BOT_TOKEN: string;
+  TELEGRAM_CHAT_ID: string;
 }
 export { KlijentBaza } from './KlijentBazaObject';
 
@@ -35,14 +40,38 @@ const applyCors = (res: Response, req: Request): Response => {
 };
 
 // ==========================================
-// 0. ADMIN OPERACIJE (STRIMING UVOZ BEZ SALA)
+// MONITORING & ERROR SHIELD
 // ==========================================
-import { posaljiHotfixTelegramAlarm } from '../shared/services/telegram-notifier';
+import { ErrorShield } from '../shared/services/errorShield';
+import type { SefErrorBody } from '../shared/services/errorShield';
 
-app.get('/api/test/telegram', async ({ env }) => {
+async function handleSefResponse(env: Env, invoiceId: string, status: number, body: SefErrorBody) {
+  const severity = await ErrorShield.handle(env, invoiceId, status, body);
+  
+  if (severity === 'AUTH_ERR') {
+    console.warn(`[Edge Monitor] AUTH GREŠKA na ${invoiceId}. Potrebna rotacija ključa.`);
+    // Trigger internal key rotation logic if needed
+  }
+  
+  return severity;
+}
+
+app.get('/api/test/telegram', async ({ env }: { env: Env }) => {
   const mockError = "SEF_API_ERROR (400): Schematron violation [Rule: SRB-380-01] - New mandatory element missing.";
   await posaljiHotfixTelegramAlarm(mockError, "FKT-TEST-BOT-001", env);
   return Response.json({ success: true, message: "Test alarm poslat na Telegram." });
+});
+
+app.get('/api/health', async () => {
+  const circuit = SefClient.getCircuitStatus();
+  return Response.json({ 
+    status: 'ONLINE',
+    system: 'SEF Bridge v4.17.0',
+    circuit_breaker: circuit.isOpen ? 'OPEN' : 'CLOSED',
+    circuit_open_until: circuit.openUntil || null,
+    legal_compliance: 'MFIN 2026 UBL 2.1 (Hotfix 3.17.1)',
+    archival_state: 'R2-ACTIVE'
+  });
 });
 
 app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env>) => {
@@ -463,9 +492,21 @@ function parseCsvLine(line: string): string[] | null {
 // @ts-ignore
 import nuxtHandler from '../.output/server/index.mjs';
 
-// ==========================================
-// 6. LIVE STATE CODEBOOKS (METADATA)
-// ==========================================
+import { Retriever } from './services/Retriever';
+
+// ... (ostatak koda)
+
+app.get('/api/admin/retrieve/:invoiceId', async (c: RouterContext<Env>) => {
+  const { env } = c;
+  const invoiceId = (c.result as any).pathname.groups.invoiceId;
+  
+  try {
+    const xml = await Retriever.pullInvoice(env, invoiceId);
+    return new Response(xml, { headers: { 'Content-Type': 'application/xml' } });
+  } catch (err: any) {
+    return Response.json({ error: err.message }, { status: 404 });
+  }
+});
 app.get('/api/v1/sifrarnici/jedinice-mera', async ({ env }: RouterContext<Env>) => {
   const mere = await env.PORESKI_KV.get("DRZAVNE_JEDINICE_MERA", "json");
   return Response.json(mere || ["H87", "PCE", "KGM", "SET"]);
@@ -567,35 +608,43 @@ export default {
     const url = new URL(req.url);
     if (url.pathname.startsWith('/api')) {
       const res = await app.fetch(req, env, ctx);
-      if (res.status !== 404) return applyCors(res, req);
+      // OKLOP: Uvek primenjujemo CORS za /api rute, čak i za 404
+      const corsRes = applyCors(res, req);
+      
+      // Ako ruter zaista nije našao ništa, a želimo da Nuxt proba (npr. Nuxt API rute)
+      // onda propuštamo samo ako je baš 404 i nema tela.
+      if (res.status === 404) {
+        const text = await res.clone().text();
+        if (text === 'Not Found') {
+          return nuxtHandler.fetch(req, env, ctx);
+        }
+      }
+      return corsRes;
     }
     return nuxtHandler.fetch(req, env, ctx);
   },
 
   async queue(batch: MessageBatch<any>, env: Env): Promise<void> {
-    const isHotfixActive = await env.PORESKI_KV.get("ALERT_SEF_HOTFIX_DETECTED");
-    if (isHotfixActive) {
-      // Hotfix still active, push messages back to queue to retry later
-      console.log(`[Queue] Hotfix still active, deferring ${batch.messages.length} messages.`);
-      batch.retryAll();
-      return;
-    }
-
     console.log(`[Queue] Processing ${batch.messages.length} compliance-queued invoices...`);
+    
     for (const msg of batch.messages) {
-      const { id, broj, xml, klijentId } = msg.body;
-      const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
-      const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
-      
       try {
-        await klijentDO.fetch(new Request('http://durableobject/fakture/send-queued', {
-          method: 'POST',
-          body: JSON.stringify({ internalId: id, xml }),
-          headers: { 'Content-Type': 'application/json' }
-        }));
+        const { id, xml, responseData, klijentId, pib } = msg.body;
+        
+        // 1. Arhiviraj u R2
+        const now = new Date();
+        const r2Key = `tenants/${pib}/${now.getFullYear()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${id}_${now.toISOString().replace(/[:.]/g, '-')}.xml`;
+        
+        await env.SEF_UBL_ARHIVA.put(r2Key, xml, {
+          httpMetadata: { contentType: "text/xml" }
+        });
+
+        // 2. Indeksiraj u KV
+        await KVRegistry.saveStatus(env, id, 'PROKNJIŽENO', r2Key);
+        
         msg.ack();
       } catch (err) {
-        console.error(`[Queue] Failed to process queued invoice ${broj}:`, err);
+        console.error(`[Queue] Failed to archive invoice:`, err);
         msg.retry();
       }
     }

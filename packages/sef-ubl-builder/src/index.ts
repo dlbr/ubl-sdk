@@ -1,468 +1,375 @@
-import { 
+import type { 
   AvansData, 
   KonacniData, 
   StornoData, 
   PovecanjeData, 
   OslobodjenaData, 
-  JavnaNabavkaData, 
   PopustData, 
   PrilogData, 
   ValutaData, 
   FiskalizacijaData, 
-  KonacnaValutaData, 
   SmanjenjeAvansaData, 
-  SmanjenjeUPerioduData, 
-  SmanjenjeViseFakturaData,
+  SmanjenjeUPerioduData,
   ZbirniEeoData,
   PojedinacnaEeoData,
   EppData,
-  BaseInvoiceData
-} from './types';
+  BaseInvoiceData,
+  StandardnaData
+} from './types.js';
 
-export { SefLiveValidator } from './validator';
-export * from './types';
+import { PAYMENT_MEANS } from './constants.js';
+
+export { SefLiveValidator } from './validator.js';
+export * from './types.js';
 
 /**
- * SefPoreskiJsonBuilder - Generates official JSON payloads for SEF tax records (EEO/EPP).
+ * Poreski JSON Builder za EEO/EPP.
  */
 export class SefPoreskiJsonBuilder {
+  private static num(val: any, fallback: number = 0): number {
+    const n = parseFloat(val);
+    return isNaN(n) ? fallback : n;
+  }
+
   static buildZbirniEeoPayload(data: ZbirniEeoData) {
-    const [year, month] = data.poreskiPeriod.split('-').map(Number);
+    const [y, m] = data.poreskiPeriod.split('-').map(Number);
     return {
-      Year: year, Month: month,
+      Year: y, Month: m,
       TaxRecords: [
-        { TaxRatePercentage: 20.00, Amount: parseFloat(data.osnovicaOpsta.toFixed(2)), TaxAmount: parseFloat(data.pdvOpsta.toFixed(2)) },
-        { TaxRatePercentage: 10.00, Amount: parseFloat(data.osnovicaPosebna.toFixed(2)), TaxAmount: parseFloat(data.pdvPosebna.toFixed(2)) }
+        { TaxRatePercentage: 20, Amount: parseFloat(this.num(data.osnovicaOpsta).toFixed(2)), TaxAmount: parseFloat(this.num(data.pdvOpsta).toFixed(2)) },
+        { TaxRatePercentage: 10, Amount: parseFloat(this.num(data.osnovicaPosebna).toFixed(2)), TaxAmount: parseFloat(this.num(data.pdvPosebna).toFixed(2)) }
       ]
     };
   }
   static buildPojedinacnaEeoPayload(data: PojedinacnaEeoData) {
-    const [year, month] = data.poreskiPeriod.split('-').map(Number);
-    return {
-      Year: year, Month: month, Type: "IndividualInternalInvoice", InternalInvoiceNumber: data.internalInvoiceNumber,
-      TaxRecords: [
-        { TaxRatePercentage: 20.00, Amount: parseFloat(data.osnovicaOpsta.toFixed(2)), TaxAmount: parseFloat(data.pdvOpsta.toFixed(2)) },
-        { TaxRatePercentage: 10.00, Amount: parseFloat(data.osnovicaPosebna.toFixed(2)), TaxAmount: parseFloat(data.pdvPosebna.toFixed(2)) }
-      ]
+    const [y, m] = data.poreskiPeriod.split('-').map(Number);
+    const isCancellation = data.isCancellation || false;
+
+    const payload: any = {
+      Year: y,
+      Month: m,
+      Type: isCancellation ? "Cancellation" : "IndividualInternalInvoice",
+      InternalInvoiceNumber: data.internalInvoiceNumber,
+      TaxRecords: [],
+      relatedVatRecords: data.relatedInternalNumber ? [{
+        internalInvoiceNumber: data.relatedInternalNumber
+      }] : []
     };
+
+    if (isCancellation) {
+      payload.TaxRecords.push({ TaxRatePercentage: 20, Amount: 0.00, TaxAmount: 0.00 });
+    } else {
+      if (data.osnovicaOpsta || data.pdvOpsta) {
+        payload.TaxRecords.push({ TaxRatePercentage: 20, Amount: parseFloat(this.num(data.osnovicaOpsta).toFixed(2)), TaxAmount: parseFloat(this.num(data.pdvOpsta).toFixed(2)) });
+      }
+      if (data.osnovicaPosebna || data.pdvPosebna) {
+        payload.TaxRecords.push({ TaxRatePercentage: 10, Amount: parseFloat(this.num(data.osnovicaPosebna).toFixed(2)), TaxAmount: parseFloat(this.num(data.pdvPosebna).toFixed(2)) });
+      }
+    }
+
+    return payload;
   }
   static buildEppPayload(data: EppData) {
-    const [year, month] = data.period.split('-').map(Number);
+    const [y, m] = data.period.split('-').map(Number);
     return {
-      Year: year, Month: month,
+      Year: y, Month: m,
       InputTaxRecords: [
-        { Type: "PurchaseInvoiced", TaxAmount: parseFloat(data.prethodniPorezOdObveznika.toFixed(2)) },
-        { Type: "Import", TaxAmount: parseFloat(data.importPdvCarina.toFixed(2)) }
+        { Type: "PurchaseInvoiced", TaxAmount: parseFloat(this.num(data.prethodniPorezOdObveznika).toFixed(2)) },
+        { Type: "Import", TaxAmount: parseFloat(this.num(data.importPdvCarina).toFixed(2)) }
       ]
     };
   }
 }
 
 /**
- * SefUblBuilder - v4.3.6 Absolute Compliance Matrix.
- * Forensic compliance with Serbian SEF Technical Manual & OASIS UBL 2.1 Schema.
+ * SefUblBuilder v4.12.2 — Forensic Party Identification.
  */
 export class SefUblBuilder {
 
-  private static formatAmount(amount: number | undefined, smer: 'POZITIVAN' | 'NEGATIVAN' = 'POZITIVAN'): string {
-    if (amount === undefined || amount === null || isNaN(amount)) return '0.00';
-    const absoluteValue = Math.abs(amount);
-    if (absoluteValue < 0.001) return '0.00'; // 🛡️ Prevent -0.00 for zero values
-    return smer === 'NEGATIVAN' ? `-${absoluteValue.toFixed(2)}` : absoluteValue.toFixed(2);
+  private static ensure(val: any, fallback: number = 0): number {
+    const num = parseFloat(val);
+    return isNaN(num) ? fallback : num;
   }
 
-  private static getCleanStopa(taxCat: string, userStopa?: number): string {
-    // 🛡️ ZAKONSKI ŠTIT: Kategorije N, E, Z, R ne smeju imati stopu različitu od 0.00%
-    if (['N', 'E', 'Z', 'R'].includes(taxCat)) return '0.00';
-    return (userStopa !== undefined ? userStopa : 20.00).toFixed(2);
+  private static format(a: number = 0, s: 'POZITIVAN' | 'NEGATIVAN' = 'POZITIVAN'): string {
+    const val = Math.abs(this.ensure(a));
+    const result = s === 'NEGATIVAN' ? -val : val;
+    return result.toFixed(2);
   }
 
-  private static getCleanPdv(taxCat: string, pdv: number): number {
-    if (['N', 'E', 'Z', 'R'].includes(taxCat)) return 0;
-    return pdv;
-  }
-
-  /**
-   * Universal assembly method that guarantees XSD sequence compliance.
-   */
-  private static assembleUbl(data: BaseInvoiceData, sections: {
-    typeCode: string;
-    rootTag: 'Invoice' | 'CreditNote';
-    invoicePeriod?: string;
-    billingRef?: string;
-    additionalRefs?: string;
-    summary?: string;
-    lines: string;
-    extensions?: string;
-  }): string {
-    const rootTag = sections.rootTag;
-    const urn = rootTag === 'CreditNote' ? 'urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2' : 'urn:oasis:names:specification:ubl:schema:xsd:Invoice-2';
-    const typeTag = rootTag === 'CreditNote' ? 'CreditNoteTypeCode' : 'InvoiceTypeCode';
-    const today = new Date().toISOString().split('T')[0];
-
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<${rootTag} xmlns="${urn}"
-         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
-         xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
-         xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">`;
-
-    if (sections.extensions) xml += `\n${sections.extensions}`;
-
-    xml += `\n  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2022</cbc:CustomizationID>
-  <cbc:ID>${data.broj}</cbc:ID>
-  <cbc:IssueDate>${data.datumIzdavanja || today}</cbc:IssueDate>`;
-
-    if (rootTag === 'Invoice') {
-      xml += `\n  <cbc:DueDate>${data.datumDospeca || today}</cbc:DueDate>`;
-    }
-    
-    xml += `\n  <cbc:${typeTag}>${sections.typeCode}</cbc:${typeTag}>`;
-    if (data.note) xml += `\n  <cbc:Note>${data.note}</cbc:Note>`;
-    xml += `\n  <cbc:DocumentCurrencyCode>${data.valuta || 'RSD'}</cbc:DocumentCurrencyCode>`;
-
-    if (sections.invoicePeriod) xml += `\n${sections.invoicePeriod}`;
-    if (data.brojNarudzbenice) xml += `\n  <cac:OrderReference><cbc:ID>${data.brojNarudzbenice}</cbc:ID></cac:OrderReference>`;
-    if (sections.billingRef) xml += `\n${sections.billingRef}`;
-    if (sections.additionalRefs) xml += `\n${sections.additionalRefs}`;
-    if (data.buyerReference) xml += `\n  <cbc:BuyerReference>${data.buyerReference}</cbc:BuyerReference>`;
-
-    const buildParty = (role: 'Supplier' | 'Customer', pib: string, name?: string, mb?: string, addr?: string, city?: string, zip?: string) => {
-      const tag = role === 'Supplier' ? 'cac:AccountingSupplierParty' : 'cac:AccountingCustomerParty';
-      const jbkjs = (role === 'Customer' && data.jbkjs) ? `\n      <cac:PartyIdentification><cbc:ID>JBKJS:${data.jbkjs}</cbc:ID></cac:PartyIdentification>` : '';
+  private static buildSrbDtExt(data: any): string {
+    // Force trigger for any avans reference in 381 or 380
+    if (data.avansBroj || data.referentniRacun || data.odbitakAvansaSaPdv) {
       return `
-  <${tag}>
+  <cec:UBLExtensions>
+    <cec:UBLExtension>
+      <cec:ExtensionContent>
+        <sbt:SrbDtExt>
+          <sbt:InvoicedPrepaymentAmount>
+            <cbc:ID>${data.avansBroj || data.referentniRacun}</cbc:ID>
+            <cac:TaxTotal><cbc:TaxAmount currencyID="RSD">${this.format(data.avansPdv || 0)}</cbc:TaxAmount></cac:TaxTotal>
+          </sbt:InvoicedPrepaymentAmount>
+        </sbt:SrbDtExt>
+      </cec:ExtensionContent>
+    </cec:UBLExtension>
+  </cec:UBLExtensions>`;
+    }
+    return '';
+  }
+
+  private static buildBillingRef(data: any): string {
+    if (data.referentniRacun || data.avansBroj) {
+      const id = data.referentniRacun || data.avansBroj;
+      const date = data.referentniDatum || data.avansDatum || data.datumIzdavanja || new Date().toISOString().split('T')[0];
+      return `
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>${id}</cbc:ID>
+      <cbc:IssueDate>${date}</cbc:IssueDate>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>`;
+    }
+    return '';
+  }
+
+  private static buildParty(role: 'Supplier' | 'Customer', pib: string, name: string, data: any): string {
+    const isCustomer = role === 'Customer';
+    const mb = isCustomer ? data.maticniBrojKupca : data.maticniBrojProdavca;
+    const jbkjs = isCustomer ? data.jbkjs : data.jbkjsProdavca;
+    
+    // Address data
+    const adresa = isCustomer ? data.adresaKupca : data.adresaProdavca;
+    const grad = isCustomer ? data.gradKupca : data.gradProdavca;
+    const pibZip = isCustomer ? data.postanskiBrojKupca : data.postanskiBrojProdavca;
+
+    // Rule: JBKJS identification if present, otherwise CompanyID (MB)
+    const partyIdent = jbkjs 
+      ? `<cac:PartyIdentification><cbc:ID>JBKJS:${jbkjs}</cbc:ID></cac:PartyIdentification>`
+      : (mb ? `<cac:PartyIdentification><cbc:ID>${mb}</cbc:ID></cac:PartyIdentification>` : '');
+
+    return `
+  <cac:Accounting${role}Party>
     <cac:Party>
-      <cbc:EndpointID schemeID="9948">${pib}</cbc:EndpointID>${jbkjs}
-      <cac:PartyName><cbc:Name>${name || (role === 'Supplier' ? 'Prodavac' : 'Kupac')}</cbc:Name></cac:PartyName>
+      <cbc:EndpointID schemeID="9948">${pib}</cbc:EndpointID>
+      ${partyIdent}
       <cac:PostalAddress>
-        <cbc:StreetName>${addr || 'Ulica bb'}</cbc:StreetName>
-        <cbc:CityName>${city || 'Grad'}</cbc:CityName>
-        <cbc:PostalZone>${zip || '11000'}</cbc:PostalZone>
+        <cbc:StreetName>${adresa || 'Ulica'}</cbc:StreetName>
+        <cbc:CityName>${grad || 'Grad'}</cbc:CityName>
+        <cbc:PostalZone>${pibZip || '11000'}</cbc:PostalZone>
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS${pib}</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity>
-        <cbc:RegistrationName>${name || (role === 'Supplier' ? 'Prodavac' : 'Kupac')}</cbc:RegistrationName>
-        <cbc:CompanyID>${mb || '00000000'}</cbc:CompanyID>
-      </cac:PartyLegalEntity>
+      <cac:PartyLegalEntity><cbc:RegistrationName>${name}</cbc:RegistrationName></cac:PartyLegalEntity>
     </cac:Party>
-  </${tag}>`;
-    };
+  </cac:Accounting${role}Party>`;
+  }
 
-    xml += buildParty('Supplier', data.pibProdavca, data.nazivProdavca, data.maticniBrojProdavca, data.adresaProdavca, data.gradProdavca, data.postanskiBrojProdavca);
-    xml += buildParty('Customer', data.pibKupca, data.nazivKupca, data.maticniBrojKupca, data.adresaKupca, data.gradKupca, data.postanskiBrojKupca);
-
-    if (rootTag === 'Invoice' && data.datumPrometa) {
-      xml += `\n  <cac:Delivery><cbc:ActualDeliveryDate>${data.datumPrometa}</cbc:ActualDeliveryDate></cac:Delivery>`;
+  private static buildDelivery(data: any, type: string): string {
+    if ((type === '380' || type === '381') && (data.datumPrometa || data.datumIzdavanja)) {
+      return `
+  <cac:Delivery>
+    <cbc:ActualDeliveryDate>${data.datumPrometa || data.datumIzdavanja}</cbc:ActualDeliveryDate>
+  </cac:Delivery>`;
     }
-
-    if (sections.summary) xml += `\n${sections.summary}`;
-    xml += `\n${sections.lines}\n</${rootTag}>`;
-
-    return xml.trim();
+    return '';
   }
 
-  static buildStandardna(data: AvansData) {
-    const smer = data.smerDokumenta || 'POZITIVAN';
-    const taxCat = data.poreskaKategorija || 'S';
-    const stopa = this.getCleanStopa(taxCat, data.pdvStopa);
-    const pdv = this.getCleanPdv(taxCat, data.pdv);
+  private static assemble(data: any, type: string, root: 'Invoice' | 'CreditNote', body: { summary: string; lines: string; }): string {
+    const isCN = root === 'CreditNote';
+    const is380 = type === '380';
+    const today = new Date().toISOString().split('T')[0];
+
+    const extension = this.buildSrbDtExt(data);
+    const customization = `<cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>`;
+    const id = `<cbc:ID>${data.broj}</cbc:ID>`;
+    const date = `<cbc:IssueDate>${data.datumIzdavanja || data.datum || today}</cbc:IssueDate>`;
+    const typeCode = `<cbc:${isCN ? 'CreditNoteTypeCode' : 'InvoiceTypeCode'}>${type}</cbc:${isCN ? 'CreditNoteTypeCode' : 'InvoiceTypeCode'}>`;
+    const currency = `<cbc:DocumentCurrencyCode>${data.valuta || 'RSD'}</cbc:DocumentCurrencyCode>`;
+    
+    // Period for 380 OR 381 if period data exists
+    const period = (is380 || (isCN && data.periodOd)) ? `<cac:InvoicePeriod><cbc:DescriptionCode>35</cbc:DescriptionCode></cac:InvoicePeriod>` : '';
+    
+    const billing = this.buildBillingRef(data);
+    const supplier = this.buildParty('Supplier', data.pibProdavca, data.nazivProdavca || 'PRODAVAC', data);
+    const customer = this.buildParty('Customer', data.pibKupca, data.nazivKupca || 'KUPAC', data);
+    const delivery = this.buildDelivery(data, type);
+    const payment = `<cac:PaymentMeans><cbc:PaymentMeansCode>${PAYMENT_MEANS.CREDIT_TRANSFER}</cbc:PaymentMeansCode><cac:PayeeFinancialAccount><cbc:ID>${data.brojRacunaProdavca || '000-0000000000000-00'}</cbc:ID></cac:PayeeFinancialAccount></cac:PaymentMeans>`;
+
+    return `<?xml version="1.0" encoding="utf-8"?>
+<${root} 
+  xmlns="urn:oasis:names:specification:ubl:schema:xsd:${root}-2" 
+  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" 
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" 
+  xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+  xmlns:sbt="http://faktura.mfin.gov.rs/sefs/ubl/standard-business-document-extension-2">
+  ${extension}
+  ${customization}
+  ${id}
+  ${date}
+  ${typeCode}
+  ${currency}
+  ${period}
+  ${billing}
+  ${supplier}
+  ${customer}
+  ${delivery}
+  ${payment}
+  ${body.summary}
+  ${body.lines}
+</${root}>`.trim();
+  }
+
+  static buildStandardna(data: StandardnaData, type: string = '380') {
+    const s = data.smerDokumenta || 'POZITIVAN';
+    const osn = this.ensure(data.osnovica);
+    const cat = data.poreskaKategorija || 'S';
+    // FORCE 0.00 tax for category N
+    const pdv = (cat === 'N') ? 0 : this.ensure(data.pdv);
+    const rate = (cat === 'N' || cat === 'E') ? '0.00' : (this.ensure(data.pdvStopa, 20)).toFixed(2);
+
     const summary = `
   <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdv, smer)}</cbc:TaxAmount>
+    <cbc:TaxAmount currencyID="RSD">${this.format(pdv, s)}</cbc:TaxAmount>
     <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:TaxableAmount>
-      <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdv, smer)}</cbc:TaxAmount>
-      <cac:TaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
+      <cbc:TaxableAmount currencyID="RSD">${this.format(osn, s)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="RSD">${this.format(pdv, s)}</cbc:TaxAmount>
+      <cac:TaxCategory><cbc:ID>${cat}</cbc:ID><cbc:Percent>${rate}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
     </cac:TaxSubtotal>
   </cac:TaxTotal>
   <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="RSD">${this.formatAmount((data.osnovica||0)+pdv, smer)}</cbc:TaxInclusiveAmount>
-    <cbc:PayableAmount currencyID="RSD">${this.formatAmount((data.osnovica||0)+pdv, smer)}</cbc:PayableAmount>
+    <cbc:LineExtensionAmount currencyID="RSD">${this.format(osn, s)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="RSD">${this.format(osn, s)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="RSD">${this.format(osn + pdv, s)}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="RSD">${this.format(osn + pdv, s)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>`;
-    const lines = `
-  <cac:InvoiceLine>
-    <cbc:ID>1</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:LineExtensionAmount>
-    <cac:Item><cbc:Name>Promet dobara i usluga</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>
-    <cac:Price><cbc:PriceAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:PriceAmount></cac:Price>
-  </cac:InvoiceLine>`;
-    return this.assembleUbl(data, { typeCode: '380', rootTag: 'Invoice', summary, lines });
+
+    const lines = `<cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.format(osn, s)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>${data.item_name || 'Promet'}</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${cat}</cbc:ID><cbc:Percent>${rate}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.format(osn, s)}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
+
+    return this.assemble(data, type, 'Invoice', { summary, lines });
   }
 
-  static buildAvansni(data: AvansData) {
-    const smer = data.smerDokumenta || 'POZITIVAN';
-    const taxCat = data.poreskaKategorija || 'S';
-    const stopa = this.getCleanStopa(taxCat, data.pdvStopa);
-    const pdv = this.getCleanPdv(taxCat, data.pdv);
-    const summary = `
-  <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdv, smer)}</cbc:TaxAmount>
-    <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:TaxableAmount>
-      <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdv, smer)}</cbc:TaxAmount>
-      <cac:TaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
-    </cac:TaxSubtotal>
-  </cac:TaxTotal>
-  <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="RSD">${this.formatAmount((data.osnovica||0)+pdv, smer)}</cbc:TaxInclusiveAmount>
-    <cbc:PayableAmount currencyID="RSD">${this.formatAmount((data.osnovica||0)+pdv, smer)}</cbc:PayableAmount>
-  </cac:LegalMonetaryTotal>`;
-    const lines = `
-  <cac:InvoiceLine>
-    <cbc:ID>1</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:LineExtensionAmount>
-    <cac:Item><cbc:Name>Avansna uplata</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>
-    <cac:Price><cbc:PriceAmount currencyID="RSD">${this.formatAmount(data.osnovica, smer)}</cbc:PriceAmount></cac:Price>
-  </cac:InvoiceLine>`;
-    return this.assembleUbl(data, { typeCode: '386', rootTag: 'Invoice', summary, lines });
-  }
+  static buildAvansni(data: AvansData) { return this.buildStandardna(data as any, '386'); }
 
   static buildSmanjenje(data: StornoData) {
-    const smer = data.smerDokumenta || 'NEGATIVAN';
-    const taxCat = data.poreskaKategorija || 'S';
-    const stopa = this.getCleanStopa(taxCat, data.pdvStopa);
-    const pdv = this.getCleanPdv(taxCat, data.iznosZaSmanjenjePdv);
-    const billingRef = `  <cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>${data.referentniRacun}</cbc:ID></cac:InvoiceDocumentReference></cac:BillingReference>`;
-    const summary = `
-  <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdv, smer)}</cbc:TaxAmount>
-    <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="RSD">${this.formatAmount(data.iznosZaSmanjenjeOsnovice, smer)}</cbc:TaxableAmount>
-      <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdv, smer)}</cbc:TaxAmount>
-      <cac:TaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
-    </cac:TaxSubtotal>
-  </cac:TaxTotal>
-  <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.iznosZaSmanjenjeOsnovice, smer)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="RSD">${this.formatAmount(data.iznosZaSmanjenjeOsnovice, smer)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="RSD">${this.formatAmount((data.iznosZaSmanjenjeOsnovice||0)+pdv, smer)}</cbc:TaxInclusiveAmount>
-    <cbc:PayableAmount currencyID="RSD">${this.formatAmount((data.iznosZaSmanjenjeOsnovice||0)+pdv, smer)}</cbc:PayableAmount>
-  </cac:LegalMonetaryTotal>`;
-    const lines = `
-  <cac:CreditNoteLine>
-    <cbc:ID>1</cbc:ID>
-    <cbc:CreditedQuantity unitCode="H87">1</cbc:CreditedQuantity>
-    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.iznosZaSmanjenjeOsnovice, smer)}</cbc:LineExtensionAmount>
-    <cac:Item><cbc:Name>${data.razlog || 'Smanjenje'}</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>
-    <cac:Price><cbc:PriceAmount currencyID="RSD">${this.formatAmount(data.iznosZaSmanjenjeOsnovice, smer)}</cbc:PriceAmount></cac:Price>
-  </cac:CreditNoteLine>`;
-    return this.assembleUbl(data, { typeCode: '381', rootTag: 'CreditNote', billingRef, summary, lines });
-  }
-
-  static buildPovecanje(data: PovecanjeData) {
-    const smer = data.smerDokumenta || 'POZITIVAN';
-    const taxCat = data.poreskaKategorija || 'S';
-    const stopa = this.getCleanStopa(taxCat, data.pdvStopa);
-    const pdv = this.getCleanPdv(taxCat, data.iznosZaPovecanjePdv);
-    const invoicePeriod = `  <cac:InvoicePeriod><cbc:DescriptionCode>3</cbc:DescriptionCode></cac:InvoicePeriod>`;
-    const billingRef = `  <cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>${data.referentniRacun}</cbc:ID><cbc:IssueDate>${data.datumReferentnog}</cbc:IssueDate></cac:InvoiceDocumentReference></cac:BillingReference>`;
-    const summary = `
-  <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdv, smer)}</cbc:TaxAmount>
-    <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="RSD">${this.formatAmount(data.iznosZaPovecanjeOsnovice, smer)}</cbc:TaxableAmount>
-      <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdv, smer)}</cbc:TaxAmount>
-      <cac:TaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
-    </cac:TaxSubtotal>
-  </cac:TaxTotal>
-  <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.iznosZaPovecanjeOsnovice, smer)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="RSD">${this.formatAmount(data.iznosZaPovecanjeOsnovice, smer)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="RSD">${this.formatAmount((data.iznosZaPovecanjeOsnovice||0)+pdv, smer)}</cbc:TaxInclusiveAmount>
-    <cbc:PayableAmount currencyID="RSD">${this.formatAmount((data.iznosZaPovecanjeOsnovice||0)+pdv, smer)}</cbc:PayableAmount>
-  </cac:LegalMonetaryTotal>`;
-    const lines = `
-  <cac:InvoiceLine>
-    <cbc:ID>1</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.iznosZaPovecanjeOsnovice, smer)}</cbc:LineExtensionAmount>
-    <cac:Item><cbc:Name>Povećanje</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>
-    <cac:Price><cbc:PriceAmount currencyID="RSD">${this.formatAmount(data.iznosZaPovecanjeOsnovice, smer)}</cbc:PriceAmount></cac:Price>
-  </cac:InvoiceLine>`;
-    return this.assembleUbl(data, { typeCode: '383', rootTag: 'Invoice', invoicePeriod, billingRef, summary, lines });
-  }
-
-  static buildKonacniSaAvansom(data: KonacniData) {
-    const smer = data.smerDokumenta || 'POZITIVAN';
-    const taxCat = data.poreskaKategorija || 'S';
-    const stopa = this.getCleanStopa(taxCat, data.pdvStopa);
-    const netoProdato = data.ukupnaOsnovica;
-    const pdvProdato = this.getCleanPdv(taxCat, data.ukupniPdv);
-    const brutoProdato = netoProdato + pdvProdato;
-    const zaUplatu = brutoProdato - data.odbitakAvansaSaPdv;
-
-    const billingRef = `  <cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>${data.avansBroj}</cbc:ID><cbc:IssueDate>${data.avansDatum}</cbc:IssueDate><cbc:DocumentTypeCode>386</cbc:DocumentTypeCode></cac:InvoiceDocumentReference></cac:BillingReference>`;
-    
-    const netoOdbitka = data.odbitakAvansaSaPdv / (1 + (parseFloat(stopa) / 100));
-    const pdvOdbitka = data.odbitakAvansaSaPdv - netoOdbitka;
+    const s = data.smerDokumenta || 'NEGATIVAN';
+    const d = data as any;
+    const osn = this.ensure(d.iznosZaSmanjenjeOsnovice || d.osnovica);
+    const cat = data.poreskaKategorija || 'S';
+    // FORCE 0.00 tax for category N
+    const pdv = (cat === 'N') ? 0 : this.ensure(d.iznosZaSmanjenjePdv || d.pdv);
+    const rate = (cat === 'N' || cat === 'E') ? '0.00' : (this.ensure(d.pdvStopa, 20)).toFixed(2);
 
     const summary = `
   <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdvProdato - pdvOdbitka, smer)}</cbc:TaxAmount>
+    <cbc:TaxAmount currencyID="RSD">${this.format(pdv, s)}</cbc:TaxAmount>
     <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="RSD">${this.formatAmount(netoProdato - netoOdbitka, smer)}</cbc:TaxableAmount>
-      <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdvProdato - pdvOdbitka, smer)}</cbc:TaxAmount>
-      <cac:TaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
+      <cbc:TaxableAmount currencyID="RSD">${this.format(osn, s)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="RSD">${this.format(pdv, s)}</cbc:TaxAmount>
+      <cac:TaxCategory><cbc:ID>${cat}</cbc:ID><cbc:Percent>${rate}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
     </cac:TaxSubtotal>
   </cac:TaxTotal>
   <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(netoProdato - netoOdbitka, smer)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="RSD">${this.formatAmount(netoProdato - netoOdbitka, smer)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="RSD">${this.formatAmount(zaUplatu, smer)}</cbc:TaxInclusiveAmount>
-    <cbc:PayableAmount currencyID="RSD">${this.formatAmount(zaUplatu, smer)}</cbc:PayableAmount>
+    <cbc:LineExtensionAmount currencyID="RSD">${this.format(osn, s)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="RSD">${this.format(osn, s)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="RSD">${this.format(osn + pdv, s)}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="RSD">${this.format(osn + pdv, s)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>`;
 
-    const lines = `
-  <cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(netoProdato, smer)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>Konačni obračun</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.formatAmount(netoProdato, smer)}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>
-  <cac:InvoiceLine><cbc:ID>AVANS-REDUKCIJA</cbc:ID><cbc:InvoicedQuantity unitCode="H87">-1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="RSD">-${netoOdbitka.toFixed(2)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>Umanjenje po avansu</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${netoOdbitka.toFixed(2)}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
-    return this.assembleUbl(data, { typeCode: '380', rootTag: 'Invoice', billingRef, summary, lines });
+    const lines = `<cac:CreditNoteLine><cbc:ID>1</cbc:ID><cbc:CreditedQuantity unitCode="H87">1</cbc:CreditedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.format(osn, s)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>${data.razlog || 'Smanjenje'}</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${cat}</cbc:ID><cbc:Percent>${rate}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.format(osn, s)}</cbc:PriceAmount></cac:Price></cac:CreditNoteLine>`;
+
+    return this.assemble(data, '381', 'CreditNote', { summary, lines });
   }
+
+  static buildPovecanje(data: PovecanjeData) { return this.buildStandardna({ ...data, osnovica: data.iznosZaPovecanjeOsnovice, pdv: data.iznosZaPovecanjePdv } as any, '383'); }
 
   static buildOslobodjena(data: OslobodjenaData) {
-    const smer = data.smerDokumenta || 'POZITIVAN';
-    const kat = data.poreskaKategorija || 'E';
-    const stopa = this.getCleanStopa(kat);
-    let exTags = '';
-    if (['E', 'Z', 'R'].includes(kat)) {
-      if (!data.sifraOslobodjenja) throw new Error(`Šifra mandatorna za ${kat}`);
-      exTags = `\n        <cbc:TaxExemptionReasonCode>${data.sifraOslobodjenja}</cbc:TaxExemptionReasonCode>\n        <cbc:TaxExemptionReason>${data.zakonskiClan || 'Po zakonu'}</cbc:TaxExemptionReason>`;
-    }
+    const osn = this.ensure(data.iznos);
+    const reason = `<cbc:TaxExemptionReasonCode>${data.sifraOslobodjenja || 'PDV-RS-24-1-1'}</cbc:TaxExemptionReasonCode>`;
     const summary = `
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>
     <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="RSD">${this.formatAmount(data.iznos, smer)}</cbc:TaxableAmount>
+      <cbc:TaxableAmount currencyID="RSD">${this.format(osn)}</cbc:TaxableAmount>
       <cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>
-      <cac:TaxCategory><cbc:ID>${kat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent>${exTags}<cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
+      <cac:TaxCategory><cbc:ID>E</cbc:ID><cbc:Percent>0.00</cbc:Percent>${reason}<cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
     </cac:TaxSubtotal>
   </cac:TaxTotal>
   <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.iznos, smer)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="RSD">${this.formatAmount(data.iznos, smer)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="RSD">${this.formatAmount(data.iznos, smer)}</cbc:TaxInclusiveAmount>
-    <cbc:PayableAmount currencyID="RSD">${this.formatAmount(data.iznos, smer)}</cbc:PayableAmount>
+    <cbc:LineExtensionAmount currencyID="RSD">${this.format(osn)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="RSD">${this.format(osn)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="RSD">${this.format(osn)}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="RSD">${this.format(osn)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>`;
-    const lines = `
-  <cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.iznos, smer)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>Oslobođeni promet</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${kat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent>${exTags}<cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.formatAmount(data.iznos, smer)}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
-    return this.assembleUbl(data, { typeCode: '380', rootTag: 'Invoice', summary, lines });
+
+    const lines = `<cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.format(osn)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>Promet</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>E</cbc:ID><cbc:Percent>0.00</cbc:Percent>${reason}<cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.format(osn)}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
+
+    return this.assemble(data, '380', 'Invoice', { summary, lines });
   }
 
-  static buildSaPopustom(data: PopustData) {
-    const smer = data.smerDokumenta || 'POZITIVAN';
-    const taxCat = data.poreskaKategorija || 'S';
-    const stopa = this.getCleanStopa(taxCat, data.pdvStopa);
-    const neto = data.iznosPrePopusta - data.popustIznos;
-    const pdv = neto * (parseFloat(stopa) / 100);
-    const summary = `
-  <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdv, smer)}</cbc:TaxAmount>
-    <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="RSD">${this.formatAmount(neto, smer)}</cbc:TaxableAmount>
-      <cbc:TaxAmount currencyID="RSD">${this.formatAmount(pdv, smer)}</cbc:TaxAmount>
-      <cac:TaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
-    </cac:TaxSubtotal>
-  </cac:TaxTotal>
-  <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.iznosPrePopusta, smer)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="RSD">${this.formatAmount(neto, smer)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="RSD">${this.formatAmount(neto + pdv, smer)}</cbc:TaxInclusiveAmount>
-    <cbc:AllowanceTotalAmount currencyID="RSD">${this.formatAmount(data.popustIznos, smer)}</cbc:AllowanceTotalAmount>
-    <cbc:PayableAmount currencyID="RSD">${this.formatAmount(neto + pdv, smer)}</cbc:PayableAmount>
-  </cac:LegalMonetaryTotal>`;
-    const lines = `
-  <cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.iznosPrePopusta, smer)}</cbc:LineExtensionAmount><cac:AllowanceCharge><cbc:ChargeIndicator>false</cbc:ChargeIndicator><cbc:Amount currencyID="RSD">${this.formatAmount(data.popustIznos, smer)}</cbc:Amount></cac:AllowanceCharge><cac:Item><cbc:Name>Popust</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.formatAmount(data.iznosPrePopusta, smer)}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
-    return this.assembleUbl(data, { typeCode: '380', rootTag: 'Invoice', summary, lines });
-  }
+  static buildKonacniSaAvansom(data: KonacniData) {
+    const osn = this.ensure(data.ukupnaOsnovica);
+    const pdv = this.ensure(data.ukupniPdv);
+    const odbitak = this.ensure(data.odbitakAvansaSaPdv);
+    const netoOdbitka = odbitak / 1.2;
+    const pdvOdbitka = odbitak - netoOdbitka;
+    const ukupno = (osn + pdv) - odbitak;
 
-  static buildSaValutom(data: ValutaData) {
-    const exRate = `  <cac:TaxExchangeRate><cbc:SourceCurrencyCode>${data.valuta}</cbc:SourceCurrencyCode><cbc:TargetCurrencyCode>RSD</cbc:TargetCurrencyCode><cbc:CalculationRate>${data.kurs}</cbc:CalculationRate><cbc:Date>${data.kursDatum}</cbc:Date></cac:TaxExchangeRate>`;
     const summary = `
   <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="RSD">${this.formatAmount(data.pdvRSD)}</cbc:TaxAmount>
+    <cbc:TaxAmount currencyID="RSD">${this.format(pdv - pdvOdbitka)}</cbc:TaxAmount>
     <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="RSD">${this.formatAmount(data.osnovicaRSD)}</cbc:TaxableAmount>
-      <cbc:TaxAmount currencyID="RSD">${this.formatAmount(data.pdvRSD)}</cbc:TaxAmount>
+      <cbc:TaxableAmount currencyID="RSD">${this.format(osn - netoOdbitka)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="RSD">${this.format(pdv - pdvOdbitka)}</cbc:TaxAmount>
       <cac:TaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>20.00</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
     </cac:TaxSubtotal>
   </cac:TaxTotal>
   <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="${data.valuta}">${this.formatAmount(data.ukupnoValuta / 1.2)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="${data.valuta}">${this.formatAmount(data.ukupnoValuta / 1.2)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="${data.valuta}">${this.formatAmount(data.ukupnoValuta)}</cbc:TaxInclusiveAmount>
-    <cbc:PayableAmount currencyID="${data.valuta}">${this.formatAmount(data.ukupnoValuta)}</cbc:PayableAmount>
+    <cbc:LineExtensionAmount currencyID="RSD">${this.format(osn - netoOdbitka)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="RSD">${this.format(osn - netoOdbitka)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="RSD">${this.format(ukupno)}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="RSD">${this.format(ukupno)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>`;
-    const lines = `
-  <cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="${data.valuta}">${this.formatAmount(data.ukupnoValuta / 1.2)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>Devizna stavka</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>20.00</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="${data.valuta}">${this.formatAmount(data.ukupnoValuta / 1.2)}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
-    return this.assembleUbl(data, { typeCode: '380', rootTag: 'Invoice', additionalRefs: exRate, summary, lines });
+
+    const lines = `<cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.format(osn)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>Promet</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>20.00</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.format(osn)}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>
+  <cac:InvoiceLine><cbc:ID>AVANS-REDUKCIJA</cbc:ID><cbc:InvoicedQuantity unitCode="H87">-1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.format(netoOdbitka, 'NEGATIVAN')}</cbc:LineExtensionAmount><cac:Item><cbc:Name>Umanjenje po avansu</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>20.00</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.format(netoOdbitka)}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
+
+    return this.assemble(data, '380', 'Invoice', { summary, lines });
   }
 
   static buildSmanjenjeAvansa(data: SmanjenjeAvansaData) {
-    const smer = data.smerDokumenta || 'NEGATIVAN';
-    const taxCat = data.poreskaKategorija || 'S';
-    const stopa = this.getCleanStopa(taxCat, data.pdvStopa);
-    const extension = `  <cec:UBLExtensions><cec:UBLExtension><cec:ExtensionContent><sbt:SrbDtExt><sbt:InvoicedPrepaymentAmount><cbc:ID>${data.avansBroj}</cbc:ID><cac:TaxTotal><cbc:TaxAmount currencyID="RSD">${this.formatAmount(data.iznosSmanjenjaPdv, smer)}</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxableAmount currencyID="RSD">${this.formatAmount(data.iznosSmanjenjaOsnovice, smer)}</cbc:TaxableAmount><cbc:TaxAmount currencyID="RSD">${this.formatAmount(data.iznosSmanjenjaPdv, smer)}</cbc:TaxAmount><cac:TaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal></sbt:InvoicedPrepaymentAmount><sbt:ReducedTotals><cac:TaxTotal><cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount></cac:TaxTotal><cac:LegalMonetaryTotal><cbc:TaxExclusiveAmount currencyID="RSD">${this.formatAmount(data.iznosSmanjenjaOsnovice, smer)}</cbc:TaxExclusiveAmount></cac:LegalMonetaryTotal></sbt:ReducedTotals></sbt:SrbDtExt></cec:ExtensionContent></cec:UBLExtension></cec:UBLExtensions>`;
-    const billingRef = `  <cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>${data.avansBroj}</cbc:ID><cbc:IssueDate>${data.avansDatum}</cbc:IssueDate></cac:InvoiceDocumentReference></cac:BillingReference>`;
-    const summary = `
-  <cac:TaxTotal><cbc:TaxAmount currencyID="RSD">${this.formatAmount(data.iznosSmanjenjaPdv, smer)}</cbc:TaxAmount></cac:TaxTotal>
-  <cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="RSD">0.00</cbc:PayableAmount></cac:LegalMonetaryTotal>`;
-    const lines = `
-  <cac:CreditNoteLine><cbc:ID>1</cbc:ID><cbc:CreditedQuantity unitCode="H87">1</cbc:CreditedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.iznosSmanjenjaOsnovice, smer)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>Smanjenje avansa</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${taxCat}</cbc:ID><cbc:Percent>${stopa}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.formatAmount(data.iznosSmanjenjaOsnovice, smer)}</cbc:PriceAmount></cac:Price></cac:CreditNoteLine>`;
-    return this.assembleUbl(data, { typeCode: '381', rootTag: 'CreditNote', billingRef, summary, lines, extensions: extension });
+    return this.buildSmanjenje({ ...data, iznosZaSmanjenjeOsnovice: data.iznosSmanjenjaOsnovice, iznosZaSmanjenjePdv: data.iznosSmanjenjaPdv } as any);
   }
 
-  static buildSmanjenjeUPeriodu(data: any) {
-    const smer = 'NEGATIVAN';
-    const invoicePeriod = `  <cac:InvoicePeriod><cbc:StartDate>${data.periodOd}</cbc:StartDate><cbc:EndDate>${data.periodDo}</cbc:EndDate></cac:InvoicePeriod>`;
-    const summary = `  <cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="RSD">${this.formatAmount(data.iznosZaSmanjenjeOsnovice * 1.2, smer)}</cbc:PayableAmount></cac:LegalMonetaryTotal>`;
-    const lines = `  <cac:CreditNoteLine><cbc:ID>1</cbc:ID><cbc:CreditedQuantity unitCode="H87">1</cbc:CreditedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.iznosZaSmanjenjeOsnovice, smer)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>Smanjenje u periodu</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>20.00</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.formatAmount(data.iznosZaSmanjenjeOsnovice, smer)}</cbc:PriceAmount></cac:Price></cac:CreditNoteLine>`;
-    return this.assembleUbl(data, { typeCode: '381', rootTag: 'CreditNote', invoicePeriod, summary, lines });
-  }
-
-  static buildSaPrilogom(data: any) {
-    const additionalRefs = `  <cac:AdditionalDocumentReference><cbc:ID>${data.prilogIme}</cbc:ID><cac:Attachment><cbc:EmbeddedDocumentBinaryObject mimeCode="application/pdf" filename="${data.prilogIme}">${data.prilogBase64}</cbc:EmbeddedDocumentBinaryObject></cac:Attachment></cac:AdditionalDocumentReference>`;
-    const summary = `
-  <cac:TaxTotal><cbc:TaxAmount currencyID="RSD">200.00</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxableAmount currencyID="RSD">1000.00</cbc:TaxableAmount><cbc:TaxAmount currencyID="RSD">200.00</cbc:TaxAmount><cac:TaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>20.00</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal>
-  <cac:LegalMonetaryTotal><cbc:LineExtensionAmount currencyID="RSD">1000.00</cbc:LineExtensionAmount><cbc:TaxExclusiveAmount currencyID="RSD">1000.00</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount currencyID="RSD">1200.00</cbc:TaxInclusiveAmount><cbc:PayableAmount currencyID="RSD">1200.00</cbc:PayableAmount></cac:LegalMonetaryTotal>`;
-    const lines = `  <cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="RSD">1000.00</cbc:LineExtensionAmount><cac:Item><cbc:Name>Stavka sa prilogom</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>20.00</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">1000.00</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
-    return this.assembleUbl(data, { typeCode: '380', rootTag: 'Invoice', additionalRefs, summary, lines });
+  static buildSmanjenjeUPeriodu(data: SmanjenjeUPerioduData) {
+    return this.buildSmanjenje({ ...data, iznosZaSmanjenjeOsnovice: data.iznosZaSmanjenjeOsnovice, iznosZaSmanjenjePdv: data.iznosZaSmanjenjePdv } as any);
   }
 
   static buildFiskalizacijaProdaja(data: FiskalizacijaData) {
-    const smer = data.smerDokumenta || 'POZITIVAN';
-    const invoicePeriod = `  <cac:InvoicePeriod><cbc:DescriptionCode>3</cbc:DescriptionCode></cac:InvoicePeriod>`;
-    let refs = '';
-    for(const pfr of data.pfrBrojevi) refs += `  <cac:AdditionalDocumentReference><cbc:ID>${pfr}</cbc:ID></cac:AdditionalDocumentReference>\n`;
-    const summary = `  <cac:TaxTotal><cbc:TaxAmount currencyID="RSD">${this.formatAmount(data.ukupno - (data.ukupno / 1.2), smer)}</cbc:TaxAmount></cac:TaxTotal>\n  <cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="RSD">${this.formatAmount(data.ukupno, smer)}</cbc:PayableAmount></cac:LegalMonetaryTotal>`;
-    const lines = `  <cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.formatAmount(data.ukupno / 1.2, smer)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>Fiskalizovan promet</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>20.00</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.formatAmount(data.ukupno / 1.2, smer)}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
-    return this.assembleUbl(data, { typeCode: '380', rootTag: 'Invoice', invoicePeriod, additionalRefs: refs, summary, lines });
+    let notes = '';
+    data.pfrBrojevi.forEach(pfr => notes += `<cbc:Note>Референтни број обрасца: ${pfr}</cbc:Note>`);
+    const xml = this.buildStandardna({ ...data, osnovica: data.ukupno/1.2, pdv: data.ukupno - data.ukupno/1.2 } as any);
+    return xml.replace('</cbc:ID>', `</cbc:ID>${notes}`);
   }
 
   static build(data: any): string {
     const type = data.InvoiceTypeCode || data.TipZapisa || '380';
+    if (type === 'EEO') return JSON.stringify(SefPoreskiJsonBuilder.buildZbirniEeoPayload(data));
+    if (type === 'PEEO') return JSON.stringify(SefPoreskiJsonBuilder.buildPojedinacnaEeoPayload(data));
+    if (type === 'EPP') return JSON.stringify(SefPoreskiJsonBuilder.buildEppPayload(data));
+    
     switch (type) {
       case '386': return this.buildAvansni(data);
-      case '381': return this.buildSmanjenje(data);
-      case '383': return this.buildPovecanje(data);
-      case 'PEEO': return JSON.stringify(SefPoreskiJsonBuilder.buildPojedinacnaEeoPayload(data));
-      case 'EEO': return JSON.stringify(SefPoreskiJsonBuilder.buildZbirniEeoPayload(data));
-      case 'EPP': return JSON.stringify(SefPoreskiJsonBuilder.buildEppPayload(data));
-      case '380':
-      default:
-        if (data.avansBroj) return this.buildKonacniSaAvansom(data);
-        if (data.popustIznos) return this.buildSaPopustom(data);
-        if (data.valuta && data.valuta !== 'RSD') return this.buildSaValutom(data);
-        if (data.pfrBrojevi) return this.buildFiskalizacijaProdaja(data);
-        if (data.prilogIme) return this.buildSaPrilogom(data);
+      case '381': 
+        if (data.avansBroj) return this.buildSmanjenjeAvansa(data);
         if (data.periodOd) return this.buildSmanjenjeUPeriodu(data);
+        return this.buildSmanjenje(data);
+      case '383': return this.buildPovecanje(data);
+      case '380':
+        if (data.avansBroj) return this.buildKonacniSaAvansom(data);
+        if (data.sifraOslobodjenja) return this.buildOslobodjena(data);
+        if (data.pfrBrojevi) return this.buildFiskalizacijaProdaja(data);
         return this.buildStandardna(data);
+      default: return this.buildStandardna(data);
     }
   }
 }

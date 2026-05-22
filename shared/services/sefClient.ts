@@ -32,11 +32,46 @@ export interface SefChangesResponse {
 export class SefClient {
   private apiKey: string;
   private baseUrl: string;
+  private static isCircuitOpen = false;
+  private static circuitOpenUntil = 0;
 
   constructor(config: SefClientConfig) {
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl || '').trim().replace(/\/$/, "");
+    let url = (config.baseUrl || '').trim().replace(/\/$/, "");
+    // OKLOP: Sprečavamo dupli /api sufiks
+    if (url.endsWith("/api")) {
+      url = url.substring(0, url.length - 4);
+    }
+    this.baseUrl = url;
     console.log(`[SefClient] Inicijalizovan API URL: ${this.baseUrl}`);
+  }
+
+  static getCircuitStatus(): { isOpen: boolean, openUntil?: string } {
+    if (!SefClient.isCircuitOpen) return { isOpen: false };
+    if (Date.now() > SefClient.circuitOpenUntil) {
+      SefClient.isCircuitOpen = false;
+      return { isOpen: false };
+    }
+    return { 
+      isOpen: true, 
+      openUntil: new Date(SefClient.circuitOpenUntil).toISOString() 
+    };
+  }
+
+  private checkCircuit() {
+    if (SefClient.isCircuitOpen) {
+      if (Date.now() > SefClient.circuitOpenUntil) {
+        SefClient.isCircuitOpen = false;
+        return;
+      }
+      throw new Error('Circuit Breaker: SEF je trenutno offline ili u prekidu. Pokušaj kasnije.');
+    }
+  }
+
+  private openCircuit(durationMs = 60000) {
+    SefClient.isCircuitOpen = true;
+    SefClient.circuitOpenUntil = Date.now() + durationMs;
+    console.error(`[SefClient] Circuit Breaker AKTIVIRAN na ${durationMs/1000}s zbog serverske greške.`);
   }
 
   /**
@@ -56,11 +91,17 @@ export class SefClient {
    * Pomoćna funkcija za fetch sa ugrađenim timeout-om (neophodno za SEF)
    */
   private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 15000): Promise<Response> {
+    this.checkCircuit();
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(url, { ...options, signal: controller.signal });
       clearTimeout(id);
+
+      if (response.status === 500 || response.status === 503) {
+        this.openCircuit();
+      }
+
       return response;
     } catch (err) {
       clearTimeout(id);

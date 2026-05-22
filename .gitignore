@@ -1,4 +1,4 @@
-node_modules
+node_modules/
 .nuxt
 .output
 .wrangler
@@ -7,3 +7,4 @@ docs
 .DS_Store
 companies.json
 *.sql
+dist/

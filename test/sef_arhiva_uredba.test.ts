@@ -147,9 +147,10 @@ describe('v3.7.0 Arhivski Bedem — Uredba o čuvanju e-faktura Audit', () => {
 
     await new Promise(r => setTimeout(r, 500));
 
-    const auditRes = await klijentDO.fetch(new Request('http://do/api/audit/download?period=2026-05-21'));
+    const auditRes = await klijentDO.fetch(new Request('http://do/api/audit/download?period=2026-05-22'));
     const auditData = await auditRes.json() as any;
 
+    expect(auditRes.status).toBe(200);
     expect(auditData.status).toBe("USKLAĐENO_SA_UREDROM_MFIN");
     expect(auditData.ukupnoDokumenata).toBeGreaterThan(0);
     expect(auditData.dokumenti.find((d:any) => d.broj === 'FKT-C5-01')).toBeDefined();

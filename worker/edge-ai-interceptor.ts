@@ -3,7 +3,7 @@ import { posaljiHotfixTelegramAlarm } from '../shared/services/telegram-notifier
 /**
  * handleSefErrorWithEdgeAi - Intelligent error classification at the Edge.
  * 
- * v4.2.1: Modularized for reuse and high-fidelity testing.
+ * v4.4.3: Hardened with robust fail-safes to prevent workerd process crashes.
  */
 export async function handleSefErrorWithEdgeAi(
   sefResponse: Response,
@@ -19,8 +19,12 @@ export async function handleSefErrorWithEdgeAi(
   console.warn(`[Edge Alert] SEF odbio dokument ${brojDokumenta}. Pokrećem Llama-3 analizu...`);
 
   try {
-    // Pokretanje ugrađenog modela na Cloudflare GPU infrastrukturi (<50ms)
-    // NAPOMENA: env.AI mora biti dostupan (Workers AI binding)
+    // 🛡️ HERMETIČKI ŠTIT: Ako AI podsistem nije dostupan (npr. lokalni Miniflare bez AI bindinga),
+    // ne dozvoljavamo krahiranje workerd-a.
+    if (!env.AI) {
+      throw new Error("AI subsystem not bound to environment.");
+    }
+
     const aiOdlukaRaw = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
       messages: [
         {
@@ -38,14 +42,16 @@ export async function handleSefErrorWithEdgeAi(
     const odluka = JSON.parse(aiOdlukaRaw.response);
 
     if (odluka.tip === "BREAKING_HOTFIX" || odluka.akcija === "QUEUE") {
-      // 1. Podigni globalnu rampu u Cloudflare KV-u za ovaj tip greške
-      await env.PORESKI_KV.put("ALERT_SEF_HOTFIX_DETECTED", JSON.stringify({
-        status: "POTREBNA_INSPEKCIJA",
-        vreme: new Date().toISOString(),
-        uzrok: sirovaGreska
-      }));
+      // 1. Podigni globalnu rampu u Cloudflare KV-u
+      if (env.PORESKI_KV) {
+        await env.PORESKI_KV.put("ALERT_SEF_HOTFIX_DETECTED", JSON.stringify({
+          status: "POTREBNA_INSPEKCIJA",
+          vreme: new Date().toISOString(),
+          uzrok: sirovaGreska
+        }));
+      }
 
-      // 2. Bezbedno gurni XML u Cloudflare Queue (Asinhroni štit)
+      // 2. XML u Cloudflare Queue (Asinhroni štit)
       if (env.SEF_QUEUE) {
         await env.SEF_QUEUE.send({
           id: lokalniId,
@@ -55,26 +61,25 @@ export async function handleSefErrorWithEdgeAi(
         });
       }
 
-      // 3. KLJUČNI ASINHRONI KORAK: Obaveštavamo tim na Telegram bez blokiranja klijenta
+      // 3. Obaveštavamo tim na Telegram (Asinhrono)
       if (ctx?.waitUntil) {
         ctx.waitUntil(posaljiHotfixTelegramAlarm(sirovaGreska, brojDokumenta, env));
       } else {
-        // Fallback za testno okruženje gde ctx možda nije prisutan
         await posaljiHotfixTelegramAlarm(sirovaGreska, brojDokumenta, env);
       }
 
-      // 4. Vrati klijentu 202 Accepted — ERP ostaje miran, krediti su rezervisani i sigurni
       return new Response(JSON.stringify({
         success: true,
         status: "QUEUED_FOR_COMPLIANCE",
-        message: "Državni SEF portal prolazi kroz vanredne tehničke izmene (Hotfix). Vaš dokument je uspešno prebačen u asinhroni štit i biće automatski procesuiran čim sistem sinhronizuje novu šemu."
+        message: "Državni SEF portal prolazi kroz vanredne tehničke izmene. Dokument je u asinhronom štitu."
       }), { status: 202, headers: { "Content-Type": "application/json" } });
     }
 
   } catch (err: any) {
-    console.error("[Edge AI Fail-Safe] Pad AI podsistema, vraćam sirovu grešku:", err.message);
+    // 🛡️ FAIL-SAFE: AI je pao, vraćamo originalnu grešku bez rušenja procesa
+    console.error("⚠️ [Edge AI Fail-Safe] AI podsistem nedostupan usled mrežnog prekida. Vraćam sirovu grešku.");
+    return new Response(sirovaGreska, { status: 400 });
   }
 
-  // Ako AI proceni da je greška standardna (npr. klijent loše ukucao PIB primaoca), vrati mu standardni 400
   return new Response(sirovaGreska, { status: 400 });
 }

@@ -12,6 +12,7 @@ export interface BaseInvoiceData {
   broj: string;
   pibProdavca: string;
   pibKupca: string;
+  brojRacunaProdavca?: string;
   nazivProdavca?: string;
   nazivKupca?: string;
   maticniBrojProdavca?: string;
@@ -42,19 +43,32 @@ export interface BaseInvoiceData {
   }[];
 }
 
+export interface StandardnaData extends BaseInvoiceData {
+  osnovica: number;
+  pdv: number;
+  pdvStopa?: number;
+  item_name?: string;
+  sifraOslobodjenja?: string;
+  zakonskiClan?: string;
+}
+
 export interface PojedinacnaEeoData {
-  poreskiPeriod: string;
+  poreskiPeriod: string; // Format: 'YYYY-MM'
   internalInvoiceNumber?: string;
   osnovicaOpsta: number;
   pdvOpsta: number;
   osnovicaPosebna: number;
   pdvPosebna: number;
+  isCancellation?: boolean; // Za Poništavanje
+  relatedInternalNumber?: string; // Veza sa prethodnom evidencijom
 }
 
 export interface AvansData extends BaseInvoiceData {
   osnovica: number;
   pdv: number;
 }
+// etc... ensure everything starts with export keyword.
+
 
 export interface KonacniData extends BaseInvoiceData {
   avansBroj: string;
