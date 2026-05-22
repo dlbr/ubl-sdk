@@ -141,6 +141,12 @@ export class KlijentBaza extends DurableObject<Env> {
       });
     });
 
+    this.app.get('/config', async () => {
+      const config = this.sql.exec(`SELECT * FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
+      if (!config) return new Response('Not configured', { status: 404 });
+      return Response.json(config);
+    });
+
     this.app.post('/config', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
       const oldConfig = this.sql.exec(`SELECT status_pretplate, limit_faktura, billing_period, licenca_od_datuma, licenca_istice_timestamp, avans_za_obnovu_poslat, limit_faktura_godisnje, poreski_period_tip FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
@@ -296,6 +302,43 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ error: "Failed", details: res.error }, { status: 422 });
     });
 
+    this.app.post('/api/popdv/finalize', async ({ req }) => {
+      const url = new URL(req.url);
+      const period = url.searchParams.get('period');
+      if (!period) return Response.json({ error: "Missing period" }, { status: 400 });
+      this.sql.exec(`UPDATE sef_popdv_periods SET status = 'FINALIZED' WHERE period = ?`, period);
+      return Response.json({ success: true });
+    });
+
+    this.app.get('/logs', async () => {
+      const logs = this.sql.exec(`SELECT * FROM error_logs ORDER BY kreirano_u DESC LIMIT 50`).toArray();
+      return Response.json({ success: true, logs });
+    });
+
+    this.app.get('/fakture', async ({ req }) => {
+      const url = new URL(req.url);
+      const page = parseInt(url.searchParams.get('page') || '1');
+      const limit = 20;
+      const offset = (page - 1) * limit;
+      const fakture = this.sql.exec(`SELECT * FROM fakture ORDER BY azurirano_u DESC LIMIT ? OFFSET ?`, limit, offset).toArray();
+      const total = this.sql.exec(`SELECT COUNT(*) as count FROM fakture`).one() as { count: number };
+      return Response.json({ 
+        success: true, 
+        fakture, 
+        total: total.count, 
+        page, 
+        totalPages: Math.ceil(total.count / limit) 
+      });
+    });
+
+    this.app.patch('/fakture/:id/odbitak', async ({ req, result }) => {
+      const sefId = (result as any).pathname.groups.id;
+      const { deductible } = await req.json() as { deductible: number };
+      // Forensic logic: update the non-deductible portion based on the requested deductible amount
+      this.sql.exec(`UPDATE sef_purchase_invoice_taxes SET non_deductible_amount = taxable_amount * (tax_percentage / 100) - ? WHERE invoice_id = ?`, deductible, sefId);
+      return Response.json({ success: true });
+    });
+
     this.app.post('/api/evidencija/eeo', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
       const period = data.poreski_period;
@@ -353,7 +396,10 @@ export class KlijentBaza extends DurableObject<Env> {
     
     this.app.post('/sync-sef', async () => {
       const config = this.sql.exec(`SELECT sef_api_key, environment FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
-      if (!config) return Response.json({ error: "No config" }, { status: 400 });
+      if (!config) {
+        console.error(`[DO] Sync failed: Configuration missing for ${this.ctx.id.toString()}`);
+        return Response.json({ error: "Firma nije konfigurisana. Molimo prođite kroz onboarding." }, { status: 400 });
+      }
       const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs') });
       const fakture = this.sql.exec(`SELECT internal_id, sef_id, status FROM fakture WHERE status NOT IN ('Approved', 'Rejected', 'Cancelled') AND sef_id IS NOT NULL`).toArray() as any[];
       for (const f of fakture) {

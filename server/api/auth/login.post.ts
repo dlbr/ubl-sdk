@@ -153,7 +153,7 @@ export default defineEventHandler(async (event) => {
 
     // 2. PAKOVANJE TITANIUM SESIJE
     const sessionPayload = {
-      klijentId: doId.toString(),
+      klijentId: klijentBaseName, // OKLOP: Čuvamo čitljivo ime, ne hex ID
       pib: body.pib,
       operater: body.operater || 'Sistemski Operater',
       createdAt: Date.now()
