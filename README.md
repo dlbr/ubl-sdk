@@ -1,59 +1,57 @@
-# SEF Bridge v4.2.2 - Autonomous Resilience Tvrđava
+# SEF Bridge v4.20.0 - Production Steel Fortress 🛡️
 
-Ovaj projekat predstavlja **v4.2.2 "Autonomous Resilience"** — najnapredniju managed Edge infrastrukturu u Srbiji za automatizovanu sinhronizaciju B2B faktura sa državnim SEF API-jem (Sistem e-Faktura).
+Ovaj projekat predstavlja **v4.20.0 "Steel Fortress"** — najnapredniju managed Edge infrastrukturu u Srbiji za automatizovanu sinhronizaciju B2B faktura sa državnim SEF API-jem (Sistem e-Faktura).
 
-Sistem je dizajniran kao **autonomni, samoizlečivi organizam** koji koristi Edge AI inteligenciju za preživljavanje unutar nestabilnog državnog ekosistema.
+Sistem je dizajniran kao **autonomni, samoizlečivi organizam** koji garantuje 100% pravnu i tehničku usklađenost sa **MFIN 2026 UBL 2.1** standardima (uključujući Hotfix 3.17.1).
 
-## 🚀 Ključni Oklopi v4.2.2
+## 🚀 Ključni Oklopi v4.20.0
 
-- **Edge AI Circuit Breaker (Llama 3 8B):** Hiper-brza klasifikacija državnih anomalija u realnom vremenu (<50ms). Ako država izbaci neprijavljeni "Hotfix", AI automatski prebacuje fakture u asinhroni Queue štit umesto odbijanja.
-- **AI-Driven Self-Healing CI/CD:** Integrisani Gemini 2.5/Claude 3.5 Sonnet pajplajn koji automatski skrapuje državne PDF-ove, piše zakrpe (patching), testira kôd na Sandbox-u i vrši redeploy bez ljudske intervencije.
-- **Arhivski Bedem (Cloudflare R2):** Hibridni model čuvanja. Originalni, potpisani UBL XML dokumenti se trajno i nepromenljivo zaključavaju na 10 godina (Uredba Vlade RS), dok SQLite služi za munjevitu analitiku.
-- **Master Specifikacija (April 2026):** 100% usklađenost sa najnovijim tehničkim uputstvom (čiste UN/ECE 5305 kategorije, negativne linije za avansno sravnjenje).
-- **Immutable Billing Ledger:** Transakcioni registar kredita sa ugrađenom idempotencijom i automatskom refundacijom za Rejected dokumente.
+- **Master UBL Builder (v4.12.3):** Centralizovana, kompoziciona arhitektura koja garantuje striktan XSD redosled elemenata. Implementirana podrška za inteligentnu identifikaciju partija (**JBKJS** za javni sektor, **CompanyID** za privatni).
+- **Vendor-Agnostic Validation (DI):** Arhitektura zasnovana na **Dependency Injection** principu. Biznis logika validatora je potpuno dekaplovana od Cloudflare-a, omogućavajući rad na bilo kom sistemu (Redis, Local JSON, SQL) kroz `KeyValueStore` interfejs.
+- **Circuit Breaker & Error Shield:** Inteligentni sistem za nadzor koji detektuje zastoje na SEF-u (500/503) i automatski otvara štit kako bi zaštitio korisnički nalog od suspenzije.
+- **Titanium Session Identity:** Potpuna sinhronizacija identiteta između Dashboard-a i Edge Workera, rešavajući probleme sa izolacijom tenanata i 404/400 API greškama.
+- **Arhivski Bedem (Cloudflare R2):** Zakonska obaveza čuvanja originalnih UBL XML dokumenata na 10 godina je rešena kroz R2 storage sa nultim troškovima iznošenja podataka (No Egress Fees).
 
 ## 🛠️ Tehnički Stack
 
-- **Frontend:** Nuxt 4 (SSR/SPA hibrid), Tailwind CSS.
-- **Edge AI:** Workers AI (@cf/meta/llama-3-8b-instruct) na GPU infrastrukturi.
+- **Frontend:** Nuxt 4 (SSR/SPA hibrid), Tailwind CSS v4.
+- **Edge Runtime:** Cloudflare Workers (Node.js compatibility mode).
 - **Skladište:** 
-  - **R2 (Object Storage):** Pravni arhiv (Immutable Cold Storage).
+  - **R2 (Object Storage):** Pravni arhiv (10-godišnja trajnost).
   - **D1 (SQLite):** Centralni registar i indeks klijenata.
-  - **Durable Objects (SQLite):** Izolovani transactional ledger za svakog tenanta.
-- **Queue:** Cloudflare Queues za asinhroni "Compliance Buffer".
-- **Monitoring:** Telegram ChatOps (interaktivno upravljanje sistemom sa telefona).
+  - **Durable Objects (SQLite):** Izolovani, transakcioni legeri za svakog klijenta.
+  - **KV (Key-Value):** Globalni šifrarnici države (Jedinice mera, Poreska pravila).
+- **Monitoring:** Telegram ChatOps & Edge Alert (Llama-3 8B analiza grešaka).
+
+## 📐 Vendor-Agnostic Arhitektura (DI)
+
+Sistem više nema "vendor lock-in" za Cloudflare KV. Validator koristi apstrakciju:
+
+```typescript
+export interface KeyValueStore {
+  get(key: string): Promise<any>;
+}
+
+// Upotreba u bilo kom okruženju:
+await SefLiveValidator.validateUnitMeasure("H87", mockStore || cfStore || redisStore);
+```
 
 ## 🛡️ Bezbednosni Mandat
 
-- **Zero-Latency Protection:** Svi AI procesi u realnom vremenu su asinhroni (`ctx.waitUntil`) kako bi se zadržala EDGE brzina.
-- **Multi-Tenant Isolation:** Svaki PIB poseduje svoj izolovani SQLite fajl i ključeve.
-- **Audit Ready:** Instant generisanje masovnih paketa za poresku inspekciju (`GET /api/v1/audit/download`).
+- **Zero-Latency Caching:** Validator koristi 5-minutni in-memory cache za šifrarnike, čime drastično ubrzava procesiranje i smanjuje troškove operacija.
+- **Hardened Fallbacks:** U slučaju nedostupnosti eksternih šifrarnika, sistem koristi stroge inženjerske default-ove kako bi osigurao kontinuitet poslovanja.
+- **Audit Ready:** Instant generisanje strukturisanih paketa za poresku inspekciju (`GET /api/audit/download`).
 
-## 📦 API Reference (Primeri)
+## 📦 API Reference (Statusi)
 
-### 1. Slanje Fakture sa AI Zaštitom
-```bash
-POST /api/fakture/send
-X-Klijent-ID: klijent_123456789
+### 1. Provera Zdravlja Sistema
+`GET /api/health`
+- Vraća status Circuit Breaker-a, verziju sistema i stanje zakonske arhive.
 
-{
-  "ID": "FKT-2026-001",
-  "InvoiceTypeCode": "380",
-  "LegalMonetaryTotal": { "PayableAmount": 120000.00 },
-  "Lines": [...]
-}
-```
-*Ukoliko SEF vrati nepoznatu grešku, sistem vraća `202 Accepted (QUEUED_FOR_COMPLIANCE)`.*
-
-### 2. Audit Download
-```bash
-GET /api/audit/download?period=2026-05
-```
-*Vraća strukturisani JSON manifest sa svim izvornim XML fajlovima iz R2 arhive.*
-
-## 💼 Komercijalna Upotreba
-
-Sistem je optimizovan za velike ERP provajdere i knjigovodstvene agencije. Za pristup master tokensima i Agency Dashboard-u, kontaktirajte tim.
+### 2. Dashboard Operacije
+- `GET /api/fakture`: Listanje svih dokumenata sa paginacijom.
+- `GET /api/dashboard/logs`: Pregled zadnjih API grešaka iz D1 baze.
+- `POST /api/fakture/sync`: Manuelna sinhronizacija statusa sa državnim SEF-om.
 
 ---
-*SEF Bridge v4.2.2 - Razvijeno za nultu toleranciju na državne greške.*
+*SEF Bridge v4.20.0 - Razvijeno za nultu toleranciju na greške u kritičnoj infrastrukturi.*
