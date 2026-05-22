@@ -326,7 +326,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ error: "Failed", details: res.error }, { status: 422 });
     });
 
-    this.app.post('/api/popdv/finalize', async ({ req }) => {
+    this.app.post('/api/popdv/finalize', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const period = url.searchParams.get('period');
       if (!period) return Response.json({ error: "Missing period" }, { status: 400 });
@@ -339,7 +339,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ success: true, logs });
     });
 
-    this.app.get('/fakture', async ({ req }) => {
+    this.app.get('/fakture', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const page = parseInt(url.searchParams.get('page') || '1');
       const limit = 20;
@@ -355,7 +355,7 @@ export class KlijentBaza extends DurableObject<Env> {
       });
     });
 
-    this.app.patch('/fakture/:id/odbitak', async ({ req, result }) => {
+    this.app.patch('/fakture/:id/odbitak', async ({ req, result }: RouterContext<Env>) => {
       const sefId = (result as any).pathname.groups.id;
       const { deductible } = await req.json() as { deductible: number };
       // Forensic logic: update the non-deductible portion based on the requested deductible amount
