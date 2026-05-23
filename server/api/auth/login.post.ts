@@ -48,8 +48,9 @@ export default defineEventHandler(async (event) => {
       const tryEnvs: Array<'production' | 'sandbox'> = ['production', 'sandbox'];
       
       for (const envType of tryEnvs) {
-        // PRIORITET: Koristimo env.SEF_API_URL ako postoji, inače standardne državne rute
+        // OKLOP: Striktno koristimo env varijablu bez fallback-a
         const baseUrl = env.SEF_API_URL;
+
         const checkClient = new SefClient({ 
           apiKey: body.api_key, 
           baseUrl, 

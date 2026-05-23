@@ -401,7 +401,7 @@ export class KlijentBaza extends DurableObject<Env> {
       const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
       if (!config) return Response.json({ error: "No config" }, { status: 400 });
 
-      const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs') });
+      const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL });
       const brojRow = this.sql.exec(`SELECT broj_fakture FROM fakture WHERE internal_id = ?`, internalId).toArray()[0] as any;
       
       const result = await client.sendInvoice(xml, internalId);
@@ -442,7 +442,7 @@ export class KlijentBaza extends DurableObject<Env> {
         console.error(`[DO] Sync failed: Configuration missing for ${this.ctx.id.toString()}`);
         return Response.json({ error: "Firma nije konfigurisana. Molimo prođite kroz onboarding." }, { status: 400 });
       }
-      const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs') });
+      const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL });
       const fakture = this.sql.exec(`SELECT internal_id, sef_id, status FROM fakture WHERE status NOT IN ('Approved', 'Rejected', 'Cancelled') AND sef_id IS NOT NULL`).toArray() as any[];
       for (const f of fakture) {
         const res = await client.getInvoiceStatus(parseInt(f.sef_id));
@@ -575,7 +575,7 @@ export class KlijentBaza extends DurableObject<Env> {
         const next = this.sql.exec(`SELECT internal_id, raw_data FROM fakture WHERE status = 'Queued' LIMIT 1`).toArray()[0] as any;
         if (!next) break;
         const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
-        const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs') });
+        const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL });
         const invoiceData = JSON.parse(next.raw_data);
         const xml = SefUblBuilder.build(invoiceData);
         const result = await client.sendInvoice(xml, next.internal_id);
