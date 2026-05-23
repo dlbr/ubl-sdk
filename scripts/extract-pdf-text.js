@@ -3,8 +3,8 @@ import https from 'https';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-const pdfModule = require('pdf-parse');
-const PDFParse = pdfModule.PDFParse;
+// Try to load as a default export or just the module itself
+const pdf = require('pdf-parse');
 
 async function downloadAndExtract() {
   const url = process.argv[2];
@@ -27,9 +27,9 @@ async function downloadAndExtract() {
       try {
         const dataBuffer = fs.readFileSync(tmpFile);
         
-        // Pass the buffer as the data option directly
-        const parser = new PDFParse({ verbosity: 0, data: dataBuffer });
-        const data = await parser.getText();
+        // pdf-parse usage: pdf(dataBuffer).then(...)
+        // Let's use the function directly, as it's the most common API for this library
+        const data = await pdf(dataBuffer);
         
         console.log(data.text);
       } catch (err) {
