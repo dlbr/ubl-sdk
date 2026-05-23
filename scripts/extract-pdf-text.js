@@ -2,8 +2,9 @@ import fs from 'fs';
 import https from 'https';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const pdfModule = require('pdf-parse');
-const pdf = pdfModule.PDFParse || pdfModule;
+
+// Based on package.json, we should import from the node-specific entry
+const pdfModule = require('pdf-parse/node');
 
 async function downloadAndExtract() {
   const url = process.argv[2];
@@ -26,10 +27,8 @@ async function downloadAndExtract() {
       try {
         const dataBuffer = fs.readFileSync(tmpFile);
         
-        // If pdf is a class constructor, instantiate it.
-        // The error 'Class constructors cannot be invoked without new' means it MUST be newed.
-        const parser = new pdf(dataBuffer);
-        const data = await parser.parse();
+        // According to the exports, the node entry provides an object or function
+        const data = await pdfModule(dataBuffer);
         
         console.log(data.text);
       } catch (err) {
