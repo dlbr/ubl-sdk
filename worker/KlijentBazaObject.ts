@@ -36,6 +36,7 @@ export class KlijentBaza extends DurableObject<Env> {
   private sql: SqlStorage;
   private isDraining = false;
   private isSyncingPurchases = false;
+  private app = Router<Env>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -43,6 +44,31 @@ export class KlijentBaza extends DurableObject<Env> {
     this.initDatabase();
     this.updateSchemaFor2026();
     this.updateSchemaForBillingLedger();
+    this.setupInternalRoutes();
+  }
+
+  override async fetch(request: Request): Promise<Response> {
+    return this.app.fetch(request, this.env, this.ctx as any);
+  }
+
+  private setupInternalRoutes() {
+    this.app.get('/config', async () => {
+      const config = this.sql.exec(`SELECT * FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
+      if (!config) return new Response('Not configured', { status: 404 });
+      return Response.json(config);
+    });
+
+    this.app.post('/config', async ({ req }: RouterContext<Env>) => {
+      const data = await req.json() as any;
+      await this.setConfig(data);
+      return Response.json({ success: true });
+    });
+
+    this.app.post('/api/internal/verify-password', async ({ req }: RouterContext<Env>) => {
+      const { password } = await req.json() as { password: string };
+      const ok = await this.verifyPassword(password);
+      return ok ? Response.json({ success: true }) : Response.json({ success: false }, { status: 401 });
+    });
   }
 
   // ==========================================
