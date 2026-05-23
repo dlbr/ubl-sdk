@@ -79,7 +79,7 @@ app.post('/api/admin/populate-companies', async ({ req, env }: RouterContext<Env
 
   const sefClient = new SefClient({ 
     apiKey: sef_api_key, 
-    baseUrl: env.SEF_API_URL || 'https://efaktura.mfin.gov.rs/api',
+    baseUrl: env.SEF_API_URL,
     environment: 'production'
   });
 
@@ -187,7 +187,7 @@ app.post('/api/admin/debug-csv', async ({ req, env }: RouterContext<Env>) => {
   const { sef_api_key } = await req.json() as { sef_api_key: string };
   const sefClient = new SefClient({ 
     apiKey: sef_api_key, 
-    baseUrl: env.SEF_API_URL || 'https://efaktura.mfin.gov.rs/api',
+    baseUrl: env.SEF_API_URL,
     environment: 'production'
   });
 

@@ -26,7 +26,7 @@ export interface SefChangesResponse {
 }
 
 /**
- * SefClient - High-fidelity client for Serbian SEF API v2/v3.
+ * SefClient - High-fidelity client for Serbian SEF API v1.
  * Hardened for Cloudflare Workers outbound routing.
  */
 export class SefClient {
@@ -167,35 +167,112 @@ export class SefClient {
   }
 
   /**
-   * Checks the status of a specific invoice.
+   * Checks the status of a specific invoice (v1 endpoint).
    */
   async getInvoiceStatus(salesInvoiceId: number): Promise<SefStatusResponse | null> {
-    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/${salesInvoiceId}`;
+    return this.getSalesInvoiceDetails(salesInvoiceId);
+  }
+
+  /**
+   * Fetches sales invoice IDs for a given range (v1 endpoint).
+   */
+  async getSalesInvoiceIds(dateFrom: string, dateTo: string, status?: string): Promise<number[] | null> {
+    let endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/ids?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`;
+    if (status) {
+      endpoint += `&status=${encodeURIComponent(status)}`;
+    }
+
+    try {
+      console.log(`[SEF Mreža] Pozivam sales/ids: ${endpoint}`);
+      const response = await this.fetchWithTimeout(endpoint, {
+        method: 'POST',
+        headers: this.getHeaders()
+      }, 20000);
+
+      if (!response.ok) {
+        console.error(`[SEF Mreža] Neuspešan poziv sales/ids (${response.status}):`, await response.text());
+        return null;
+      }
+
+      const data = await response.json() as { salesInvoiceIds: number[] };
+      const ids = data.salesInvoiceIds || [];
+      console.log(`[SEF Mreža] Pronađeno ${ids.length} sales IDs.`);
+      return ids;
+    } catch (err) {
+      console.error('[SEF Mreža] Fatalna greška tokom povlačenja sales IDs:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Downloads the raw UBL XML for a specific sales invoice (v1 endpoint).
+   */
+  async downloadSalesInvoiceXml(salesInvoiceId: number): Promise<string | null> {
+    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/xml?invoiceId=${salesInvoiceId}`;
 
     try {
       const response = await this.fetchWithTimeout(endpoint, {
         method: 'GET',
-        headers: {
-          'ApiKey': this.apiKey,
-          'Accept': 'application/json',
-          'User-Agent': 'SEF-Bridge-Edge-Tank/2.0'
-        }
+        headers: this.getHeaders('application/xml'),
+      }, 15000);
+
+      if (!response.ok) {
+        console.error(`[SEF Mreža] Neuspešno preuzimanje sales XML-a za fakturu ${salesInvoiceId}. Status: ${response.status}`);
+        return null;
+      }
+
+      const text = await response.text();
+      // OKLOP: v1 XML endpoint obično vraća direktan XML ili Base64 u JSON-u
+      if (text.trim().startsWith('{')) {
+        const json = JSON.parse(text);
+        if (json.Base64Xml) return atob(json.Base64Xml);
+        if (json.Xml) return json.Xml;
+      }
+      
+      if (text.length > 20 && !text.includes('<') && /^[A-Za-z0-9+/=]+$/.test(text.trim())) {
+        return atob(text.trim());
+      }
+
+      return text;
+    } catch (err) {
+      console.error(`[SEF Mreža] Izuzetak pri preuzimanju sales XML-a fakture ${salesInvoiceId}:`, err);
+      return null;
+    }
+  }
+
+  /**
+   * Checks the details of a specific sales invoice (v1 endpoint).
+   */
+  async getSalesInvoiceDetails(salesInvoiceId: number): Promise<SefStatusResponse | null> {
+    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice?invoiceId=${salesInvoiceId}`;
+
+    try {
+      const response = await this.fetchWithTimeout(endpoint, {
+        method: 'GET',
+        headers: this.getHeaders()
       }, 10000);
 
       if (!response.ok) return null;
-      return await response.json() as SefStatusResponse;
+      const data = await response.json() as any;
+      // Mapiramo SimpleSalesInvoiceDto na naš interni format
+      return {
+        InvoiceId: data.invoiceId,
+        InvoiceNumber: data.invoiceNumber,
+        InvoiceStatus: data.status || data.invoiceStatus,
+        SalesInvoiceId: data.invoiceId,
+        TotalAmount: data.totalAmount || 0
+      };
     } catch (err) {
-      console.error(`[SEF Mreža] Greška pri proveri statusa fakture ${salesInvoiceId}:`, err);
+      console.error(`[SEF Mreža] Greška pri preuzimanju detalja fakture ${salesInvoiceId}:`, err);
       return null;
     }
   }
 
   /**
-   * Fetches sales invoice changes for a given range (v3 endpoint).
-   * Used for discovery and status synchronization.
+   * Fetches purchase invoice overview for a given range (v1 endpoint).
    */
-  async getSalesInvoiceChanges(dateFrom: string, dateTo: string, page: number = 1): Promise<SefChangesResponse | null> {
-    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/v3/changes?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}&page=${page}`;
+  async getPurchaseInvoiceOverview(dateFrom: string, dateTo: string, status: string = ''): Promise<any[] | null> {
+    const endpoint = `${this.baseUrl}/api/publicApi/purchase-invoice/overview?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}&status=${encodeURIComponent(status)}`;
 
     try {
       const response = await this.fetchWithTimeout(endpoint, {
@@ -204,51 +281,13 @@ export class SefClient {
       }, 20000);
 
       if (!response.ok) {
-        console.error(`[SEF Mreža] Neuspešan poziv v3 sales promena (${response.status}):`, await response.text());
+        console.error(`[SEF Mreža] Neuspešan poziv purchase/overview (${response.status}):`, await response.text());
         return null;
       }
 
-      const rawData = await response.json() as any;
-      const normalizedInvoices = rawData.SalesInvoices || rawData.invoices || (Array.isArray(rawData) ? rawData : []);
-      const hasMore = typeof rawData.HasMoreCardInvoices === 'boolean' ? rawData.HasMoreCardInvoices : false;
-
-      return {
-        invoices: normalizedInvoices,
-        hasMoreCardInvoices: hasMore
-      };
+      return await response.json() as any[];
     } catch (err) {
-      console.error('[SEF Mreža] Fatalna greška tokom povlačenja v3 sales promena:', err);
-      return null;
-    }
-  }
-
-  /**
-   * Fetches purchase invoice changes for a given range (v3 endpoint).
-   */
-  async getPurchaseInvoiceChanges(dateFrom: string, dateTo: string, page: number = 1): Promise<SefChangesResponse | null> {
-    const endpoint = `${this.baseUrl}/api/publicApi/purchase-invoice/v3/changes?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}&page=${page}`;
-
-    try {
-      const response = await this.fetchWithTimeout(endpoint, {
-        method: 'GET',
-        headers: this.getHeaders()
-      }, 20000);
-
-      if (!response.ok) {
-        console.error(`[SEF Mreža] Neuspešan poziv v3 promena (${response.status}):`, await response.text());
-        return null;
-      }
-
-      const rawData = await response.json() as any;
-      const normalizedInvoices = rawData.PurchaseInvoices || rawData.invoices || (Array.isArray(rawData) ? rawData : []);
-      const hasMore = typeof rawData.HasMoreCardInvoices === 'boolean' ? rawData.HasMoreCardInvoices : false;
-
-      return {
-        invoices: normalizedInvoices,
-        hasMoreCardInvoices: hasMore
-      };
-    } catch (err) {
-      console.error('[SEF Mreža] Fatalna greška tokom povlačenja v3 promena:', err);
+      console.error('[SEF Mreža] Fatalna greška tokom povlačenja purchase overview:', err);
       return null;
     }
   }

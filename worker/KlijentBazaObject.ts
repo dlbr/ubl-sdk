@@ -319,7 +319,10 @@ export class KlijentBaza extends DurableObject<Env> {
       const payload = this.generatePopdvData(period, pib);
       const config = this.sql.exec(`SELECT sef_subscription_token FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
       if (!config?.sef_subscription_token) return Response.json({ error: "No token" }, { status: 401 });
-      const client = new PopdvSefClient({ baseUrl: 'https://demoppppdv.mfin.gov.rs/public-api', token: config.sef_subscription_token });
+      const client = new PopdvSefClient({ 
+        baseUrl: this.env.SEF_PPPPDV_URL, 
+        token: config.sef_subscription_token 
+      });
       const res = await client.sendDraft(payload);
       if (res.success && res.data) {
         this.sql.exec(`UPDATE sef_popdv_periods SET status = 'DRAFT_ACCEPTED', draft_id = ? WHERE period = ?`, res.data.draftId, period);
@@ -401,7 +404,11 @@ export class KlijentBaza extends DurableObject<Env> {
       const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
       if (!config) return Response.json({ error: "No config" }, { status: 400 });
 
-      const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL! });
+      const client = new SefClient({ 
+        apiKey: config.sef_api_key, 
+        environment: config.environment, 
+        baseUrl: this.env.SEF_API_URL 
+      });
       const brojRow = this.sql.exec(`SELECT broj_fakture FROM fakture WHERE internal_id = ?`, internalId).toArray()[0] as any;
       
       const result = await client.sendInvoice(xml, internalId);
@@ -449,44 +456,79 @@ export class KlijentBaza extends DurableObject<Env> {
         baseUrl: this.env.SEF_API_URL 
       });
 
-      // 1. DISCOVERY: Povlačimo promene sa SEF-a za poslednjih 30 dana (v3 API)
-      const dateTo = new Date().toISOString().split('T')[0]!;
-      const dateFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!;
+      // 1. DISCOVERY: Povlačimo promene sa SEF-a za poslednjih 30 dana (v1 API)
+      const now = new Date();
+      const dateTo = now.toISOString();
+      const dateFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      console.log(`[DO] Pokrećem discovery za ${config.klijent_id} od ${dateFrom} do ${dateTo}`);
 
       let discoveredSales = 0;
       let discoveredPurchases = 0;
 
       try {
-        // Sales Discovery
-        const salesChanges = await sefClient.getSalesInvoiceChanges(dateFrom, dateTo);
-        if (salesChanges?.invoices) {
-          this.ctx.storage.transactionSync(() => {
-            for (const inv of salesChanges.invoices) {
-              const res = this.sql.exec(`
-                INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
-                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(sef_id) DO UPDATE SET 
-                  status = excluded.status,
-                  azurirano_u = CURRENT_TIMESTAMP
-                WHERE status != excluded.status`, 
-                `SEF-DISC-${inv.SalesInvoiceId}`, 
-                inv.SalesInvoiceId.toString(), 
-                inv.InvoiceStatus, 
-                inv.InvoiceNumber, 
-                inv.TotalAmount || 0
-              );
-              // Ako je insertovan novi red (a ne samo update-ovan postojeći), povećavamo brojač
-              // U SQLite-u insert on conflict do update vraća rowsAffected, ali ovde je teško razlučiti bez promene query-ja
-              discoveredSales++;
+        // Sales Discovery (Step 1: Get IDs)
+        const salesIds = await sefClient.getSalesInvoiceIds(dateFrom, dateTo);
+        if (salesIds && salesIds.length > 0) {
+          console.log(`[DO] Otkriveno ${salesIds.length} izlaznih faktura. Preuzimam detalje i XML-ove...`);
+          // Uzimamo samo zadnjih 20 faktura za inicijalno otkrivanje
+          const idsToFetch = salesIds.slice(-20);
+          for (const id of idsToFetch) {
+            const [details, xml] = await Promise.all([
+              sefClient.getSalesInvoiceDetails(id),
+              sefClient.downloadSalesInvoiceXml(id)
+            ]);
+
+            if (details) {
+              let amount = details.TotalAmount || 0;
+              let number = details.InvoiceNumber || `DISC-${id}`;
+
+              // OKLOP: Ako detalji nemaju iznos (često kod v1), vadimo ga hirurški iz XML-a
+              if (xml && (amount === 0 || !details.InvoiceNumber)) {
+                try {
+                  const extraction = SefUblParser.extract(xml, id.toString());
+                  amount = parseFloat(SefUblParser.parseInvoice(xml).then(p => p.PayableAmount) as any) || amount; 
+                  // Ispravka: SefUblParser.parseInvoice je async, ali extract je sync.
+                  // Koristiću direktnije metode iz parsera ako je moguće.
+                  const payableRegex = /<[^>]*?PayableAmount\b[^>]*>([^<]*?)<\//i;
+                  const numberRegex = /<[^>]*?ID\b[^>]*>([^<]*?)<\//i;
+                  
+                  const amountMatch = xml.match(payableRegex);
+                  if (amountMatch) amount = parseFloat(amountMatch[1]);
+                  
+                  const numberMatch = xml.match(numberRegex);
+                  if (numberMatch) number = numberMatch[1];
+                } catch (pErr) {
+                  console.error(`[DO] Greška pri parsu XML-a za ${id}: ${pErr}`);
+                }
+              }
+
+              this.ctx.storage.transactionSync(() => {
+                this.sql.exec(`
+                  INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
+                  VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                  ON CONFLICT(sef_id) DO UPDATE SET 
+                    status = excluded.status,
+                    azurirano_u = CURRENT_TIMESTAMP
+                  WHERE status != excluded.status`, 
+                  `SEF-DISC-${id}`, 
+                  id.toString(), 
+                  details.InvoiceStatus, 
+                  number, 
+                  amount
+                );
+                discoveredSales++;
+              });
             }
-          });
+          }
         }
 
-        // Purchase Discovery
-        const purchaseChanges = await sefClient.getPurchaseInvoiceChanges(dateFrom, dateTo);
-        if (purchaseChanges?.invoices) {
+        // Purchase Discovery (v1 overview endpoint)
+        const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo);
+        if (purchaseOverviews && Array.isArray(purchaseOverviews)) {
+          console.log(`[DO] Otkriveno ${purchaseOverviews.length} ulaznih faktura.`);
           this.ctx.storage.transactionSync(() => {
-            for (const inv of purchaseChanges.invoices) {
+            for (const inv of purchaseOverviews) {
               this.sql.exec(`
                 INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status, raw_xml)
                 VALUES (?, ?, ?, ?, ?, ?, '<xml_missing>')
@@ -494,12 +536,12 @@ export class KlijentBaza extends DurableObject<Env> {
                   status = excluded.status,
                   updated_at = CURRENT_TIMESTAMP
                 WHERE status != excluded.status`,
-                inv.PurchaseInvoiceId.toString(),
-                inv.InvoiceNumber,
-                inv.SupplierPib || '000000000',
-                inv.CreationDate || new Date().toISOString(),
-                inv.TotalAmount || 0,
-                inv.InvoiceStatus
+                inv.invoiceId.toString(),
+                inv.documentNumber || 'N/A',
+                inv.supplierPib || '000000000',
+                inv.creationDate || new Date().toISOString(),
+                inv.totalAmount || 0,
+                inv.invoiceStatus
               );
               discoveredPurchases++;
             }
@@ -507,7 +549,6 @@ export class KlijentBaza extends DurableObject<Env> {
         }
       } catch (discoveryErr: any) {
         console.error(`[DO] Discovery Error: ${discoveryErr.message}`);
-        // Ne prekidamo skroz, možda status sync prođe
       }
 
       // 2. STATUS SYNC: Za sve fakture koje su u prelaznim stanjima, proveravamo detaljan status
@@ -649,7 +690,11 @@ export class KlijentBaza extends DurableObject<Env> {
         const next = this.sql.exec(`SELECT internal_id, raw_data FROM fakture WHERE status = 'Queued' LIMIT 1`).toArray()[0] as any;
         if (!next) break;
         const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
-        const client = new SefClient({ apiKey: config.sef_api_key, environment: config.environment, baseUrl: this.env.SEF_API_URL! });
+        const client = new SefClient({ 
+        apiKey: config.sef_api_key, 
+        environment: config.environment, 
+        baseUrl: this.env.SEF_API_URL 
+      });
         const invoiceData = JSON.parse(next.raw_data);
         const xml = SefUblBuilder.build(invoiceData);
         const result = await client.sendInvoice(xml, next.internal_id);
