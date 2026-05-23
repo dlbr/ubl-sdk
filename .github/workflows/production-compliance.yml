@@ -25,11 +25,24 @@ jobs:
         node-version: 22
         cache: 'npm'
 
-    - name: Instalacija zavisnosti
-      run: npm install
+    - name: 🛠️ Instalacija zavisnosti i sistemskih alata (xmllint)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libxml2-utils
+        npm install
 
     - name: Build aplikacije
       run: npm run build
+
+    - name: 🧪 Validacija UBL XML sheme (Ecosio emulation)
+      run: |
+        if [ -d "./test/output" ]; then
+          for xml in ./test/output/*.xml; do
+            if [ -f "$xml" ]; then
+              xmllint --schema ./xsd/UBL-Invoice-2.1.xsd "$xml" --noout
+            fi
+          done
+        fi
 
     - name: Pokretanje lokalnih testova (UBL & JSON Matrix)
       run: npm test
