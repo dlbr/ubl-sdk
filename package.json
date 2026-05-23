@@ -22,6 +22,7 @@
   "type": "module",
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.4",
+    "@google/generative-ai": "^0.24.1",
     "@nuxtjs/tailwindcss": "^6.14.0",
     "@types/node": "^25.8.0",
     "lucide-vue-next": "^1.0.0",
