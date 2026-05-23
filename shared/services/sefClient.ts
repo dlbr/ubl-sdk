@@ -292,14 +292,15 @@ export class SefClient {
   }
 
   /**
-   * Fetches sales invoice changes (v3 endpoint).
+   * Fetches sales invoice changes (POST as per v1 swagger, but using v3 path if available).
    */
   async getSalesInvoiceChanges(dateFrom: string, dateTo: string, page: number = 1): Promise<SefChangesResponse | null> {
     const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/v3/changes?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}&page=${page}`;
 
     try {
+      console.log(`[SEF Mreža] Pozivam sales/v3/changes (POST): ${endpoint}`);
       const response = await this.fetchWithTimeout(endpoint, {
-        method: 'GET',
+        method: 'POST',
         headers: this.getHeaders()
       }, 20000);
 
@@ -323,14 +324,15 @@ export class SefClient {
   }
 
   /**
-   * Fetches purchase invoice changes (v3 endpoint).
+   * Fetches purchase invoice changes (POST as per v1 swagger).
    */
   async getPurchaseInvoiceChanges(dateFrom: string, dateTo: string, page: number = 1): Promise<SefChangesResponse | null> {
     const endpoint = `${this.baseUrl}/api/publicApi/purchase-invoice/v3/changes?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}&page=${page}`;
 
     try {
+      console.log(`[SEF Mreža] Pozivam purchase/v3/changes (POST): ${endpoint}`);
       const response = await this.fetchWithTimeout(endpoint, {
-        method: 'GET',
+        method: 'POST',
         headers: this.getHeaders()
       }, 20000);
 
