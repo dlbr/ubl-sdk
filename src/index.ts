@@ -19,12 +19,11 @@ import type {
 
 import { PAYMENT_MEANS } from './constants.js';
 
-export { SefLiveValidator } from './validator.js';
 export * from './types.js';
+export * from './validator.js';
+export * from './normalizer.js';
+export * from './constants.js';
 
-/**
- * Poreski JSON Builder za EEO/EPP.
- */
 export class SefPoreskiJsonBuilder {
   private static num(val: any, fallback: number = 0): number {
     const n = parseFloat(val);
