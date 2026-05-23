@@ -33,23 +33,29 @@ jobs:
           PDF_URL: ${{ github.event.inputs.pdf_url || github.event.client_payload.pdf_url }}
         run: |
           echo "Preuzimanje PDF-a: $PDF_URL"
-          # 1. Skripta preuzima PDF i pretvara ga u sirovi tekst
           node scripts/extract-pdf-text.js "$PDF_URL" > hotfix_text.txt
           
           echo "Pokretanje AI Patcher-a..."
-          # 2. Pokreće se AI agent koji čita tekst i modifikuje lokalne fajlove (validator.ts / index.ts)
-          node scripts/ai-code-patcher.js hotfix_text.txt
+          AI_RESULT=$(node scripts/ai-code-patcher.js hotfix_text.txt)
+          echo "$AI_RESULT"
+          if [[ "$AI_RESULT" != *"NO_CHANGES"* ]]; then
+             echo "patch_applied=true" >> $GITHUB_OUTPUT
+          else
+             echo "patch_applied=false" >> $GITHUB_OUTPUT
+          fi
           
       - name: 🧪 Pokretanje Lokalnog Test Suita (Vitest)
+        if: steps.ai_patcher.outputs.patch_applied == 'true'
         run: npm test
 
       - name: 🛡️ Verifikacija na Državnom Sandbox-u (CI/CD Bedem)
+        if: steps.ai_patcher.outputs.patch_applied == 'true'
         env:
           SEF_DEMO_API_KEY: ${{ secrets.STAGING_SEF_API_KEY }}
         run: node scripts/state-sandbox-ping.js
 
       - name: 🚀 AUTOMATSKI REDEPLOY (Cloudflare Wrangler)
-        if: success() # Izvršava se ISKLJUČIVO ako su svi prethodni koraci i testovi 100% prošli!
+        if: steps.ai_patcher.outputs.patch_applied == 'true' && success()
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
