@@ -5,6 +5,11 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+    paths:
+      - '**.ts'
+      - '**.js'
+      - 'package.json'
+      - '.github/workflows/production-compliance.yml'
 
 jobs:
   compliance-and-test:
