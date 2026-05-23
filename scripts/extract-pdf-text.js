@@ -1,6 +1,6 @@
-const fs = require('fs');
-const https = require('https');
-const pdf = require('pdf-parse');
+import fs from 'fs';
+import https from 'https';
+import pdf from 'pdf-parse';
 
 async function downloadAndExtract() {
   const url = process.argv[2];
@@ -14,9 +14,9 @@ async function downloadAndExtract() {
   console.log(`Downloading PDF from ${url}...`);
   
   const file = fs.createWriteStream(tmpFile);
-  https.get(url, function(response) {
+  https.get(url, (response) => {
     response.pipe(file);
-    file.on('finish', async function() {
+    file.on('finish', async () => {
       file.close();
       console.log('Download complete. Extracting text...');
       
@@ -30,7 +30,7 @@ async function downloadAndExtract() {
         process.exit(1);
       }
     });
-  }).on('error', function(err) {
+  }).on('error', (err) => {
     fs.unlink(tmpFile, () => {});
     console.error('Download failed:', err.message);
     process.exit(1);
