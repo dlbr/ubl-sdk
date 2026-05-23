@@ -1,6 +1,6 @@
 {
   "name": "@dlbr/sef-ubl-builder",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Ultra-brzi, Edge-native JSON-to-UBL 2.1 XML generator prilagođen specifikacijama srpskog SEF-a",
   "main": "dist/index.js",
