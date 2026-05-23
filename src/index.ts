@@ -82,7 +82,7 @@ export class SefPoreskiJsonBuilder {
 }
 
 /**
- * SefUblBuilder v4.12.2 — Forensic Party Identification.
+ * SefUblBuilder v4.12.3 — Steel Master Builder Alignment.
  */
 export class SefUblBuilder {
 
@@ -97,8 +97,16 @@ export class SefUblBuilder {
     return result.toFixed(2);
   }
 
+  private static getNamespaces(isCN: boolean): string {
+    const urn = isCN ? 'urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2' : 'urn:oasis:names:specification:ubl:schema:xsd:Invoice-2';
+    return `xmlns="${urn}" 
+  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" 
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" 
+  xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+  xmlns:sbt="http://faktura.mfin.gov.rs/sefs/ubl/standard-business-document-extension-2"`;
+  }
+
   private static buildSrbDtExt(data: any): string {
-    // Force trigger for any avans reference in 381 or 380
     if (data.avansBroj || data.referentniRacun || data.odbitakAvansaSaPdv) {
       return `
   <cec:UBLExtensions>
@@ -126,8 +134,18 @@ export class SefUblBuilder {
     <cac:InvoiceDocumentReference>
       <cbc:ID>${id}</cbc:ID>
       <cbc:IssueDate>${date}</cbc:IssueDate>
+      <cbc:DocumentTypeCode>${data.tipReferentnogDokumenta || '380'}</cbc:DocumentTypeCode>
     </cac:InvoiceDocumentReference>
   </cac:BillingReference>`;
+    }
+    return '';
+  }
+
+  private static buildInvoicePeriod(type: string, data: any): string {
+    // DescriptionCode 35 is mandatory for 380/383. Also used for CN 381 if period data is present.
+    const is380_383 = (type === '380' || type === '383');
+    if (is380_383 || data.periodOd) {
+      return `<cac:InvoicePeriod><cbc:DescriptionCode>35</cbc:DescriptionCode></cac:InvoicePeriod>`;
     }
     return '';
   }
@@ -176,19 +194,16 @@ export class SefUblBuilder {
 
   private static assemble(data: any, type: string, root: 'Invoice' | 'CreditNote', body: { summary: string; lines: string; }): string {
     const isCN = root === 'CreditNote';
-    const is380 = type === '380';
     const today = new Date().toISOString().split('T')[0];
 
     const extension = this.buildSrbDtExt(data);
+    const namespaces = this.getNamespaces(isCN);
     const customization = `<cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>`;
     const id = `<cbc:ID>${data.broj}</cbc:ID>`;
     const date = `<cbc:IssueDate>${data.datumIzdavanja || data.datum || today}</cbc:IssueDate>`;
-    const typeCode = `<cbc:${isCN ? 'CreditNoteTypeCode' : 'InvoiceTypeCode'}>${type}</cbc:${isCN ? 'CreditNoteTypeCode' : 'InvoiceTypeCode'}>`;
+    const typeCode = `<cbc:${isCN ? 'CreditNoteTypeCode' : 'InvoiceTypeCode'}>${type}</cbc:${isCN ? 'CreditNoteTypeCode' : 'InvoiceTypeCode'}>${data.extra_notes || ''}`;
     const currency = `<cbc:DocumentCurrencyCode>${data.valuta || 'RSD'}</cbc:DocumentCurrencyCode>`;
-    
-    // Period for 380 OR 381 if period data exists
-    const period = (is380 || (isCN && data.periodOd)) ? `<cac:InvoicePeriod><cbc:DescriptionCode>35</cbc:DescriptionCode></cac:InvoicePeriod>` : '';
-    
+    const period = this.buildInvoicePeriod(type, data);
     const billing = this.buildBillingRef(data);
     const supplier = this.buildParty('Supplier', data.pibProdavca, data.nazivProdavca || 'PRODAVAC', data);
     const customer = this.buildParty('Customer', data.pibKupca, data.nazivKupca || 'KUPAC', data);
@@ -196,12 +211,7 @@ export class SefUblBuilder {
     const payment = `<cac:PaymentMeans><cbc:PaymentMeansCode>${PAYMENT_MEANS.CREDIT_TRANSFER}</cbc:PaymentMeansCode><cac:PayeeFinancialAccount><cbc:ID>${data.brojRacunaProdavca || '000-0000000000000-00'}</cbc:ID></cac:PayeeFinancialAccount></cac:PaymentMeans>`;
 
     return `<?xml version="1.0" encoding="utf-8"?>
-<${root} 
-  xmlns="urn:oasis:names:specification:ubl:schema:xsd:${root}-2" 
-  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" 
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" 
-  xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
-  xmlns:sbt="http://faktura.mfin.gov.rs/sefs/ubl/standard-business-document-extension-2">
+<${root} ${namespaces}>
   ${extension}
   ${customization}
   ${id}
@@ -219,6 +229,11 @@ export class SefUblBuilder {
 </${root}>`.trim();
   }
 
+  private static buildTaxCategoryContent(cat: string, rate: string): string {
+    // Rule: DescriptionCode is PROHIBITED in TaxCategory/ClassifiedTaxCategory.
+    return `<cbc:ID>${cat}</cbc:ID><cbc:Percent>${rate}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>`;
+  }
+
   static buildStandardna(data: StandardnaData, type: string = '380') {
     const s = data.smerDokumenta || 'POZITIVAN';
     const osn = this.ensure(data.osnovica);
@@ -233,7 +248,7 @@ export class SefUblBuilder {
     <cac:TaxSubtotal>
       <cbc:TaxableAmount currencyID="RSD">${this.format(osn, s)}</cbc:TaxableAmount>
       <cbc:TaxAmount currencyID="RSD">${this.format(pdv, s)}</cbc:TaxAmount>
-      <cac:TaxCategory><cbc:ID>${cat}</cbc:ID><cbc:Percent>${rate}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
+      <cac:TaxCategory>${this.buildTaxCategoryContent(cat, rate)}</cac:TaxCategory>
     </cac:TaxSubtotal>
   </cac:TaxTotal>
   <cac:LegalMonetaryTotal>
@@ -243,7 +258,7 @@ export class SefUblBuilder {
     <cbc:PayableAmount currencyID="RSD">${this.format(osn + pdv, s)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>`;
 
-    const lines = `<cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.format(osn, s)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>${data.item_name || 'Promet'}</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${cat}</cbc:ID><cbc:Percent>${rate}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.format(osn, s)}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
+    const lines = `<cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="H87">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.format(osn, s)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>${data.item_name || 'Promet'}</cbc:Name><cac:ClassifiedTaxCategory>${this.buildTaxCategoryContent(cat, rate)}</cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.format(osn, s)}</cbc:PriceAmount></cac:Price></cac:InvoiceLine>`;
 
     return this.assemble(data, type, 'Invoice', { summary, lines });
   }
@@ -265,7 +280,7 @@ export class SefUblBuilder {
     <cac:TaxSubtotal>
       <cbc:TaxableAmount currencyID="RSD">${this.format(osn, s)}</cbc:TaxableAmount>
       <cbc:TaxAmount currencyID="RSD">${this.format(pdv, s)}</cbc:TaxAmount>
-      <cac:TaxCategory><cbc:ID>${cat}</cbc:ID><cbc:Percent>${rate}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
+      <cac:TaxCategory>${this.buildTaxCategoryContent(cat, rate)}</cac:TaxCategory>
     </cac:TaxSubtotal>
   </cac:TaxTotal>
   <cac:LegalMonetaryTotal>
@@ -275,7 +290,7 @@ export class SefUblBuilder {
     <cbc:PayableAmount currencyID="RSD">${this.format(osn + pdv, s)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>`;
 
-    const lines = `<cac:CreditNoteLine><cbc:ID>1</cbc:ID><cbc:CreditedQuantity unitCode="H87">1</cbc:CreditedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.format(osn, s)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>${data.razlog || 'Smanjenje'}</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>${cat}</cbc:ID><cbc:Percent>${rate}</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.format(osn, s)}</cbc:PriceAmount></cac:Price></cac:CreditNoteLine>`;
+    const lines = `<cac:CreditNoteLine><cbc:ID>1</cbc:ID><cbc:CreditedQuantity unitCode="H87">1</cbc:CreditedQuantity><cbc:LineExtensionAmount currencyID="RSD">${this.format(osn, s)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>${data.razlog || 'Smanjenje'}</cbc:Name><cac:ClassifiedTaxCategory>${this.buildTaxCategoryContent(cat, rate)}</cac:ClassifiedTaxCategory></cac:Item><cac:Price><cbc:PriceAmount currencyID="RSD">${this.format(osn, s)}</cbc:PriceAmount></cac:Price></cac:CreditNoteLine>`;
 
     return this.assemble(data, '381', 'CreditNote', { summary, lines });
   }
@@ -347,8 +362,16 @@ export class SefUblBuilder {
   static buildFiskalizacijaProdaja(data: FiskalizacijaData) {
     let notes = '';
     data.pfrBrojevi.forEach(pfr => notes += `<cbc:Note>Референтни број обрасца: ${pfr}</cbc:Note>`);
-    const xml = this.buildStandardna({ ...data, osnovica: data.ukupno/1.2, pdv: data.ukupno - data.ukupno/1.2 } as any);
-    return xml.replace('</cbc:ID>', `</cbc:ID>${notes}`);
+    
+    // We cast to any to inject 'notes' property which assemble() will pick up if we update it
+    const d = { 
+      ...data, 
+      osnovica: data.ukupno/1.2, 
+      pdv: data.ukupno - data.ukupno/1.2,
+      extra_notes: notes 
+    } as any;
+    
+    return this.buildStandardna(d);
   }
 
   static build(data: any): string {
