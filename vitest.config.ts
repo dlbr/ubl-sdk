@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
 import { cloudflareTest } from '@cloudflare/vitest-pool-workers';
 
+const isCI = !!process.env.CI;
+
 export default defineConfig({
   test: {
     pool: 'threads',
@@ -19,7 +21,7 @@ export default defineConfig({
     testTimeout: 60000,
     teardownTimeout: 10000,
   },
-  plugins: [
+  plugins: isCI ? [] : [
     cloudflareTest({
       wrangler: { 
         configPath: './wrangler.toml',
