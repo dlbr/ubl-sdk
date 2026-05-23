@@ -196,12 +196,13 @@ export class KlijentBaza extends DurableObject<Env> {
       baseUrl: this.env.SEF_API_URL 
     });
 
-    // 1. DISCOVERY: AGRESIVNI V1 MOD (v4.15.4)
-    // SEF API preferira YYYY-MM-DD format za pretragu u v1
+    // 1. DISCOVERY: AGRESIVNI V1 MOD (v4.16.3)
     const formatSefDate = (d: Date) => d.toISOString().split('T')[0];
     const now = new Date();
+    const yesterday = new Date(now.getTime() - 86400000);
     const dateTo = formatSefDate(now);
     const dateFrom = formatSefDate(new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000));
+    const yesterdayStr = formatSefDate(yesterday);
 
     console.log(`[DO RPC] Pokrećem discovery za ${config.klijent_id} od ${dateFrom} do ${dateTo}`);
 
@@ -251,7 +252,7 @@ export class KlijentBaza extends DurableObject<Env> {
 
       // --- SALES DISCOVERY (v1 Changes) ---
       // v1/changes nekad vidi fakture koje /ids promaši zbog statusa
-      const salesChanges = await sefClient.getSalesInvoiceChanges(dateTo);
+      const salesChanges = await sefClient.getSalesInvoiceChanges(yesterdayStr);
       if (salesChanges && Array.isArray(salesChanges) && salesChanges.length > 0) {
          console.log(`[DO RPC] Pronađeno ${salesChanges.length} statusnih promena u prodaji.`);
          this.ctx.storage.transactionSync(() => {
