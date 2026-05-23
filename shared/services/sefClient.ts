@@ -184,6 +184,38 @@ export class SefClient {
   }
 
   /**
+   * Fetches sales invoice changes for a given range (v3 endpoint).
+   * Used for discovery and status synchronization.
+   */
+  async getSalesInvoiceChanges(dateFrom: string, dateTo: string, page: number = 1): Promise<SefChangesResponse | null> {
+    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/v3/changes?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}&page=${page}`;
+
+    try {
+      const response = await this.fetchWithTimeout(endpoint, {
+        method: 'GET',
+        headers: this.getHeaders()
+      }, 20000);
+
+      if (!response.ok) {
+        console.error(`[SEF Mreža] Neuspešan poziv v3 sales promena (${response.status}):`, await response.text());
+        return null;
+      }
+
+      const rawData = await response.json() as any;
+      const normalizedInvoices = rawData.SalesInvoices || rawData.invoices || (Array.isArray(rawData) ? rawData : []);
+      const hasMore = typeof rawData.HasMoreCardInvoices === 'boolean' ? rawData.HasMoreCardInvoices : false;
+
+      return {
+        invoices: normalizedInvoices,
+        hasMoreCardInvoices: hasMore
+      };
+    } catch (err) {
+      console.error('[SEF Mreža] Fatalna greška tokom povlačenja v3 sales promena:', err);
+      return null;
+    }
+  }
+
+  /**
    * Fetches purchase invoice changes for a given range (v3 endpoint).
    */
   async getPurchaseInvoiceChanges(dateFrom: string, dateTo: string, page: number = 1): Promise<SefChangesResponse | null> {
