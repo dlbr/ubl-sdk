@@ -143,70 +143,103 @@ export class KlijentBaza extends DurableObject<Env> {
       baseUrl: this.env.SEF_API_URL 
     });
 
+    // 1. DISCOVERY: HIBRIDNI PRISTUP (v3 primarno, v1 fallback)
     const now = new Date();
     const dateTo = now.toISOString();
     const dateFrom = new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000).toISOString();
 
-    console.log(`[DO RPC] Pokrećem discovery (120 dana) za ${config.klijent_id} na ${this.env.SEF_API_URL}`);
+    console.log(`[DO RPC] Pokrećem HIBRIDNI discovery (120 dana) za ${config.klijent_id}`);
 
     let discoveredSales = 0;
     let discoveredPurchases = 0;
 
     try {
-      const salesIds = await sefClient.getSalesInvoiceIds(dateFrom, dateTo);
-      if (salesIds && salesIds.length > 0) {
-        const idsToFetch = salesIds.slice(-50);
-        for (const id of idsToFetch) {
-          const [details, xml] = await Promise.all([
-            sefClient.getSalesInvoiceDetails(id),
-            sefClient.downloadSalesInvoiceXml(id)
-          ]);
-
-          if (details) {
-            let amount = details.TotalAmount || 0;
-            let number = details.InvoiceNumber || `DISC-${id}`;
-
-            if (xml) {
-              const payableRegex = /<[^>]*?PayableAmount\b[^>]*>([^<]*?)<\//i;
-              const numberRegex = /<[^>]*?ID\b[^>]*>([^<]*?)<\//i;
-              const amountMatch = xml.match(payableRegex);
-              if (amountMatch) amount = parseFloat(amountMatch[1]);
-              const numberMatch = xml.match(numberRegex);
-              if (numberMatch) number = numberMatch[1];
+      // --- SALES DISCOVERY (v3) ---
+      const salesChanges = await sefClient.getSalesInvoiceChanges(dateFrom, dateTo);
+      if (salesChanges?.invoices && salesChanges.invoices.length > 0) {
+        console.log(`[DO RPC] v3 otkrio ${salesChanges.invoices.length} izlaznih faktura.`);
+        this.ctx.storage.transactionSync(() => {
+          for (const inv of salesChanges.invoices) {
+            this.sql.exec(`
+              INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
+              VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+              ON CONFLICT(sef_id) DO UPDATE SET 
+                status = excluded.status,
+                azurirano_u = CURRENT_TIMESTAMP
+              WHERE status != excluded.status`, 
+              `SEF-v3-DISC-${inv.SalesInvoiceId}`, inv.SalesInvoiceId.toString(), inv.InvoiceStatus, inv.InvoiceNumber, inv.TotalAmount || 0
+            );
+            discoveredSales++;
+          }
+        });
+      } else {
+        // Fallback na v1
+        console.log(`[DO RPC] v3 prazan, pokušavam v1 fallback za prodaju...`);
+        const salesIds = await sefClient.getSalesInvoiceIds(dateFrom, dateTo);
+        if (salesIds && salesIds.length > 0) {
+          const idsToFetch = salesIds.slice(-20);
+          for (const id of idsToFetch) {
+            const [details, xml] = await Promise.all([
+              sefClient.getSalesInvoiceDetails(id),
+              sefClient.downloadSalesInvoiceXml(id)
+            ]);
+            if (details) {
+              let amount = details.TotalAmount || 0;
+              let number = details.InvoiceNumber || `DISC-${id}`;
+              if (xml) {
+                const payableRegex = /<[^>]*?PayableAmount\b[^>]*>([^<]*?)<\//i;
+                const numberRegex = /<[^>]*?ID\b[^>]*>([^<]*?)<\//i;
+                const amountMatch = xml.match(payableRegex);
+                if (amountMatch) amount = parseFloat(amountMatch[1]);
+                const numberMatch = xml.match(numberRegex);
+                if (numberMatch) number = numberMatch[1];
+              }
+              this.ctx.storage.transactionSync(() => {
+                this.sql.exec(`
+                  INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
+                  VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                  ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, azurirano_u = CURRENT_TIMESTAMP WHERE status != excluded.status`, 
+                  `SEF-v1-DISC-${id}`, id.toString(), details.InvoiceStatus, number, amount
+                );
+                discoveredSales++;
+              });
             }
-
-            this.ctx.storage.transactionSync(() => {
-              this.sql.exec(`
-                INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
-                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(sef_id) DO UPDATE SET 
-                  status = excluded.status,
-                  azurirano_u = CURRENT_TIMESTAMP
-                WHERE status != excluded.status`, 
-                `SEF-DISC-${id}`, id.toString(), details.InvoiceStatus, number, amount
-              );
-              discoveredSales++;
-            });
           }
         }
       }
 
-      const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo);
-      if (purchaseOverviews && Array.isArray(purchaseOverviews)) {
+      // --- PURCHASE DISCOVERY (v3) ---
+      const purchaseChanges = await sefClient.getPurchaseInvoiceChanges(dateFrom, dateTo);
+      if (purchaseChanges?.invoices && purchaseChanges.invoices.length > 0) {
+        console.log(`[DO RPC] v3 otkrio ${purchaseChanges.invoices.length} ulaznih faktura.`);
         this.ctx.storage.transactionSync(() => {
-          for (const inv of purchaseOverviews) {
+          for (const inv of purchaseChanges.invoices) {
             this.sql.exec(`
               INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status, raw_xml)
               VALUES (?, ?, ?, ?, ?, ?, '<xml_missing>')
-              ON CONFLICT(sef_id) DO UPDATE SET 
-                status = excluded.status,
-                updated_at = CURRENT_TIMESTAMP
-              WHERE status != excluded.status`,
-              inv.invoiceId.toString(), inv.documentNumber || 'N/A', inv.supplierPib || '000000000', inv.creationDate || new Date().toISOString(), inv.totalAmount || 0, inv.invoiceStatus
+              ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP WHERE status != excluded.status`,
+              inv.PurchaseInvoiceId.toString(), inv.InvoiceNumber, inv.SupplierPib || '000000000', inv.CreationDate || new Date().toISOString(), inv.TotalAmount || 0, inv.InvoiceStatus
             );
             discoveredPurchases++;
           }
         });
+      } else {
+        // Fallback na v1 overview
+        console.log(`[DO RPC] v3 prazan, pokušavam v1 fallback za nabavku...`);
+        const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo);
+        if (purchaseOverviews && Array.isArray(purchaseOverviews)) {
+          this.ctx.storage.transactionSync(() => {
+            for (const inv of purchaseOverviews) {
+              this.sql.exec(`
+                INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status, raw_xml)
+                VALUES (?, ?, ?, ?, ?, ?, '<xml_missing>')
+                ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP WHERE status != excluded.status`,
+                inv.invoiceId.toString(), inv.documentNumber || 'N/A', inv.supplierPib || '000000000', inv.creationDate || new Date().toISOString(), inv.totalAmount || 0, inv.invoiceStatus
+              );
+              discoveredPurchases++;
+            }
+          });
+        }
       }
     } catch (discoveryErr: any) {
       console.error(`[DO] Discovery Fatal Error: ${discoveryErr.message}`);
