@@ -25,8 +25,11 @@ async function downloadAndExtract() {
       
       try {
         const dataBuffer = fs.readFileSync(tmpFile);
-        // Call pdf() as a function, passing an empty object as options
-        const data = await pdf(dataBuffer, {});
+        
+        // If pdf is a class constructor, instantiate it.
+        // The error 'Class constructors cannot be invoked without new' means it MUST be newed.
+        const parser = new pdf(dataBuffer);
+        const data = await parser.parse();
         
         console.log(data.text);
       } catch (err) {
