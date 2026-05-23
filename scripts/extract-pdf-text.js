@@ -3,8 +3,6 @@ import https from 'https';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-// Based on the diagnostic, the main export is an object containing PDFParse.
-// We should use PDFParse directly.
 const pdfModule = require('pdf-parse');
 const PDFParse = pdfModule.PDFParse;
 
@@ -29,9 +27,9 @@ async function downloadAndExtract() {
       try {
         const dataBuffer = fs.readFileSync(tmpFile);
         
-        // PDFParse is a class that needs to be instantiated.
-        const parser = new PDFParse({ verbosity: 0 });
-        const data = await parser.parse(dataBuffer);
+        // Pass the buffer as the data option to the constructor, then use getText()
+        const parser = new PDFParse({ verbosity: 0, data: dataBuffer });
+        const data = await parser.getText();
         
         console.log(data.text);
       } catch (err) {
