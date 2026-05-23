@@ -190,3 +190,4 @@ export class KlijentBaza extends DurableObject<Env> {
     const purchase = this.sql.exec(`SELECT * FROM sef_purchase_invoices`).toArray();
     return { fakture, purchase };
   }
+}
