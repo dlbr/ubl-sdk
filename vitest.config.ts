@@ -25,6 +25,14 @@ export default defineConfig({
         configPath: './wrangler.toml',
         mode: 'local'
       },
+      poolOptions: {
+        workers: {
+          isolatedStorage: true,
+          miniflare: {
+            compatibilityDate: '2026-05-21',
+          },
+        },
+      },
     }),
   ],
 });
