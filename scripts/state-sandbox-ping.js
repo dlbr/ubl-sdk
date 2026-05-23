@@ -50,7 +50,7 @@ async function testirajDrzavniSanityCheck() {
       process.exit(1);
     }
   } catch (err) {
-    console.error("❌ Mrežna greška pri komunikaciji sa državnim SEF serverom:", (err as Error).message);
+    console.error("❌ Mrežna greška pri komunikaciji sa državnim SEF serverom:", err.message);
     process.exit(1);
   }
 }
