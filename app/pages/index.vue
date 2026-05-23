@@ -1,84 +1,94 @@
 <script setup lang="ts">
-const { klijentId, isAuthenticated } = useSefAuth()
+// SEF Bridge Index Page - v4.21.0
 </script>
 
 <template>
-  <div class="min-h-screen bg-white font-sans text-gray-900">
-    <!-- Demo Banner -->
-    <div class="bg-red-600 text-white text-center py-2 text-xs font-black uppercase tracking-[0.2em] sticky top-0 z-50 shadow-xl">
-      SISTEM JE U DEMO REŽIMU — TRANSAKCIJE SE VRŠE NA DRŽAVNOM SANDBOX-u
-    </div>
-    <!-- Navigacija -->
-    <nav class="max-w-7xl mx-auto px-6 py-6 flex justify-between items-center">
-      <div class="flex items-center gap-2">
-        <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-200">S</div>
-        <span class="text-2xl font-black tracking-tighter uppercase">SEF <span class="text-blue-600">Bridge</span></span>
-      </div>
-      <div class="flex items-center gap-6">
-        <NuxtLink v-if="isAuthenticated" to="/dashboard" class="font-bold text-blue-600 hover:text-blue-700 underline decoration-2 underline-offset-4 transition">Dashboard →</NuxtLink>
-        <NuxtLink v-else to="/onboarding" class="bg-gray-900 text-white px-6 py-2 rounded-full font-bold hover:bg-black transition shadow-xl">Započni Onboarding</NuxtLink>
+  <div class="min-h-screen bg-gray-50 font-sans text-gray-900">
+    <nav class="border-b border-gray-200 bg-white">
+      <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+        <h1 class="text-xl font-black tracking-tighter">SEF BRIDGE</h1>
+        <div class="flex gap-4">
+          <NuxtLink to="/onboarding" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700">Aktiviraj nalog</NuxtLink>
+        </div>
       </div>
     </nav>
 
-    <!-- Hero Sekcija -->
-    <header class="max-w-5xl mx-auto px-6 py-24 text-center space-y-8">
-      <div class="inline-block bg-blue-50 text-blue-700 px-4 py-1.5 rounded-full text-sm font-black uppercase tracking-widest border border-blue-100 mb-4">
-        Forenzička Izolacija Podataka
-      </div>
-      <h1 class="text-l md:text-8xl font-black tracking-tighter leading-[0.9] text-gray-900">
-        INTEGRACIJA SA SEF-OM KOJA <span class="text-blue-600 italic">NIKADA</span> NE PADA.
-      </h1>
-      <p class="text-xl md:text-2xl text-gray-500 max-w-3xl mx-auto leading-relaxed font-medium">
-        Prvi multi-tenant API bridge u Srbiji sa fizički odvojenim SQLite bazama za svakog klijenta na Cloudflare Edge infrastrukturi.
-      </p>
-      <div class="flex flex-col sm:flex-row gap-4 justify-center pt-8">
-        <NuxtLink to="/onboarding" class="bg-blue-600 text-white px-10 py-5 rounded-2xl font-black text-xl hover:bg-blue-700 transition shadow-2xl shadow-blue-200 hover:scale-[1.02] active:scale-95">
-          Registruj Firmu Odmah
-        </NuxtLink>
-        <a href="#zasto" class="bg-white border-2 border-gray-200 px-10 py-5 rounded-2xl font-black text-xl hover:bg-gray-50 transition">
-          Saznaj Više
-        </a>
-      </div>
-    </header>
+    <main class="max-w-7xl mx-auto px-4 py-16">
+      <section class="text-center mb-24">
+        <h1 class="text-5xl font-black mb-6 tracking-tighter">Digitalni most za vašu firmu</h1>
+        <p class="text-xl text-gray-600 max-w-2xl mx-auto">Automatizovano i poreski ispravno izdavanje faktura uz Steel Fortress arhitekturu.</p>
+      </section>
 
-    <!-- Zasto Sekcija -->
-    <section id="zasto" class="bg-gray-50 py-32 border-y border-gray-200">
-      <div class="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-12">
-        <div class="space-y-4">
-          <div class="text-4xl">🔐</div>
-          <h3 class="text-2xl font-black tracking-tight">100% Izolacija</h3>
-          <p class="text-gray-500 leading-relaxed font-medium">
-            Vaši podaci nisu u "zajedničkoj gomili". Svaka firma dobija svoj kriptovani sef na samoj ivici mreže. Niko ne vidi vaše promete.
-          </p>
+      <section class="mb-24">
+        <h2 class="text-3xl font-black mb-12 text-center tracking-tighter">Kako SEF Bridge radi za vas?</h2>
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 class="font-bold text-lg mb-2 text-blue-600">A - Automatska kontrola</h3>
+            <p class="text-sm text-gray-600">Sistem sam proverava ispravnost pre slanja.</p>
+          </div>
+          <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 class="font-bold text-lg mb-2 text-blue-600">B - Bezbednost</h3>
+            <p class="text-sm text-gray-600">Vaši podaci su zaštićeni "kamikaza" tehnologijom koja sprečava svako curenje.</p>
+          </div>
+          <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 class="font-bold text-lg mb-2 text-blue-600">D - Determinizam</h3>
+            <p class="text-sm text-gray-600">Naš sistem ne greši – fakture se generišu identično svaki put.</p>
+          </div>
+          <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 class="font-bold text-lg mb-2 text-blue-600">E - Edge brzina</h3>
+            <p class="text-sm text-gray-600">Sve operacije se izvršavaju munjevito, bez zastoja.</p>
+          </div>
+          <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 class="font-bold text-lg mb-2 text-blue-600">F - Forenzički trag</h3>
+            <p class="text-sm text-gray-600">Svaka faktura je trajno i sigurno arhivirana.</p>
+          </div>
+          <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 class="font-bold text-lg mb-2 text-blue-600">I - Integracija</h3>
+            <p class="text-sm text-gray-600">Mi smo prevodilac između vašeg knjigovodstva i države.</p>
+          </div>
+          <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 class="font-bold text-lg mb-2 text-blue-600">K - Kontinuirana validacija</h3>
+            <p class="text-sm text-gray-600">Čuvar koji vas štiti od kazni.</p>
+          </div>
+          <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 class="font-bold text-lg mb-2 text-blue-600">O - Oslobađanje od stresa</h3>
+            <p class="text-sm text-gray-600">Vi ne brinete o tehničkim detaljima, mi brinemo za vas.</p>
+          </div>
+          <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 class="font-bold text-lg mb-2 text-blue-600">P - Poreska preciznost</h3>
+            <p class="text-sm text-gray-600">Automatsko mapiranje svih poreskih kategorija.</p>
+          </div>
+          <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <h3 class="font-bold text-lg mb-2 text-blue-600">S - Standardizacija</h3>
+            <p class="text-sm text-gray-600">Vaše fakture su uvek po međunarodnom UBL 2.1 standardu.</p>
+          </div>
         </div>
-        <div class="space-y-4">
-          <div class="text-4xl">⚡</div>
-          <h3 class="text-2xl font-black tracking-tight">Neprekidan Rad</h3>
-          <p class="text-gray-500 leading-relaxed font-medium">
-            Transakcioni batch import guta hiljade faktura u milisekundi. Jitter backoff mehanizam štiti vezu od državnih restrikcija.
-          </p>
-        </div>
-        <div class="space-y-4">
-          <div class="text-4xl">⚓</div>
-          <h3 class="text-2xl font-black tracking-tight">Pametni Webhook-ovi</h3>
-          <p class="text-gray-500 leading-relaxed font-medium">
-            Vaš ERP dobija notifikaciju iste sekunde kada kupac promeni status fakture (Odobreno, Odbijeno ili Pregledano).
-          </p>
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- Pricing Sekcija -->
-    <LandingPricing />
-
-    <!-- Footer -->
-    <footer class="py-12 text-center text-gray-400 text-sm font-bold uppercase tracking-widest bg-gray-50 border-t border-gray-200">
-      &copy; 2026 SEF BRIDGE PRO. EDGE INFRASTRUKTURA REPUBLIKE SRBIJE.
-    </footer>
+      <section class="bg-gray-900 text-gray-100 p-12 rounded-3xl">
+        <h2 class="text-3xl font-black mb-8 tracking-tighter">Tehnički temelj: Steel Fortress arhitektura</h2>
+        <div class="grid md:grid-cols-2 gap-8 text-sm">
+          <div>
+            <h4 class="font-bold text-blue-400 mb-2">Gatekeeper (MasterValidator)</h4>
+            <p class="text-gray-400">Sanitacija i poslovna logika pre ulaska u sistem.</p>
+          </div>
+          <div>
+            <h4 class="font-bold text-blue-400 mb-2">Factory (SefUblBuilder)</h4>
+            <p class="text-gray-400">Deterministička transformacija u XML.</p>
+          </div>
+          <div>
+            <h4 class="font-bold text-blue-400 mb-2">XSD Shield (xmllint)</h4>
+            <p class="text-gray-400">Sintaksna neprobojnost u CI/CD procesu.</p>
+          </div>
+          <div>
+            <h4 class="font-bold text-blue-400 mb-2">Audit-Ready Persistence</h4>
+            <p class="text-gray-400">Nepromenljiv arhiv (Immutable Ledger).</p>
+          </div>
+        </div>
+        <div class="mt-12 text-center">
+            <NuxtLink to="/docs" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold hover:bg-blue-500">Dokumentacija za developere</NuxtLink>
+        </div>
+      </section>
+    </main>
   </div>
 </template>
-
-<style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
-.font-sans { font-family: 'Inter', sans-serif; }
-</style>
