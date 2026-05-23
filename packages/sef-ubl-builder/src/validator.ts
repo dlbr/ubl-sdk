@@ -1,4 +1,4 @@
-import { SefPoreskiJsonBuilder } from './builder-poreski.js';
+import { SefPoreskiJsonBuilder } from './index.js';
 import { PAYMENT_MEANS } from './constants.js';
 import { Normalizer } from './normalizer.js';
 
