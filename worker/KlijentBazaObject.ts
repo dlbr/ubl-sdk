@@ -143,23 +143,26 @@ export class KlijentBaza extends DurableObject<Env> {
       baseUrl: this.env.SEF_API_URL 
     });
 
-    // 1. DISCOVERY: AGRESIVNI HIBRIDNI MOD (v4.15.1)
+    // 1. DISCOVERY: AGRESIVNI HIBRIDNI MOD (v4.15.2)
+    // SEF API preferira YYYY-MM-DD format za pretragu
+    const formatSefDate = (d: Date) => d.toISOString().split('T')[0];
     const now = new Date();
-    const dateTo = now.toISOString();
-    const dateFrom = new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000).toISOString();
+    const dateTo = formatSefDate(now);
+    const dateFrom = formatSefDate(new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000));
 
-    console.log(`[Agresivni Integrator] Pokrećem forenzički discovery za ${config.klijent_id}`);
+    console.log(`[Agresivni Integrator] Pokrećem discovery za ${config.klijent_id || 'UNK'} [${dateFrom} do ${dateTo}]`);
 
     let discoveredSales = 0;
     let discoveredPurchases = 0;
 
-    // --- SALES STAGE 1: Moderni v3 Sync (Dashboard Gold Mine) ---
+    // --- SALES STAGE 1: Dual-Path Changes (Modern & Standard) ---
     try {
-      const salesChanges = await sefClient.getSalesInvoiceChanges(dateFrom, dateTo);
-      if (salesChanges?.invoices && salesChanges.invoices.length > 0) {
-        console.log(`[Agresivni Integrator] v3/changes POGODAK: ${salesChanges.invoices.length} faktura.`);
+      // Pokušavamo v3, ako ne prođe, automatski hvatamo grešku i idemo dalje
+      const salesChanges = await sefClient.getSalesInvoiceChanges(dateFrom, dateTo).catch(() => null);
+      
+      const processSales = (invoices: any[]) => {
         this.ctx.storage.transactionSync(() => {
-          for (const inv of salesChanges.invoices) {
+          for (const inv of invoices) {
             this.sql.exec(`
               INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
               VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -169,25 +172,23 @@ export class KlijentBaza extends DurableObject<Env> {
             discoveredSales++;
           }
         });
+      };
+
+      if (salesChanges?.invoices && salesChanges.invoices.length > 0) {
+        processSales(salesChanges.invoices);
       } else {
-        console.warn(`[Agresivni Integrator] v3/changes prazan ili 404. Skačem na v1/ids + XML ekstrakciju.`);
-        
-        // --- SALES STAGE 2: Forenzički v1 ID crawl + UBL Extraction ---
+        // Ako v3 nije našao ništa, probamo IDs (v1) jer je on najpouzdaniji za "mrtve" fakture
         const salesIds = await sefClient.getSalesInvoiceIds(dateFrom, dateTo);
         if (salesIds && salesIds.length > 0) {
-          console.log(`[Agresivni Integrator] v1/ids POGODAK: ${salesIds.length} ID-eva pronađeno.`);
-          const idsToFetch = salesIds.slice(-50); // Uzmi zadnjih 50
+          console.log(`[Agresivni Integrator] v1/ids POGODAK: ${salesIds.length} faktura.`);
+          const idsToFetch = salesIds.slice(-50);
           for (const id of idsToFetch) {
             const xml = await sefClient.downloadSalesInvoiceXml(id);
             if (xml) {
-              // Hirurška ekstrakcija iz XML-a (jer v1 detalji lažu)
               const payableRegex = /<[^>]*?PayableAmount\b[^>]*>([^<]*?)<\//i;
               const numberRegex = /<[^>]*?ID\b[^>]*>([^<]*?)<\//i;
-              const statusRegex = /<[^>]*?InvoiceStatus\b[^>]*>([^<]*?)<\//i; // Retko ali moguće
-              
               const amountMatch = xml.match(payableRegex);
               const numberMatch = xml.match(numberRegex);
-              
               const amount = amountMatch ? parseFloat(amountMatch[1]) : 0;
               const number = numberMatch ? numberMatch[1] : `ID-${id}`;
 
@@ -205,14 +206,13 @@ export class KlijentBaza extends DurableObject<Env> {
         }
       }
     } catch (e: any) {
-      console.error(`[Agresivni Integrator] Fatalni krah u Sales Discovery: ${e.message}`);
+      console.error(`[Agresivni Integrator] Greška u Sales Discovery: ${e.message}`);
     }
 
-    // --- PURCHASE STAGE: Robustni v1 Overview (Grid-Ready Data) ---
+    // --- PURCHASE STAGE: Overview + v3 Fallback ---
     try {
-      const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo);
-      if (purchaseOverviews && Array.isArray(purchaseOverviews)) {
-        console.log(`[Agresivni Integrator] v1/purchase/overview POGODAK: ${purchaseOverviews.length} faktura.`);
+      const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo).catch(() => null);
+      if (purchaseOverviews && Array.isArray(purchaseOverviews) && purchaseOverviews.length > 0) {
         this.ctx.storage.transactionSync(() => {
           for (const inv of purchaseOverviews) {
             this.sql.exec(`
@@ -224,9 +224,24 @@ export class KlijentBaza extends DurableObject<Env> {
             discoveredPurchases++;
           }
         });
+      } else {
+        const purchaseChanges = await sefClient.getPurchaseInvoiceChanges(dateFrom, dateTo).catch(() => null);
+        if (purchaseChanges?.invoices && purchaseChanges.invoices.length > 0) {
+          this.ctx.storage.transactionSync(() => {
+            for (const inv of purchaseChanges.invoices) {
+              this.sql.exec(`
+                INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status, raw_xml)
+                VALUES (?, ?, ?, ?, ?, ?, '<xml_missing>')
+                ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP WHERE status != excluded.status`,
+                inv.PurchaseInvoiceId.toString(), inv.InvoiceNumber, inv.SupplierPib || '000000000', inv.CreationDate || new Date().toISOString(), inv.TotalAmount || 0, inv.InvoiceStatus
+              );
+              discoveredPurchases++;
+            }
+          });
+        }
       }
     } catch (e: any) {
-      console.error(`[Agresivni Integrator] Fatalni krah u Purchase Discovery: ${e.message}`);
+      console.error(`[Agresivni Integrator] Greška u Purchase Discovery: ${e.message}`);
     }
 
     try {
