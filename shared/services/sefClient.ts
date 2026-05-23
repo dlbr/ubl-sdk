@@ -170,6 +170,76 @@ export class SefClient {
   }
 
   /**
+   * Official Portal-Style Search for Sales Invoices.
+   * v4.15.6: Uses CompanyIds and Unix timestamps for maximum fidelity.
+   */
+  async getSalesInvoiceFind(companyId: number, dateFromMs: number, dateToMs: number): Promise<any[] | null> {
+    const endpoint = `${this.baseUrl}/api/sales-invoice/find`;
+    
+    const body = {
+      CompanyIds: [companyId],
+      SortItems: [{ SortColumn: "invoice_LastModifiedUtc", SortDirection: "desc" }],
+      PagingOptions: { PageIndex: 0, PageSize: 100 },
+      Restrictions: [
+        { Field: "invoice_InvoiceSentDateUtc_After", Values: [dateFromMs.toString()] },
+        { Field: "invoice_InvoiceSentDateUtc_Before", Values: [dateToMs.toString()] }
+      ]
+    };
+
+    try {
+      console.log(`[SEF Mreža] Pozivam sales-invoice/find (Portal Style): ${endpoint}`);
+      const response = await this.fetchWithTimeout(endpoint, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(body)
+      }, 30000);
+
+      if (!response.ok) {
+        console.error(`[SEF Mreža] Neuspešan poziv sales/find (${response.status})`);
+        return null;
+      }
+
+      const data = await response.json() as any;
+      return data.invoices || [];
+    } catch (err: any) {
+      console.error('[SEF Mreža] Greška tokom sales/find:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Official Portal-Style Search for Purchase Invoices.
+   */
+  async getPurchaseInvoiceFind(companyId: number, dateFromMs: number, dateToMs: number): Promise<any[] | null> {
+    const endpoint = `${this.baseUrl}/api/purchase-invoice/find`;
+    
+    const body = {
+      CompanyIds: [companyId],
+      SortItems: [{ SortColumn: "invoice_LastModifiedUtc", SortDirection: "desc" }],
+      PagingOptions: { PageIndex: 0, PageSize: 100 },
+      Restrictions: [
+        { Field: "invoice_InvoiceSentDateUtc_After", Values: [dateFromMs.toString()] },
+        { Field: "invoice_InvoiceSentDateUtc_Before", Values: [dateToMs.toString()] }
+      ]
+    };
+
+    try {
+      console.log(`[SEF Mreža] Pozivam purchase-invoice/find (Portal Style): ${endpoint}`);
+      const response = await this.fetchWithTimeout(endpoint, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(body)
+      }, 30000);
+
+      if (!response.ok) return null;
+      const data = await response.json() as any;
+      return data.invoices || [];
+    } catch (err: any) {
+      return null;
+    }
+  }
+
+  /**
    * Checks the status of a specific invoice (v1 endpoint).
    */
   async getInvoiceStatus(salesInvoiceId: number): Promise<SefStatusResponse | null> {

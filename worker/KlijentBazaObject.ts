@@ -249,6 +249,26 @@ export class KlijentBaza extends DurableObject<Env> {
         }
       }
 
+      // --- SALES DISCOVERY (v1 Changes) ---
+      // v1/changes nekad vidi fakture koje /ids promaši zbog statusa
+      const salesChanges = await sefClient.getSalesInvoiceChanges(dateTo);
+      if (salesChanges && Array.isArray(salesChanges) && salesChanges.length > 0) {
+         console.log(`[DO RPC] Pronađeno ${salesChanges.length} statusnih promena u prodaji.`);
+         this.ctx.storage.transactionSync(() => {
+           for (const ch of salesChanges) {
+             this.sql.exec(`
+                INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
+                VALUES (?, ?, ?, 'CHG-INIT', 0, CURRENT_TIMESTAMP)
+                ON CONFLICT(sef_id) DO UPDATE SET 
+                  status = excluded.status,
+                  azurirano_u = CURRENT_TIMESTAMP
+                WHERE status != excluded.status`,
+                `SEF-CHG-${ch.salesInvoiceId}`, ch.salesInvoiceId.toString(), ch.newInvoiceStatus || 'Sent'
+             );
+           }
+         });
+      }
+
       // --- PURCHASE DISCOVERY (v1 Overview) ---
       const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo);
       if (purchaseOverviews && Array.isArray(purchaseOverviews)) {
