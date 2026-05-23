@@ -41,8 +41,9 @@ const xml = SefUblBuilder.build(invoiceData);
 ```
 
 ## Zašto koristiti ovaj Builder?
-- **Zero-Bullshit**: Nema nepotrebnih zavisnosti.
+- **Zero-Bullshit**: Nema nepotrebnih zavisnosti. Radi na čistim Web standardima (Web Crypto API, TextEncoder/Decoder).
 - **Produkciono spreman**: Testiran protiv MFIN Demo okruženja kroz `shield.stress.test.ts`.
+- **Edge-Native**: Dizajniran za maksimalne performanse na Cloudflare Edge runtime-u (bez Node.js polifila).
 - **Forenzička preciznost**: Svaka greška u podacima baca jasan Exception, eliminisajući 400 Bad Request nejasnoće sa SEF-a.
 
 ## Razvoj
