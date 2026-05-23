@@ -80,16 +80,17 @@ export const useSefAuth = () => {
 
 export const useSefApi = () => {
   const { klijentId } = useSefAuth()
-  const config = useRuntimeConfig()
   
   // Univerzalni wrapper za zahteve sa ugrađenim zaglavljem
   const fetchWithAuth = (url: string, options: any = {}) => {
+    const headers = { ...options.headers }
+    if (klijentId.value) {
+      headers['X-Klijent-ID'] = klijentId.value
+    }
+
     return $fetch(url, {
       ...options,
-      headers: {
-        ...options.headers,
-        'X-Klijent-ID': klijentId.value || ''
-      }
+      headers
     })
   }
 
@@ -103,28 +104,37 @@ export const useSefApi = () => {
 
   // DASHBOARD: Dohvatanje statistike (reaktivno)
   const getStats = () => {
+    const headers: Record<string, string> = {}
+    if (klijentId.value) headers['X-Klijent-ID'] = klijentId.value
+
     return useFetch<SefStats>('/api/dashboard/stats', {
-      headers: { 'X-Klijent-ID': klijentId.value || '' },
-      key: `stats-${klijentId.value}`,
+      headers,
+      key: `stats-${klijentId.value || 'unauth'}`,
       server: false // Statistika se osvežava na klijentu
     })
   }
 
   // DASHBOARD: Dohvatanje logova grešaka
   const getLogs = () => {
+    const headers: Record<string, string> = {}
+    if (klijentId.value) headers['X-Klijent-ID'] = klijentId.value
+
     return useFetch<{ logs: SefLog[] }>('/api/dashboard/logs', {
-      headers: { 'X-Klijent-ID': klijentId.value || '' },
-      key: `logs-${klijentId.value}`,
+      headers,
+      key: `logs-${klijentId.value || 'unauth'}`,
       server: false
     })
   }
 
   // DASHBOARD: Dohvatanje liste faktura (paginirano)
   const getFakture = (page: Ref<number>) => {
+    const headers: Record<string, string> = {}
+    if (klijentId.value) headers['X-Klijent-ID'] = klijentId.value
+
     return useFetch<SefFaktureResponse>('/api/fakture', {
       query: { page },
-      headers: { 'X-Klijent-ID': klijentId.value || '' },
-      key: `fakture-${klijentId.value}`,
+      headers,
+      key: `fakture-${klijentId.value || 'unauth'}`,
       watch: [page],
       server: false
     })

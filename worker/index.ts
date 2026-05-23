@@ -219,8 +219,10 @@ async function preuzmiSesijuIzKolacica(cookieString: string | null, env: Env): P
 
 const auth = (handler: (c: RouterContext<Env> & { klijentId?: string, operater?: string }) => Promise<Response> | Response) => {
   return async (c: RouterContext<Env> & { klijentId?: string, operater?: string }) => {
-    if (c.req.headers.has('X-Klijent-ID')) {
-      c.klijentId = c.req.headers.get('X-Klijent-ID') || '';
+    // OKLOP: Trust X-Klijent-ID header ONLY if it has a non-empty value
+    const headerKlijentId = c.req.headers.get('X-Klijent-ID');
+    if (headerKlijentId && headerKlijentId.trim() !== '') {
+      c.klijentId = headerKlijentId;
       c.operater = 'Sistemski Operater';
       return await handler(c);
     }
