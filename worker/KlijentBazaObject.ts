@@ -143,63 +143,60 @@ export class KlijentBaza extends DurableObject<Env> {
       baseUrl: this.env.SEF_API_URL 
     });
 
-    // 1. DISCOVERY: HIBRIDNI PRISTUP (v3 primarno, v1 fallback)
+    // 1. DISCOVERY: AGRESIVNI HIBRIDNI MOD (v4.15.1)
     const now = new Date();
     const dateTo = now.toISOString();
     const dateFrom = new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000).toISOString();
 
-    console.log(`[DO RPC] Pokrećem HIBRIDNI discovery (120 dana) za ${config.klijent_id}`);
+    console.log(`[Agresivni Integrator] Pokrećem forenzički discovery za ${config.klijent_id}`);
 
     let discoveredSales = 0;
     let discoveredPurchases = 0;
 
+    // --- SALES STAGE 1: Moderni v3 Sync (Dashboard Gold Mine) ---
     try {
-      // --- SALES DISCOVERY (v3) ---
       const salesChanges = await sefClient.getSalesInvoiceChanges(dateFrom, dateTo);
       if (salesChanges?.invoices && salesChanges.invoices.length > 0) {
-        console.log(`[DO RPC] v3 otkrio ${salesChanges.invoices.length} izlaznih faktura.`);
+        console.log(`[Agresivni Integrator] v3/changes POGODAK: ${salesChanges.invoices.length} faktura.`);
         this.ctx.storage.transactionSync(() => {
           for (const inv of salesChanges.invoices) {
             this.sql.exec(`
               INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
               VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(sef_id) DO UPDATE SET 
-                status = excluded.status,
-                azurirano_u = CURRENT_TIMESTAMP
-              WHERE status != excluded.status`, 
-              `SEF-v3-DISC-${inv.SalesInvoiceId}`, inv.SalesInvoiceId.toString(), inv.InvoiceStatus, inv.InvoiceNumber, inv.TotalAmount || 0
+              ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, azurirano_u = CURRENT_TIMESTAMP WHERE status != excluded.status`, 
+              `SEF-v3-${inv.SalesInvoiceId}`, inv.SalesInvoiceId.toString(), inv.InvoiceStatus, inv.InvoiceNumber, inv.TotalAmount || 0
             );
             discoveredSales++;
           }
         });
       } else {
-        // Fallback na v1
-        console.log(`[DO RPC] v3 prazan, pokušavam v1 fallback za prodaju...`);
+        console.warn(`[Agresivni Integrator] v3/changes prazan ili 404. Skačem na v1/ids + XML ekstrakciju.`);
+        
+        // --- SALES STAGE 2: Forenzički v1 ID crawl + UBL Extraction ---
         const salesIds = await sefClient.getSalesInvoiceIds(dateFrom, dateTo);
         if (salesIds && salesIds.length > 0) {
-          const idsToFetch = salesIds.slice(-20);
+          console.log(`[Agresivni Integrator] v1/ids POGODAK: ${salesIds.length} ID-eva pronađeno.`);
+          const idsToFetch = salesIds.slice(-50); // Uzmi zadnjih 50
           for (const id of idsToFetch) {
-            const [details, xml] = await Promise.all([
-              sefClient.getSalesInvoiceDetails(id),
-              sefClient.downloadSalesInvoiceXml(id)
-            ]);
-            if (details) {
-              let amount = details.TotalAmount || 0;
-              let number = details.InvoiceNumber || `DISC-${id}`;
-              if (xml) {
-                const payableRegex = /<[^>]*?PayableAmount\b[^>]*>([^<]*?)<\//i;
-                const numberRegex = /<[^>]*?ID\b[^>]*>([^<]*?)<\//i;
-                const amountMatch = xml.match(payableRegex);
-                if (amountMatch) amount = parseFloat(amountMatch[1]);
-                const numberMatch = xml.match(numberRegex);
-                if (numberMatch) number = numberMatch[1];
-              }
+            const xml = await sefClient.downloadSalesInvoiceXml(id);
+            if (xml) {
+              // Hirurška ekstrakcija iz XML-a (jer v1 detalji lažu)
+              const payableRegex = /<[^>]*?PayableAmount\b[^>]*>([^<]*?)<\//i;
+              const numberRegex = /<[^>]*?ID\b[^>]*>([^<]*?)<\//i;
+              const statusRegex = /<[^>]*?InvoiceStatus\b[^>]*>([^<]*?)<\//i; // Retko ali moguće
+              
+              const amountMatch = xml.match(payableRegex);
+              const numberMatch = xml.match(numberRegex);
+              
+              const amount = amountMatch ? parseFloat(amountMatch[1]) : 0;
+              const number = numberMatch ? numberMatch[1] : `ID-${id}`;
+
               this.ctx.storage.transactionSync(() => {
                 this.sql.exec(`
                   INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
                   VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                  ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, azurirano_u = CURRENT_TIMESTAMP WHERE status != excluded.status`, 
-                  `SEF-v1-DISC-${id}`, id.toString(), details.InvoiceStatus, number, amount
+                  ON CONFLICT(sef_id) DO UPDATE SET azurirano_u = CURRENT_TIMESTAMP`, 
+                  `SEF-v1-${id}`, id.toString(), 'Approved', number, amount
                 );
                 discoveredSales++;
               });
@@ -207,42 +204,29 @@ export class KlijentBaza extends DurableObject<Env> {
           }
         }
       }
+    } catch (e: any) {
+      console.error(`[Agresivni Integrator] Fatalni krah u Sales Discovery: ${e.message}`);
+    }
 
-      // --- PURCHASE DISCOVERY (v3) ---
-      const purchaseChanges = await sefClient.getPurchaseInvoiceChanges(dateFrom, dateTo);
-      if (purchaseChanges?.invoices && purchaseChanges.invoices.length > 0) {
-        console.log(`[DO RPC] v3 otkrio ${purchaseChanges.invoices.length} ulaznih faktura.`);
+    // --- PURCHASE STAGE: Robustni v1 Overview (Grid-Ready Data) ---
+    try {
+      const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo);
+      if (purchaseOverviews && Array.isArray(purchaseOverviews)) {
+        console.log(`[Agresivni Integrator] v1/purchase/overview POGODAK: ${purchaseOverviews.length} faktura.`);
         this.ctx.storage.transactionSync(() => {
-          for (const inv of purchaseChanges.invoices) {
+          for (const inv of purchaseOverviews) {
             this.sql.exec(`
               INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status, raw_xml)
               VALUES (?, ?, ?, ?, ?, ?, '<xml_missing>')
               ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP WHERE status != excluded.status`,
-              inv.PurchaseInvoiceId.toString(), inv.InvoiceNumber, inv.SupplierPib || '000000000', inv.CreationDate || new Date().toISOString(), inv.TotalAmount || 0, inv.InvoiceStatus
+              inv.invoiceId.toString(), inv.documentNumber || 'N/A', inv.supplierPib || '000000000', inv.creationDate || new Date().toISOString(), inv.totalAmount || 0, inv.invoiceStatus
             );
             discoveredPurchases++;
           }
         });
-      } else {
-        // Fallback na v1 overview
-        console.log(`[DO RPC] v3 prazan, pokušavam v1 fallback za nabavku...`);
-        const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo);
-        if (purchaseOverviews && Array.isArray(purchaseOverviews)) {
-          this.ctx.storage.transactionSync(() => {
-            for (const inv of purchaseOverviews) {
-              this.sql.exec(`
-                INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status, raw_xml)
-                VALUES (?, ?, ?, ?, ?, ?, '<xml_missing>')
-                ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP WHERE status != excluded.status`,
-                inv.invoiceId.toString(), inv.documentNumber || 'N/A', inv.supplierPib || '000000000', inv.creationDate || new Date().toISOString(), inv.totalAmount || 0, inv.invoiceStatus
-              );
-              discoveredPurchases++;
-            }
-          });
-        }
       }
-    } catch (discoveryErr: any) {
-      console.error(`[DO] Discovery Fatal Error: ${discoveryErr.message}`);
+    } catch (e: any) {
+      console.error(`[Agresivni Integrator] Fatalni krah u Purchase Discovery: ${e.message}`);
     }
 
     try {

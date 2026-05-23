@@ -82,13 +82,15 @@ export class SefClient {
 
   /**
    * Pomoćna funkcija za postavljanje standardizovanih, neprobojnih zaglavlja za SEF.
+   * v4.15.1: Dodati browser-like headeri za izbegavanje "Security through Obscurity" filtera.
    */
   private getHeaders(contentType = 'application/json'): Record<string, string> {
     return {
       'ApiKey': this.apiKey,
       'Content-Type': contentType,
-      'Accept': contentType === 'application/xml' ? 'application/xml' : 'application/json',
-      'User-Agent': 'SEF-Bridge-Edge-Tank/2.0 (Cloudflare Worker Runtime)',
+      'Accept': 'application/json, text/plain, */*',
+      'X-Requested-With': 'XMLHttpRequest',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 (SEF-Bridge-Forensic)',
       'Connection': 'keep-alive'
     };
   }
