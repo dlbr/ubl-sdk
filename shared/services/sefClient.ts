@@ -248,6 +248,7 @@ export class SefClient {
 
   /**
    * Fetches sales invoice IDs for a given range (v1 endpoint).
+   * v4.15.8: Supports explicit status filtering to mimic portal behavior.
    */
   async getSalesInvoiceIds(dateFrom: string, dateTo: string, status?: string): Promise<number[] | null> {
     let endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/ids?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}`;
@@ -256,11 +257,11 @@ export class SefClient {
     }
 
     try {
-      console.log(`[SEF Mreža] Pozivam sales-invoice/ids (POST): ${endpoint}`);
+      console.log(`[SEF Mreža] Pozivam sales-invoice/ids (POST) [Status: ${status || 'ALL'}]: ${endpoint}`);
       const response = await this.fetchWithTimeout(endpoint, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify({}) // OKLOP: Neki SEF API-ji zahtevaju bar prazan body za POST
+        body: JSON.stringify({}) // OKLOP: Obavezan prazan body za v1 POST
       }, 20000);
 
       if (!response.ok) {
