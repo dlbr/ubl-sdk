@@ -17,7 +17,7 @@ jobs:
     - name: Inicijalizacija Node.js okruženja
       uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: 22
         cache: 'npm'
 
     - name: Instalacija zavisnosti
@@ -28,7 +28,7 @@ jobs:
 
     - name: 🚨 Državni Sanity Check (E2E Test na Demo SEF API)
       env:
-        DRZAVNI_DEMO_API_KEY: ${{ secrets.SEF_DEMO_API_KEY }}
+        DRZAVNI_DEMO_API_KEY: ${{ secrets.STAGING_SEF_API_KEY }}
         TEST_KLIJENT_PIB: "102345678"
       run: |
         echo "Pokrećem simulaciju slanja JSON EEO/EPP na državni Sandbox..."

@@ -20,7 +20,7 @@ jobs:
       - name: 🛠️ Podešavanje Node.js okruženja
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: 📦 Instalacija zavisnosti (npm)
         run: npm ci
@@ -44,7 +44,7 @@ jobs:
 
       - name: 🛡️ Verifikacija na Državnom Sandbox-u (CI/CD Bedem)
         env:
-          SEF_DEMO_API_KEY: ${{ secrets.SEF_DEMO_API_KEY }}
+          SEF_DEMO_API_KEY: ${{ secrets.STAGING_SEF_API_KEY }}
         run: node scripts/state-sandbox-ping.js
 
       - name: 🚀 AUTOMATSKI REDEPLOY (Cloudflare Wrangler)
