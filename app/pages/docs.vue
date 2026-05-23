@@ -99,24 +99,53 @@ const { klijentId } = useSefAuth()
             <section id="api-reference">
               <h2 class="text-2xl font-black text-gray-900 mb-8 flex items-center gap-3 text-blue-600">
                 <span class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-sm">3</span>
-                API Referenca
+                API Referenca (Core)
               </h2>
 
-              <div class="space-y-12">
-                <article class="group">
-                  <div class="flex items-center gap-3 mb-4">
-                    <span class="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-black rounded uppercase">POST</span>
-                    <h3 class="text-xl font-bold text-gray-900">/api/evidencija/eeo</h3>
+              <div class="space-y-8">
+                <!-- Sync Engine -->
+                <article class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                  <div class="flex items-center gap-3 mb-2">
+                    <span class="px-2 py-1 bg-purple-100 text-purple-700 text-[10px] font-black rounded uppercase">POST</span>
+                    <h3 class="text-lg font-bold font-mono">/api/fakture/sync</h3>
                   </div>
-                  <p class="text-sm text-gray-500 mb-4 font-medium">Zbirna evidencija obračuna (JSON).</p>
+                  <p class="text-sm text-gray-600">Pokreće "Agresivnu sinhronizaciju". Povlači fakture iz v1/v3 izvora, normalizuje ih i arhivira u D1/R2.</p>
                 </article>
 
-                <article class="group">
-                  <div class="flex items-center gap-3 mb-4">
-                    <span class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-black rounded uppercase">POST</span>
-                    <h3 class="text-xl font-bold text-gray-900">/api/evidencija/epp</h3>
+                <!-- Invoice Grid -->
+                <article class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                  <div class="flex items-center gap-3 mb-2">
+                    <span class="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-black rounded uppercase">GET</span>
+                    <h3 class="text-lg font-bold font-mono">/api/fakture?page=1</h3>
                   </div>
-                  <p class="text-sm text-gray-500 mb-4 font-medium">Evidencija prethodnog poreza (JSON).</p>
+                  <p class="text-sm text-gray-600">Povlači fakture iz lokalnog read-modela. Paginizovano (20 po strani).</p>
+                </article>
+
+                <!-- Batch Engine -->
+                <article class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                  <div class="flex items-center gap-3 mb-2">
+                    <span class="px-2 py-1 bg-purple-100 text-purple-700 text-[10px] font-black rounded uppercase">POST</span>
+                    <h3 class="text-lg font-bold font-mono">/api/fakture/batch</h3>
+                  </div>
+                  <p class="text-sm text-gray-600">Batch slanje faktura. Automatski prolazi kroz MasterValidator pre queue-iranja.</p>
+                </article>
+
+                <!-- Audit -->
+                <article class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                  <div class="flex items-center gap-3 mb-2">
+                    <span class="px-2 py-1 bg-yellow-100 text-yellow-700 text-[10px] font-black rounded uppercase">GET</span>
+                    <h3 class="text-lg font-bold font-mono">/api/audit/download?period=2026-05</h3>
+                  </div>
+                  <p class="text-sm text-gray-600">Generiše JSON manifest sa XML sadržajima za poreski audit.</p>
+                </article>
+
+                <!-- EEO/EPP -->
+                <article class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                  <div class="flex items-center gap-3 mb-2">
+                    <span class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-black rounded uppercase">POST</span>
+                    <h3 class="text-lg font-bold font-mono">/api/evidencija/eeo</h3>
+                  </div>
+                  <p class="text-sm text-gray-600">Zbirna evidencija obračuna (JSON).</p>
                 </article>
               </div>
             </section>
