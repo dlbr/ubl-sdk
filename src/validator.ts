@@ -11,26 +11,37 @@ export class MasterValidator {
 
     // 2. Validacija
     const errors: string[] = [];
+// 1. Strukturalna provera
+if (!cleanData.ID || !cleanData.broj || !cleanData.datumIzdavanja || !cleanData.pibProdavca || !cleanData.pibKupca) {
+  errors.push("Nedostaju obavezna polja (ID, broj, datum, PIB)");
+}
 
-    if (!cleanData.ID || !cleanData.broj || !cleanData.datumIzdavanja || !cleanData.pibProdavca || !cleanData.pibKupca) {
-      errors.push("Nedostaju obavezna polja (ID, broj, datum, PIB)");
-    }
+// 2. PIB validacija
+if (cleanData.pibKupca && !/^\d{9}$/.test(cleanData.pibKupca)) {
+  errors.push("PIB mora imati 9 cifara");
+}
 
-    const amount = parseFloat(cleanData.LegalMonetaryTotal?.PayableAmount || cleanData.osnovica || 0);
-    if (amount < 0) errors.push("Iznos ne može biti negativan");
+// 3. Finansijska provera
+const amount = parseFloat(cleanData.LegalMonetaryTotal?.PayableAmount || cleanData.osnovica || 0);
+if (amount < 0) errors.push("Iznos ne može biti negativan");
 
-    if (cleanData.InvoiceTypeCode === '386') {
-      if (!cleanData.datumUplate) errors.push("Avans zahteva datum uplate");
-    }
-    
-    if (cleanData.InvoiceTypeCode === '381') {
-      if (!cleanData.billingReference?.invoiceId) errors.push("381 zahteva BillingReference");
-      if (!cleanData.correctionReason) errors.push("Razlog korekcije je obavezan");
-    }
+if (cleanData.InvoiceTypeCode === '386') {
+  if (!cleanData.datumUplate) errors.push("Avans zahteva datum uplate");
+  if (!cleanData.billingReference?.invoiceId) errors.push("386 zahteva BillingReference");
+  if (cleanData.datumIzdavanja && cleanData.datumUplate && new Date(cleanData.datumIzdavanja) > new Date(cleanData.datumUplate)) {
+    errors.push("Rok plaćanja ne može biti pre datuma izdavanja");
+  }
+}
 
-    if (cleanData.valuta !== 'RSD' && (!cleanData.exchangeRate || cleanData.exchangeRate <= 0)) {
-      errors.push("Strana valuta zahteva kurs");
-    }
+if (cleanData.InvoiceTypeCode === '381') {
+  if (!cleanData.billingReference?.invoiceId) errors.push("381 zahteva BillingReference");
+  if (!cleanData.correctionReason) errors.push("Razlog korekcije je obavezan");
+}
+
+// 4. Izvoz (Foreign Trade) - only if valuta is provided and not RSD
+if (cleanData.valuta && cleanData.valuta !== 'RSD' && (!cleanData.exchangeRate || cleanData.exchangeRate <= 0)) {
+  errors.push("Strana valuta zahteva kurs");
+}
 
     if (errors.length > 0) {
       throw new Error(`🛡️ [MasterValidator] FATAL: ${errors.join(' | ')}`);
