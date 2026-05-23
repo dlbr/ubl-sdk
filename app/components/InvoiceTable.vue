@@ -87,8 +87,8 @@ defineExpose({ refresh })
       </div>
 
       <!-- Pagination -->
-      <div v-if="data?.pagination && data.pagination.totalPages > 1" class="bg-gray-50 px-6 py-3 border-t border-gray-200 flex justify-between items-center">
-        <span class="text-xs text-gray-500">Stranica {{ data.pagination.page }} od {{ data.pagination.totalPages }}</span>
+      <div v-if="data?.totalPages && data.totalPages > 1" class="bg-gray-50 px-6 py-3 border-t border-gray-200 flex justify-between items-center">
+        <span class="text-xs text-gray-500">Stranica {{ data.page }} od {{ data.totalPages }}</span>
         <div class="flex gap-2">
           <button 
             :disabled="currentPage <= 1"
@@ -98,7 +98,7 @@ defineExpose({ refresh })
             Prethodna
           </button>
           <button 
-            :disabled="currentPage >= data.pagination.totalPages"
+            :disabled="currentPage >= data.totalPages"
             @click="currentPage++"
             class="px-3 py-1 border border-gray-300 rounded text-xs font-medium bg-white hover:bg-gray-50 disabled:opacity-50"
           >

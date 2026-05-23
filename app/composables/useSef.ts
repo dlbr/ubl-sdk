@@ -41,26 +41,22 @@ export interface SefFaktura {
 
 export interface SefFaktureResponse {
   fakture: SefFaktura[];
-  pagination: {
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-  };
+  page: number;
+  total: number;
+  totalPages: number;
+  success: boolean;
 }
 
-export const useSefAuth = () => {
-  // OKLOP: Uklonjen plaintext kolačić. Identitet se sada čuva isključivo u šifrovanoj sesiji na serveru.
-  const klijentId = ref<string | null>(null)
+// OKLOP: State se sada deli na nivou modula kako bi svi kompozabeli videli isti identitet
+const klijentId = ref<string | null>(null)
 
+export const useSefAuth = () => {
   // Inicijalizacija klijentId-a ako smo u browseru (nakon što statsData stigne)
   const login = (id: string) => {
     klijentId.value = id
   }
 
   const isAuthenticated = computed(() => {
-    // Na klijentu, ako imamo klijentId ref, smatramo se ulogovanim
-    // Backend će svakako uraditi finalnu proveru preko sealed session-a
     return !!klijentId.value
   })
 
@@ -104,11 +100,10 @@ export const useSefApi = () => {
 
   // DASHBOARD: Dohvatanje statistike (reaktivno)
   const getStats = () => {
-    const headers: Record<string, string> = {}
-    if (klijentId.value) headers['X-Klijent-ID'] = klijentId.value
-
     return useFetch<SefStats>('/api/dashboard/stats', {
-      headers,
+      headers: computed(() => ({
+        'X-Klijent-ID': klijentId.value || ''
+      })),
       key: `stats-${klijentId.value || 'unauth'}`,
       server: false // Statistika se osvežava na klijentu
     })
@@ -116,11 +111,10 @@ export const useSefApi = () => {
 
   // DASHBOARD: Dohvatanje logova grešaka
   const getLogs = () => {
-    const headers: Record<string, string> = {}
-    if (klijentId.value) headers['X-Klijent-ID'] = klijentId.value
-
     return useFetch<{ logs: SefLog[] }>('/api/dashboard/logs', {
-      headers,
+      headers: computed(() => ({
+        'X-Klijent-ID': klijentId.value || ''
+      })),
       key: `logs-${klijentId.value || 'unauth'}`,
       server: false
     })
@@ -128,14 +122,13 @@ export const useSefApi = () => {
 
   // DASHBOARD: Dohvatanje liste faktura (paginirano)
   const getFakture = (page: Ref<number>) => {
-    const headers: Record<string, string> = {}
-    if (klijentId.value) headers['X-Klijent-ID'] = klijentId.value
-
     return useFetch<SefFaktureResponse>('/api/fakture', {
       query: { page },
-      headers,
+      headers: computed(() => ({
+        'X-Klijent-ID': klijentId.value || ''
+      })),
       key: `fakture-${klijentId.value || 'unauth'}`,
-      watch: [page],
+      watch: [page, klijentId],
       server: false
     })
   }
