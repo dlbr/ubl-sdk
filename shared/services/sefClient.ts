@@ -38,12 +38,12 @@ export class SefClient {
   constructor(config: SefClientConfig) {
     this.apiKey = config.apiKey;
     
-    // OKLOP: Ako baseUrl nije poslat, koristimo zvanične državne endpointe na osnovu okruženja
-    let url = config.baseUrl || (config.environment === 'production' 
-      ? 'https://efaktura.mfin.gov.rs/api' 
-      : 'https://demoefaktura.mfin.gov.rs/api');
+    // OKLOP: Koristimo isključivo URL-ove iz environment varijabli ili tajni (secrets)
+    if (!config.baseUrl) {
+      throw new Error(`Kritična greška: SEF_API_URL nije definisan u okruženju [${config.environment}]. Proverite .dev.vars ili wrangler secrets.`);
+    }
 
-    url = url.trim().replace(/\/$/, "");
+    let url = config.baseUrl.trim().replace(/\/$/, "");
     
     // OKLOP: Sprečavamo dupli /api sufiks
     if (url.endsWith("/api")) {
