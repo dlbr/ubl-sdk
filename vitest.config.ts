@@ -23,8 +23,7 @@ export default defineConfig({
     cloudflareTest({
       wrangler: { 
         configPath: './wrangler.toml',
-        // Force local execution in CI to avoid "must be logged in" error
-        mode: process.env.CI ? 'local' : 'remote' 
+        mode: 'local'
       },
     }),
   ],
