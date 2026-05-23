@@ -1,6 +1,8 @@
 import fs from 'fs';
 import https from 'https';
-import pdf from 'pdf-parse';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pdf = require('pdf-parse');
 
 async function downloadAndExtract() {
   const url = process.argv[2];
