@@ -110,7 +110,7 @@ export class KlijentBaza extends DurableObject<Env> {
                 INSERT INTO fakture (id, invoice_number, status, ukupno_iznos)
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET status = excluded.status`, 
-                id.toString(), details.InvoiceNumber || `DISC-${id}`, details.InvoiceStatus, details.TotalAmount || 0
+                (id || 0).toString(), (details.InvoiceNumber || `DISC-${id || 0}`).toString(), (details.InvoiceStatus || 'Unknown').toString(), details.TotalAmount || 0
               );
               discoveredSales++;
             });
@@ -126,12 +126,12 @@ export class KlijentBaza extends DurableObject<Env> {
               INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status)
               VALUES (?, ?, ?, ?, ?, ?)
               ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status`,
-              inv.invoiceId.toString(), 
-              inv.documentNumber || 'N/A', 
-              inv.supplierPib || '000000000', 
-              inv.creationDate || new Date().toISOString(), 
+              (inv.invoiceId || 0).toString(), 
+              (inv.documentNumber || 'N/A').toString(), 
+              (inv.supplierPib || '000000000').toString(), 
+              (inv.creationDate || new Date().toISOString()).toString(), 
               inv.sumWithVat || inv.totalAmount || 0, 
-              inv.status || inv.invoiceStatus
+              (inv.status || inv.invoiceStatus || 'Unknown').toString()
             );
             discoveredPurchases++;
           }

@@ -48,7 +48,7 @@ export const Router = <Env = any>(): RouterType<Env> => {
         if (route.path.includes('/:')) {
           const parts = route.path.split('/')
           const pathParts = pathname.split('/')
-          if (parts.length === pathParts.length) {
+          if (parts && pathParts && parts.length === pathParts.length) {
             let match = true
             const result = { pathname: { groups: {} as any } }
             for (let i = 0; i < parts.length; i++) {
