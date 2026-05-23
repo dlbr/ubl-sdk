@@ -366,7 +366,15 @@ app.get('/api/auth/session', auth(async (c: RouterContext<Env> & { klijentId?: s
 }));
 
 app.get('/api/webhook-setup', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
-  console.log(`[Worker] Handling /api/webhook-setup for ${c.klijentId}`);
+  console.log(`[Worker] Match /api/webhook-setup for ${c.klijentId}`);
+  const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
+  const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+  const data = await klijentDO.getWebhookInstructions();
+  return Response.json(data);
+}));
+
+app.get('/api/webhook-setup/', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
+  console.log(`[Worker] Match /api/webhook-setup/ for ${c.klijentId}`);
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
   const data = await klijentDO.getWebhookInstructions();

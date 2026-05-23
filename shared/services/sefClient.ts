@@ -17,6 +17,7 @@ export interface SefStatusResponse {
   InvoiceStatus: string;
   SalesInvoiceId: number;
   InvoiceNumber: string;
+  TotalAmount: number;
   [key: string]: any;
 }
 
@@ -28,6 +29,7 @@ export interface SefChangesResponse {
 /**
  * SefClient - High-fidelity client for Serbian SEF API v1.
  * Hardened for Cloudflare Workers outbound routing.
+ * v4.15.4: Strictly aligned with public_v1 swagger.
  */
 export class SefClient {
   private apiKey: string;
@@ -184,21 +186,19 @@ export class SefClient {
     }
 
     try {
-      console.log(`[SEF Mreža] Pozivam sales/ids: ${endpoint}`);
+      console.log(`[SEF Mreža] Pozivam sales-invoice/ids (POST): ${endpoint}`);
       const response = await this.fetchWithTimeout(endpoint, {
         method: 'POST',
         headers: this.getHeaders()
       }, 20000);
 
       if (!response.ok) {
-        console.error(`[SEF Mreža] Neuspešan poziv sales/ids (${response.status}):`, await response.text());
+        console.error(`[SEF Mreža] Neuspešan poziv sales-invoice/ids (${response.status}):`, await response.text());
         return null;
       }
 
       const data = await response.json() as { salesInvoiceIds: number[] };
-      const ids = data.salesInvoiceIds || [];
-      console.log(`[SEF Mreža] Pronađeno ${ids.length} sales IDs.`);
-      return ids;
+      return data.salesInvoiceIds || [];
     } catch (err) {
       console.error('[SEF Mreža] Fatalna greška tokom povlačenja sales IDs:', err);
       return null;
@@ -206,37 +206,26 @@ export class SefClient {
   }
 
   /**
-   * Downloads the raw UBL XML for a specific sales invoice (v1 endpoint).
+   * Fetches sales invoice changes (v1 endpoint).
    */
-  async downloadSalesInvoiceXml(salesInvoiceId: number): Promise<string | null> {
-    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/xml?invoiceId=${salesInvoiceId}`;
+  async getSalesInvoiceChanges(date: string): Promise<any[] | null> {
+    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/changes?date=${encodeURIComponent(date)}`;
 
     try {
+      console.log(`[SEF Mreža] Pozivam sales-invoice/changes (POST): ${endpoint}`);
       const response = await this.fetchWithTimeout(endpoint, {
-        method: 'GET',
-        headers: this.getHeaders('application/xml'),
-      }, 15000);
+        method: 'POST',
+        headers: this.getHeaders()
+      }, 20000);
 
       if (!response.ok) {
-        console.error(`[SEF Mreža] Neuspešno preuzimanje sales XML-a za fakturu ${salesInvoiceId}. Status: ${response.status}`);
+        console.error(`[SEF Mreža] Neuspešan poziv sales-invoice/changes (${response.status}):`, await response.text());
         return null;
       }
 
-      const text = await response.text();
-      // OKLOP: v1 XML endpoint obično vraća direktan XML ili Base64 u JSON-u
-      if (text.trim().startsWith('{')) {
-        const json = JSON.parse(text);
-        if (json.Base64Xml) return atob(json.Base64Xml);
-        if (json.Xml) return json.Xml;
-      }
-      
-      if (text.length > 20 && !text.includes('<') && /^[A-Za-z0-9+/=]+$/.test(text.trim())) {
-        return atob(text.trim());
-      }
-
-      return text;
+      return await response.json() as any[];
     } catch (err) {
-      console.error(`[SEF Mreža] Izuzetak pri preuzimanju sales XML-a fakture ${salesInvoiceId}:`, err);
+      console.error('[SEF Mreža] Fatalna greška tokom povlačenja sales promena:', err);
       return null;
     }
   }
@@ -255,13 +244,12 @@ export class SefClient {
 
       if (!response.ok) return null;
       const data = await response.json() as any;
-      // Mapiramo SimpleSalesInvoiceDto na naš interni format
       return {
         InvoiceId: data.invoiceId,
-        InvoiceNumber: data.invoiceNumber,
+        InvoiceNumber: data.invoiceNumber || data.documentNumber,
         InvoiceStatus: data.status || data.invoiceStatus,
         SalesInvoiceId: data.invoiceId,
-        TotalAmount: data.totalAmount || 0
+        TotalAmount: data.sumWithVat || data.totalAmount || 0
       };
     } catch (err) {
       console.error(`[SEF Mreža] Greška pri preuzimanju detalja fakture ${salesInvoiceId}:`, err);
@@ -276,13 +264,14 @@ export class SefClient {
     const endpoint = `${this.baseUrl}/api/publicApi/purchase-invoice/overview?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}&status=${encodeURIComponent(status)}`;
 
     try {
+      console.log(`[SEF Mreža] Pozivam purchase-invoice/overview (GET): ${endpoint}`);
       const response = await this.fetchWithTimeout(endpoint, {
         method: 'GET',
         headers: this.getHeaders()
       }, 20000);
 
       if (!response.ok) {
-        console.error(`[SEF Mreža] Neuspešan poziv purchase/overview (${response.status}):`, await response.text());
+        console.error(`[SEF Mreža] Neuspešan poziv purchase-invoice/overview (${response.status}):`, await response.text());
         return null;
       }
 
@@ -294,129 +283,7 @@ export class SefClient {
   }
 
   /**
-   * Performs an exhaustive search for sales invoices (v1 hidden endpoint).
-   * This is the "Gold Mine" endpoint that returns full details in a list.
-   */
-  async getSalesInvoiceSearch(dateFrom: string, page: number = 1): Promise<any[] | null> {
-    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/search`;
-
-    const body = {
-      pagingOptions: {
-        pageIndex: page,
-        pageSize: 100
-      },
-      restrictions: [
-        {
-          field: "Invoice_AccountingDateUtc_After",
-          values: [dateFrom]
-        }
-      ],
-      sortItems: [
-        {
-          sortColumn: "Invoice_InvoiceDateUtc",
-          sortDirection: "Descending"
-        }
-      ]
-    };
-
-    try {
-      console.log(`[SEF Mreža] Pozivam sales/search (Agresivna Pretraga): ${endpoint}`);
-      const response = await this.fetchWithTimeout(endpoint, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(body)
-      }, 30000);
-
-      if (!response.ok) {
-        console.error(`[SEF Mreža] Neuspešan poziv sales/search (${response.status}):`, await response.text());
-        return null;
-      }
-
-      const data = await response.json() as any;
-      return data.invoices || [];
-    } catch (err) {
-      console.error('[SEF Mreža] Fatalna greška tokom sales pretrage:', err);
-      return null;
-    }
-  }
-
-  /**
-   * Fetches sales invoice changes (POST as per v1 swagger, but using v3 path if available).
-   */
-  async getSalesInvoiceChanges(dateFrom: string, dateTo: string, page: number = 1): Promise<SefChangesResponse | null> {
-    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/v3/changes?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}&page=${page}`;
-
-    try {
-      console.log(`[SEF Mreža] Pozivam sales/v3/changes (POST): ${endpoint}`);
-      const response = await this.fetchWithTimeout(endpoint, {
-        method: 'POST',
-        headers: this.getHeaders()
-      }, 20000);
-
-      if (!response.ok) {
-        console.error(`[SEF Mreža] Neuspešan poziv v3 sales/changes (${response.status}):`, await response.text());
-        return null;
-      }
-
-      const rawData = await response.json() as any;
-      const normalizedInvoices = rawData.SalesInvoices || rawData.invoices || (Array.isArray(rawData) ? rawData : []);
-      const hasMore = typeof rawData.HasMoreCardInvoices === 'boolean' ? rawData.HasMoreCardInvoices : false;
-
-      return {
-        invoices: normalizedInvoices,
-        hasMoreCardInvoices: hasMore
-      };
-    } catch (err) {
-      console.error('[SEF Mreža] Fatalna greška tokom povlačenja v3 sales promena:', err);
-      return null;
-    }
-  }
-
-  /**
-   * Fetches purchase invoice changes (POST as per v1 swagger).
-   */
-  async getPurchaseInvoiceChanges(dateFrom: string, dateTo: string, page: number = 1): Promise<SefChangesResponse | null> {
-    const endpoint = `${this.baseUrl}/api/publicApi/purchase-invoice/v3/changes?dateFrom=${encodeURIComponent(dateFrom)}&dateTo=${encodeURIComponent(dateTo)}&page=${page}`;
-
-    try {
-      console.log(`[SEF Mreža] Pozivam purchase/v3/changes (POST): ${endpoint}`);
-      const response = await this.fetchWithTimeout(endpoint, {
-        method: 'POST',
-        headers: this.getHeaders()
-      }, 20000);
-
-      if (!response.ok) {
-        console.error(`[SEF Mreža] Neuspešan poziv v3 purchase/changes (${response.status}):`, await response.text());
-        return null;
-      }
-
-      const rawData = await response.json() as any;
-      const normalizedInvoices = rawData.PurchaseInvoices || rawData.invoices || (Array.isArray(rawData) ? rawData : []);
-      const hasMore = typeof rawData.HasMoreCardInvoices === 'boolean' ? rawData.HasMoreCardInvoices : false;
-
-      return {
-        invoices: normalizedInvoices,
-        hasMoreCardInvoices: hasMore
-      };
-    } catch (err) {
-      console.error('[SEF Mreža] Fatalna greška tokom povlačenja v3 purchase promena:', err);
-      return null;
-    }
-  }
-
-  /**
-   * Fetches sales invoice overview (ids + basic info) for a given range.
-   */
-  async getSalesInvoiceOverview(dateFrom: string, dateTo: string, status: string = ''): Promise<any[] | null> {
-    // Ako v1 nema overview za sales, koristimo IDS pa detalje, ali ovde dodajemo wrapper
-    const ids = await this.getSalesInvoiceIds(dateFrom, dateTo, status);
-    if (!ids) return null;
-    return ids.map(id => ({ invoiceId: id }));
-  }
-
-  /**
    * Downloads the raw UBL XML for a specific purchase invoice.
-   * v3.8.0: Handles Base64 response from state servers.
    */
   async downloadPurchaseInvoiceXml(purchaseInvoiceId: number): Promise<string | null> {
     const endpoint = `${this.baseUrl}/api/publicApi/purchase-invoice/xml?invoiceId=${purchaseInvoiceId}`;
@@ -452,8 +319,38 @@ export class SefClient {
   }
 
   /**
+   * Downloads the raw UBL XML for a specific sales invoice (v1 endpoint).
+   */
+  async downloadSalesInvoiceXml(salesInvoiceId: number): Promise<string | null> {
+    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/xml?invoiceId=${salesInvoiceId}`;
+
+    try {
+      const response = await this.fetchWithTimeout(endpoint, {
+        method: 'GET',
+        headers: this.getHeaders('application/xml'),
+      }, 15000);
+
+      if (!response.ok) return null;
+      const text = await response.text();
+      
+      if (text.trim().startsWith('{')) {
+        const json = JSON.parse(text);
+        if (json.Base64Xml) return atob(json.Base64Xml);
+        if (json.Xml) return json.Xml;
+      }
+      
+      if (text.length > 20 && !text.includes('<') && /^[A-Za-z0-9+/=]+$/.test(text.trim())) {
+        return atob(text.trim());
+      }
+
+      return text;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /**
    * Downloads the signed UBL XML for a specific sales invoice.
-   * v3.8.0: Required for legal archival.
    */
   async downloadSignedInvoice(salesInvoiceId: number): Promise<string | null> {
     const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/signed-xml?invoiceId=${salesInvoiceId}`;
@@ -484,10 +381,8 @@ export class SefClient {
 
   /**
    * Downloads the complete registry of companies from SEF Public API.
-   * HARDENED FOR EDGE: Requests CSV for low memory footprint.
    */
   async downloadAllCompanies(): Promise<string | null> {
-    // Koristimo getAllCompanies koji je po preporuci korisnika stabilniji
     const endpoint = `${this.baseUrl}/api/publicApi/getAllCompanies?includeAllStatuses=false`;
 
     try {
@@ -500,22 +395,16 @@ export class SefClient {
         }
       }, 60000);
 
-      if (!response.ok) {
-        console.error(`[SEF Mreža] Neuspešno preuzimanje registra kompanija. Status: ${response.status}`);
-        return null;
-      }
+      if (!response.ok) return null;
       
       const contentType = response.headers.get('content-type') || '';
       let text = await response.text();
 
-      // OKLOP: Uklanjamo Byte Order Mark (BOM) ako postoji (čest slučaj kod državnih CSV-ova)
       if (text.charCodeAt(0) === 0xFEFF) {
         text = text.slice(1);
       }
 
       if (contentType.includes('json')) {
-        // Ako država odbije CSV i pošalje JSON, moramo ga konvertovati u naš interni CSV format
-        // kako bismo zadržali kompatibilnost sa striming parserom u index.ts
         try {
           const json = JSON.parse(text) as any[];
           if (Array.isArray(json)) {
@@ -529,14 +418,11 @@ export class SefClient {
              });
              return [header, ...lines].join('\n');
           }
-        } catch (jsonErr) {
-          console.error('[SEF Mreža] Neuspela konverzija JSON registra u CSV:', jsonErr);
-        }
+        } catch {}
       }
 
       return text;
     } catch (err) {
-      console.error('[SEF Mreža] Fatalna greška pri preuzimanju centralnog registra kompanija:', err);
       return null;
     }
   }
@@ -555,7 +441,6 @@ export class SefClient {
       const data = await response.json() as Array<{ Code: string }>;
       return data.map(m => m.Code);
     } catch (err) {
-      console.error('[SEF Mreža] Greška pri povlačenju jedinica mera:', err);
       return null;
     }
   }

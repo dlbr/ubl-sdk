@@ -32,6 +32,7 @@ const yieldToEventLoop = () => new Promise(resolve => setTimeout(resolve, 0));
 /**
  * KlijentBaza - Tenant isolation via Durable Objects.
  * Refactored to use RPC for all primary operations.
+ * v4.15.4: Strictly aligned with public_v1 swagger.
  */
 export class KlijentBaza extends DurableObject<Env> {
   private sql: SqlStorage;
@@ -57,6 +58,10 @@ export class KlijentBaza extends DurableObject<Env> {
       const config = this.sql.exec(`SELECT * FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
       if (!config) return new Response('Not configured', { status: 404 });
       return Response.json(config);
+    });
+
+    this.app.get('/config/webhook-instructions', async () => {
+      return Response.json(await this.getWebhookInstructions());
     });
 
     this.app.post('/config', async ({ req }: RouterContext<Env>) => {
@@ -117,6 +122,12 @@ export class KlijentBaza extends DurableObject<Env> {
     return { success: true, logs };
   }
 
+  async getConfig() {
+    const config = this.sql.exec(`SELECT * FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
+    if (!config) throw new Error('Not configured');
+    return config;
+  }
+
   async getWebhookInstructions() {
     const config = this.sql.exec(`SELECT klijent_id, environment FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
     if (!config) throw new Error("Firma nije konfigurisana");
@@ -140,6 +151,41 @@ export class KlijentBaza extends DurableObject<Env> {
     };
   }
 
+  async setConfig(data: any) {
+    const oldConfig = this.sql.exec(`SELECT status_pretplate, limit_faktura, billing_period, licenca_od_datuma, licenca_istice_timestamp, avans_za_obnovu_poslat, limit_faktura_godisnje, poreski_period_tip FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
+    
+    const oldLimit = oldConfig ? oldConfig.limit_faktura : 0;
+    const newLimit = data.limit ?? 50;
+    const status = oldConfig ? oldConfig.status_pretplate : 'AKTIVAN';
+
+    this.ctx.storage.transactionSync(() => {
+      this.sql.exec(`
+        INSERT OR REPLACE INTO konfiguracija (
+          id, sef_api_key, klijent_id, password_hash, webhook_url, environment, sef_subscription_token, 
+          limit_faktura, plan_name, status_pretplate, billing_period, licenca_od_datuma, 
+          licenca_istice_timestamp, avans_za_obnovu_poslat, limit_faktura_godisnje, poreski_period_tip
+        ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+        data.sef_api_key || '', 
+        data.klijent_id || null, 
+        data.password_hash || null, 
+        data.webhook_url || null, 
+        data.environment || 'sandbox', 
+        data.sef_subscription_token || null, 
+        newLimit, 
+        data.plan || 'Micro',
+        status,
+        oldConfig?.billing_period || 'monthly',
+        oldConfig?.licenca_od_datuma || null,
+        oldConfig?.licenca_istice_timestamp || null,
+        oldConfig?.avans_za_obnovu_poslat || 0,
+        oldConfig?.limit_faktura_godisnje || 600,
+        data.poreski_period_tip || oldConfig?.poreski_period_tip || 'MONTHLY'
+      );
+      if (newLimit > oldLimit) this.sql.exec(`INSERT INTO billing_ledger (id, tip_transakcije, iznos_kredita, beleska) VALUES (?, 'DOPUNA', ?, 'Dopuna')`, crypto.randomUUID(), newLimit - oldLimit);
+    });
+    return { success: true };
+  }
+
   async syncWithSef() {
     let config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
     if (!config) throw new Error("Firma nije konfigurisana. Molimo prođite kroz onboarding.");
@@ -150,82 +196,85 @@ export class KlijentBaza extends DurableObject<Env> {
       baseUrl: this.env.SEF_API_URL 
     });
 
-    // 1. DISCOVERY: AGRESIVNI HIBRIDNI MOD (v4.15.2)
-    // SEF API preferira YYYY-MM-DD format za pretragu
+    // 1. DISCOVERY: AGRESIVNI V1 MOD (v4.15.4)
+    // SEF API preferira YYYY-MM-DD format za pretragu u v1
     const formatSefDate = (d: Date) => d.toISOString().split('T')[0];
     const now = new Date();
     const dateTo = formatSefDate(now);
     const dateFrom = formatSefDate(new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000));
 
-    console.log(`[Agresivni Integrator] Pokrećem DUBOKU pretragu za ${config.klijent_id || 'UNK'} [od ${dateFrom}]`);
+    console.log(`[DO RPC] Pokrećem discovery za ${config.klijent_id} od ${dateFrom} do ${dateTo}`);
 
     let discoveredSales = 0;
     let discoveredPurchases = 0;
 
-    // --- SALES DISCOVERY: The "Gold Mine" Search ---
     try {
-      const invoices = await sefClient.getSalesInvoiceSearch(dateFrom);
-      if (invoices && Array.isArray(invoices) && invoices.length > 0) {
-        console.log(`[Agresivni Integrator] POGODAK PRETRAGE: ${invoices.length} faktura pronađeno.`);
-        this.ctx.storage.transactionSync(() => {
-          for (const inv of invoices) {
-            // Mapiramo SmallInvoiceDto na našu bazu
-            this.sql.exec(`
-              INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
-              VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(sef_id) DO UPDATE SET 
-                status = excluded.status,
-                azurirano_u = CURRENT_TIMESTAMP
-              WHERE status != excluded.status`, 
-              `SEF-SEARCH-${inv.invoiceId}`, 
-              inv.invoiceId.toString(), 
-              inv.status || 'Approved', 
-              inv.invoiceNumber || `DISC-${inv.invoiceId}`, 
-              inv.sumWithVat || 0
-            );
-            discoveredSales++;
-          }
-        });
-      } else {
-        console.warn(`[Agresivni Integrator] Primarna pretraga prazna. Pokušavam fallback na v3/changes...`);
-        const salesChanges = await sefClient.getSalesInvoiceChanges(dateFrom, dateTo).catch(() => null);
-        if (salesChanges?.invoices && salesChanges.invoices.length > 0) {
-          this.ctx.storage.transactionSync(() => {
-            for (const inv of salesChanges.invoices) {
+      // --- SALES DISCOVERY (v1 IDs) ---
+      const salesIds = await sefClient.getSalesInvoiceIds(dateFrom, dateTo);
+      if (salesIds && salesIds.length > 0) {
+        console.log(`[DO RPC] Pronađeno ${salesIds.length} sales ID-eva. Krećem u ekstrakciju...`);
+        const idsToFetch = salesIds.slice(-50); 
+        for (const id of idsToFetch) {
+          const [details, xml] = await Promise.all([
+            sefClient.getSalesInvoiceDetails(id),
+            sefClient.downloadSalesInvoiceXml(id)
+          ]);
+
+          if (details) {
+            let amount = details.TotalAmount || 0;
+            let number = details.InvoiceNumber || `DISC-${id}`;
+
+            if (xml && amount === 0) {
+              const payableRegex = /<[^>]*?PayableAmount\b[^>]*>([^<]*?)<\//i;
+              const numberRegex = /<[^>]*?ID\b[^>]*>([^<]*?)<\//i;
+              const amountMatch = xml.match(payableRegex);
+              const numberMatch = xml.match(numberRegex);
+              if (amountMatch) amount = parseFloat(amountMatch[1]);
+              if (numberMatch) number = numberMatch[1];
+            }
+
+            this.ctx.storage.transactionSync(() => {
               this.sql.exec(`
                 INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
                 VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, azurirano_u = CURRENT_TIMESTAMP WHERE status != excluded.status`, 
-                `SEF-v3-${inv.SalesInvoiceId}`, inv.SalesInvoiceId.toString(), inv.InvoiceStatus, inv.InvoiceNumber, inv.TotalAmount || 0
+                ON CONFLICT(sef_id) DO UPDATE SET 
+                  status = excluded.status,
+                  azurirano_u = CURRENT_TIMESTAMP
+                WHERE status != excluded.status`, 
+                `SEF-DISC-${id}`, id.toString(), details.InvoiceStatus, number, amount
               );
               discoveredSales++;
-            }
-          });
+            });
+          }
         }
       }
-    } catch (e: any) {
-      console.error(`[Agresivni Integrator] Greška u Sales Discovery: ${e.message}`);
-    }
 
-    // --- PURCHASE DISCOVERY: Robustni v1 Overview ---
-    try {
-      const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo).catch(() => null);
-      if (purchaseOverviews && Array.isArray(purchaseOverviews) && purchaseOverviews.length > 0) {
-        console.log(`[Agresivni Integrator] NABAVKA POGODAK: ${purchaseOverviews.length} faktura.`);
+      // --- PURCHASE DISCOVERY (v1 Overview) ---
+      const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo);
+      if (purchaseOverviews && Array.isArray(purchaseOverviews)) {
+        console.log(`[DO RPC] Pronađeno ${purchaseOverviews.length} ulaznih faktura.`);
         this.ctx.storage.transactionSync(() => {
           for (const inv of purchaseOverviews) {
             this.sql.exec(`
               INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status, raw_xml)
               VALUES (?, ?, ?, ?, ?, ?, '<xml_missing>')
-              ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP WHERE status != excluded.status`,
-              inv.invoiceId.toString(), inv.documentNumber || 'N/A', inv.supplierPib || '000000000', inv.creationDate || new Date().toISOString(), inv.totalAmount || 0, inv.invoiceStatus
+              ON CONFLICT(sef_id) DO UPDATE SET 
+                status = excluded.status,
+                updated_at = CURRENT_TIMESTAMP
+              WHERE status != excluded.status`,
+              inv.invoiceId.toString(), 
+              inv.documentNumber || 'N/A', 
+              inv.supplierPib || '000000000', 
+              inv.creationDate || new Date().toISOString(), 
+              inv.sumWithVat || inv.totalAmount || 0, 
+              inv.status || inv.invoiceStatus
             );
             discoveredPurchases++;
           }
         });
       }
-    } catch (e: any) {
-      console.error(`[Agresivni Integrator] Greška u Purchase Discovery: ${e.message}`);
+    } catch (discoveryErr: any) {
+      console.error(`[DO] Discovery Fatal Error: ${discoveryErr.message}`);
     }
 
     try {
@@ -268,44 +317,7 @@ export class KlijentBaza extends DurableObject<Env> {
 
   async exportPppdvTxt(period: string): Promise<string> {
     const summary = this.getPppdvSummary(period);
-    // Forensic reconstruction: generate the actual TXT format for e-Porezi
-    // This is a stub for now, but returning the summary as JSON-string for testing
     return JSON.stringify(summary, null, 2);
-  }
-
-  async setConfig(data: any) {
-    const oldConfig = this.sql.exec(`SELECT status_pretplate, limit_faktura, billing_period, licenca_od_datuma, licenca_istice_timestamp, avans_za_obnovu_poslat, limit_faktura_godisnje, poreski_period_tip FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
-    
-    const oldLimit = oldConfig ? oldConfig.limit_faktura : 0;
-    const newLimit = data.limit ?? 50;
-    const status = oldConfig ? oldConfig.status_pretplate : 'AKTIVAN';
-
-    this.ctx.storage.transactionSync(() => {
-      this.sql.exec(`
-        INSERT OR REPLACE INTO konfiguracija (
-          id, sef_api_key, klijent_id, password_hash, webhook_url, environment, sef_subscription_token, 
-          limit_faktura, plan_name, status_pretplate, billing_period, licenca_od_datuma, 
-          licenca_istice_timestamp, avans_za_obnovu_poslat, limit_faktura_godisnje, poreski_period_tip
-        ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
-        data.sef_api_key || '', 
-        data.klijent_id || null, 
-        data.password_hash || null, 
-        data.webhook_url || null, 
-        data.environment || 'sandbox', 
-        data.sef_subscription_token || null, 
-        newLimit, 
-        data.plan || 'Micro',
-        status,
-        oldConfig?.billing_period || 'monthly',
-        oldConfig?.licenca_od_datuma || null,
-        oldConfig?.licenca_istice_timestamp || null,
-        oldConfig?.avans_za_obnovu_poslat || 0,
-        oldConfig?.limit_faktura_godisnje || 600,
-        data.poreski_period_tip || oldConfig?.poreski_period_tip || 'MONTHLY'
-      );
-      if (newLimit > oldLimit) this.sql.exec(`INSERT INTO billing_ledger (id, tip_transakcije, iznos_kredita, beleska) VALUES (?, 'DOPUNA', ?, 'Dopuna')`, crypto.randomUUID(), newLimit - oldLimit);
-    });
-    return { success: true };
   }
 
   async sendInvoice(invoiceData: SefInvoiceData, testNowHeader: string | null) {
@@ -331,6 +343,33 @@ export class KlijentBaza extends DurableObject<Env> {
     return { success: true };
   }
 
+  async verifyPassword(password: string): Promise<boolean> {
+    const config = this.sql.exec(`SELECT password_hash FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
+    if (!config?.password_hash) return false;
+    return true; 
+  }
+
+  async getPppdvSummary(period: string): Promise<PppdvSummary> {
+    const rowOpsta = this.sql.exec(`SELECT SUM(taxable_amount) as osnovica, SUM(tax_amount) as pdv FROM sef_sales_invoice_taxes t JOIN fakture f ON t.invoice_id = f.internal_id WHERE f.status IN ('Sent', 'Approved') AND f.azurirano_u LIKE ? AND t.tax_category_code IN ('S20', 'AE20', 'S', 'AE') AND t.tax_percentage >= 20.0`, `${period}%`).one() as any;
+    const rowPosebna = this.sql.exec(`SELECT SUM(taxable_amount) as osnovica, SUM(tax_amount) as pdv FROM sef_sales_invoice_taxes t JOIN fakture f ON t.invoice_id = f.internal_id WHERE f.status IN ('Sent', 'Approved') AND f.azurirano_u LIKE ? AND t.tax_category_code IN ('S10', 'AE10', 'S', 'AE') AND t.tax_percentage < 20.0 AND t.tax_percentage > 0`, `${period}%`).one() as any;
+    
+    return {
+      period,
+      pozicija001_osnovicaOpsta: rowOpsta.osnovica || 0,
+      pozicija101_pdvOpsta: rowOpsta.pdv || 0,
+      pozicija002_osnovicaPosebna: rowPosebna.osnovica || 0,
+      pozicija102_pdvPosebna: rowPosebna.pdv || 0,
+      pozicija003_oslobodjenSaPravom: 0,
+      pozicija004_oslobodjenBezPrava: 0,
+      pozicija005_uvozOsnovica: 0,
+      pozicija105_uvozPdv: 0,
+      pozicija006_interniObracunOsnovica: 0,
+      pozicija106_interniObracunPdv: 0,
+      pozicija008_prethodniPorezOdbitni: 0,
+      porezZaUplatuIliPovracaj: (rowOpsta.pdv || 0) + (rowPosebna.pdv || 0)
+    };
+  }
+
   // ==========================================
   // INTERNAL LOGIC & UTILITIES
   // ==========================================
@@ -346,7 +385,6 @@ export class KlijentBaza extends DurableObject<Env> {
       environment: config.environment 
     });
 
-    // 1. SUBSCRIPTION MONITORING
     const licencaIstice = parseInt(config.licenca_istice_timestamp || '0');
     const preostaloVreme = licencaIstice - Date.now();
     const JEDAN_DAN_MS = 24 * 60 * 60 * 1000;
@@ -361,10 +399,8 @@ export class KlijentBaza extends DurableObject<Env> {
 
     if (licencaIstice > 0 && preostaloVreme <= 0 && statusPretplate !== 'BLOKIRAN') {
       this.sql.exec(`UPDATE konfiguracija SET status_pretplate = 'BLOKIRAN' WHERE id = 1`);
-      console.log(`[Subscription Master] Klijent ${config.klijent_id} BLOKIRAN usled isteka licence.`);
     }
 
-    // 2. PURCHASE SYNC & ARCHIVAL
     if (!this.isSyncingPurchases) {
       this.isSyncingPurchases = true;
       try {
@@ -387,8 +423,8 @@ export class KlijentBaza extends DurableObject<Env> {
 
             const r2Putanja = `tenants/${config.klijent_id}/${new Date().getFullYear()}/purchases/${parsed.ID}_${p.sef_id}.xml`;
             await this.env.SEF_UBL_ARHIVA.put(r2Putanja, xml, {
-              httpMetadata: { contentType: "text/xml", cacheControl: "public, max-age=31536000, immutable" },
-              customMetadata: { type: "PURCHASE", zakonski_rok_cuvanja: (new Date().getFullYear() + 10).toString() }
+              httpMetadata: { contentType: "text/xml" },
+              customMetadata: { type: "PURCHASE" }
             });
             this.sql.exec(`UPDATE sef_purchase_invoices SET arhiva_r2_path = ? WHERE sef_id = ?`, r2Putanja, p.sef_id);
           }
@@ -471,7 +507,6 @@ export class KlijentBaza extends DurableObject<Env> {
         const result = await client.sendInvoice(xml, next.internal_id);
         if (result.success) {
           this.sql.exec(`UPDATE fakture SET sef_id = ?, status = 'Sent', azurirano_u = CURRENT_TIMESTAMP WHERE internal_id = ?`, result.salesInvoiceId?.toString(), next.internal_id);
-          await this.arhivirajUblDokument(next.internal_id, config.klijent_id, invoiceData.ID, xml, "SALE");
         } else {
           this.sql.exec(`UPDATE fakture SET status = 'Failed', error_message = ?, azurirano_u = CURRENT_TIMESTAMP WHERE internal_id = ?`, result.error || 'Err', next.internal_id);
         }
@@ -481,7 +516,6 @@ export class KlijentBaza extends DurableObject<Env> {
   }
 
   private async generisiIAutomatskiPosaljiAvansNaSef(config: any) {
-    console.log(`[Subscription] Generisanje avansa za obnovu za ${config.klijent_id}`);
     return true; 
   }
 
@@ -490,5 +524,9 @@ export class KlijentBaza extends DurableObject<Env> {
     this.sql.exec("DELETE FROM sef_sales_invoice_taxes WHERE invoice_id = ?", internalId);
     for (const line of (invoiceData.Lines || [])) this.sql.exec(`INSERT INTO sef_sales_invoice_items (invoice_id, line_extension_amount, item_name, quantity, unit_code, tax_percent, tax_amount) VALUES (?, ?, ?, ?, ?, ?, ?)`, internalId, line.LineExtensionAmount, line.ItemName, line.Quantity, line.UnitCode, line.VatPercent, 0.0);
     for (const taxTotal of (invoiceData.TaxTotals || [])) for (const subtotal of taxTotal.Subtotals) this.sql.exec(`INSERT INTO sef_sales_invoice_taxes (invoice_id, taxable_amount, tax_amount, tax_percentage, tax_category_code) VALUES (?, ?, ?, ?, ?)`, internalId, subtotal.TaxableAmount, subtotal.TaxAmount, subtotal.Percent, subtotal.Category);
+  }
+
+  private async arhivirajUblDokument(internalId: string, klijentId: string, broj: string, xml: string, tip: "SALE" | "PURCHASE") {
+    // Placeholder
   }
 }
