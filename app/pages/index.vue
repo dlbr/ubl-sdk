@@ -14,7 +14,9 @@ useHead({
   <div class="min-h-screen bg-gray-50 font-sans text-gray-900">
     <nav class="border-b border-gray-200 bg-white">
       <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-        <h1 class="text-xl font-black tracking-tighter">SEF BRIDGE</h1>
+        <NuxtLink to="/">
+          <img src="/bridge-logo.svg" alt="SEF Bridge Logo" class="h-10 w-auto" />
+        </NuxtLink>
         <div class="flex gap-4">
           <NuxtLink to="/onboarding" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700">Aktiviraj nalog</NuxtLink>
         </div>
