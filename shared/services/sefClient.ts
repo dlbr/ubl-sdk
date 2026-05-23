@@ -189,18 +189,20 @@ export class SefClient {
       console.log(`[SEF Mreža] Pozivam sales-invoice/ids (POST): ${endpoint}`);
       const response = await this.fetchWithTimeout(endpoint, {
         method: 'POST',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        body: JSON.stringify({}) // OKLOP: Neki SEF API-ji zahtevaju bar prazan body za POST
       }, 20000);
 
       if (!response.ok) {
-        console.error(`[SEF Mreža] Neuspešan poziv sales-invoice/ids (${response.status}):`, await response.text());
+        const errorText = await response.text();
+        console.error(`[SEF Mreža] Neuspešan poziv sales-invoice/ids (${response.status}):`, errorText);
         return null;
       }
 
       const data = await response.json() as { salesInvoiceIds: number[] };
       return data.salesInvoiceIds || [];
-    } catch (err) {
-      console.error('[SEF Mreža] Fatalna greška tokom povlačenja sales IDs:', err);
+    } catch (err: any) {
+      console.error('[SEF Mreža] Fatalna greška tokom povlačenja sales IDs:', err.message);
       return null;
     }
   }
@@ -215,17 +217,19 @@ export class SefClient {
       console.log(`[SEF Mreža] Pozivam sales-invoice/changes (POST): ${endpoint}`);
       const response = await this.fetchWithTimeout(endpoint, {
         method: 'POST',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        body: JSON.stringify({}) // OKLOP: Slanje praznog body-ja
       }, 20000);
 
       if (!response.ok) {
-        console.error(`[SEF Mreža] Neuspešan poziv sales-invoice/changes (${response.status}):`, await response.text());
+        const errorText = await response.text();
+        console.error(`[SEF Mreža] Neuspešan poziv sales-invoice/changes (${response.status}):`, errorText);
         return null;
       }
 
       return await response.json() as any[];
-    } catch (err) {
-      console.error('[SEF Mreža] Fatalna greška tokom povlačenja sales promena:', err);
+    } catch (err: any) {
+      console.error('[SEF Mreža] Fatalna greška tokom povlačenja sales promena:', err.message);
       return null;
     }
   }
