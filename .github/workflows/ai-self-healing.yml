@@ -13,6 +13,9 @@ jobs:
   ai_patch_and_deploy:
     name: 🧠 AI Patcher & 🚀 Deploy
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
       - name: 📥 Povlačenje koda sa GitHub-a
         uses: actions/checkout@v4
@@ -29,7 +32,6 @@ jobs:
       - name: 📄 Ekstrakcija teksta iz PDF-a i AI analiza
         id: ai_patcher
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PDF_URL: ${{ github.event.inputs.pdf_url || github.event.client_payload.pdf_url }}
         run: |
           echo "Preuzimanje PDF-a: $PDF_URL"
