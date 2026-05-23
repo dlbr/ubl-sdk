@@ -27,11 +27,13 @@ async function downloadAndExtract() {
       try {
         const dataBuffer = fs.readFileSync(tmpFile);
         
-        // Pass the buffer as the data option to the constructor, then use getText()
+        // Correct usage found from prototype: 
+        // 1. Instantiate 2. load() 3. getText()
         const parser = new PDFParse({ verbosity: 0, data: dataBuffer });
+        await parser.load();
         const data = await parser.getText();
         
-        console.log(data.text);
+        console.log(data);
       } catch (err) {
         console.error('PDF Extraction failed:', err);
         process.exit(1);
