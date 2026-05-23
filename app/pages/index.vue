@@ -75,6 +75,8 @@ useHead({
         </div>
       </section>
 
+      <LandingPricing />
+
       <section class="bg-gray-900 text-gray-100 p-12 rounded-3xl">
         <h2 class="text-3xl font-black mb-8 tracking-tighter">Tehnički temelj: Steel Fortress arhitektura</h2>
         <div class="grid md:grid-cols-2 gap-8 text-sm">
