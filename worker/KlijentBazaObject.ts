@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./index";
 import { type SefInvoiceData, SefInvoiceSchema } from "../shared/types/sef";
-import { SefUblBuilder, SefLiveValidator } from "../packages/sef-ubl-builder/src/index";
+import { SefUblBuilder } from "../packages/sef-ubl-builder/src/index";
 import { SefClient } from "../shared/services/sefClient";
 import { PopdvSefClient } from "../shared/services/popdvClient";
 import { SefExcelBuilder } from "../shared/services/excelBuilder";
@@ -86,7 +86,7 @@ export class KlijentBaza extends DurableObject<Env> {
     const dateFrom = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const dateTo = new Date().toISOString().split('T')[0];
 
-    console.log(`[DO RPC] Pokrećem Tolerant Discovery za ${config.klijent_id}`);
+    console.log(`[DO RPC] Pokrećem Tolerant Discovery za ${config.klijent_id || 'unknown'}`);
 
     let discoveredSales = 0;
     let discoveredPurchases = 0;
@@ -175,9 +175,18 @@ export class KlijentBaza extends DurableObject<Env> {
   async getPppdvSummary(period: string) { return {}; }
   async sendInvoice(invoiceData: any, headers: any) { return { success: true }; }
 
-  async dumpDatabase() {
+  private updateSchemaFor2026() {
+    try { this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN poreski_period_tip TEXT DEFAULT 'MONTHLY';`); } catch (e) {}
+  }
+
+  private updateSchemaForBillingLedger() {
+    try {
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS billing_ledger (row_id INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, faktura_id TEXT, broj_fakture TEXT, tip_transakcije TEXT, iznos_kredita INTEGER, kreiran_u DATETIME DEFAULT CURRENT_TIMESTAMP, beleska TEXT);`);
+    } catch (e) {}
+  }
+
+  async dumpDatabase(): Promise<{ fakture: any[], purchase: any[] }> {
     const fakture = this.sql.exec(`SELECT * FROM fakture`).toArray();
     const purchase = this.sql.exec(`SELECT * FROM sef_purchase_invoices`).toArray();
     return { fakture, purchase };
   }
-}
