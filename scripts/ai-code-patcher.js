@@ -1,9 +1,6 @@
 import fs from 'fs';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-async function analyzeChanges() {
+async function patchCode() {
   const textFile = process.argv[2];
   if (!textFile) {
     console.error('Text file is required');
@@ -11,28 +8,29 @@ async function analyzeChanges() {
   }
 
   const content = fs.readFileSync(textFile, 'utf8');
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-  const prompt = `
-    Analyze the following technical MFIN SEF update text.
-    Compare it against current MasterValidator and UBL logic requirements.
-    
-    If changes are required to the code to maintain compliance, generate the necessary diff/patch code and explain the rationale.
-    If no changes are needed, output "NO_CHANGES".
-    
-    Text: ${content}
-  `;
+  // Nema require, nema dependency-ja, samo čisti fetch
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: `
+        Ti si sistem za inženjersku harmonizaciju SEF Bridge-a.
+        Analiziraj ovaj tekst iz MFIN dokumentacije: 
+        ${content}
+        
+        Ako MFIN uvodi nova pravila, napiši novi validacioni kod za packages/sef-ubl-builder/src/validator.ts.
+        Output mora biti SAMO kod koji treba dodati u MasterValidator.validate() metod.
+        Ako nema promena, vrati string: NO_CHANGES
+      ` }] }]
+    })
+  });
 
-  try {
-    const result = await model.generateContent(prompt);
-    console.log("--- AI ANALYSIS & PROPOSED DIFF ---");
-    console.log(result.response.text());
-    console.log("-----------------------------------");
-  } catch (err) {
-    console.error('AI Analysis failed:', err);
-    process.exit(1);
-  }
+  const data = await response.json();
+  const patch = data.candidates?.[0]?.content?.parts?.[0]?.text || "NO_CHANGES";
+  
+  console.log("--- AI ANALYSIS ---");
+  console.log(patch);
 }
 
-analyzeChanges();
+patchCode();
