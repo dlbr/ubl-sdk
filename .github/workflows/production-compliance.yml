@@ -34,6 +34,9 @@ jobs:
     - name: Build aplikacije
       run: npm run build
 
+    - name: Pokretanje lokalnih testova (UBL & JSON Matrix)
+      run: npm test
+
     - name: 🧪 Validacija UBL XML sheme (Ecosio emulation)
       run: |
         if [ -d "./test/output" ]; then
@@ -43,9 +46,6 @@ jobs:
             fi
           done
         fi
-
-    - name: Pokretanje lokalnih testova (UBL & JSON Matrix)
-      run: npm test
 
     - name: 🚨 Državni Sanity Check (E2E Test na Demo SEF API)
       env:
