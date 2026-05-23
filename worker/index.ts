@@ -254,11 +254,12 @@ app.post('/api/register', async ({ req, env }: RouterContext<Env>) => {
   const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
   const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
   
-  await klijentDO.fetch(new Request('http://durableobject/config', {
-    method: 'POST',
-    body: JSON.stringify({ sef_api_key, plan: 'Micro', limit: 50 }),
-    headers: { 'Content-Type': 'application/json' }
-  }));
+  await klijentDO.setConfig({ 
+    sef_api_key, 
+    klijent_id: klijentId,
+    plan: 'Micro', 
+    limit: 50 
+  });
 
   return Response.json({ 
     success: true, 
@@ -365,6 +366,7 @@ app.get('/api/auth/session', auth(async (c: RouterContext<Env> & { klijentId?: s
 }));
 
 app.get('/api/webhook-setup', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
+  console.log(`[Worker] Handling /api/webhook-setup for ${c.klijentId}`);
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
   const data = await klijentDO.getWebhookInstructions();
@@ -416,8 +418,12 @@ app.post('/api/fakture/sync', auth(async (c: RouterContext<Env> & { klijentId?: 
 
 app.get('/api/analytics/pppdv-summary', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
+  const period = url.searchParams.get('period');
+  if (!period) return Response.json({ error: "Missing period" }, { status: 400 });
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request(`http://durableobject/api/analytics/pppdv-summary${url.search}`));
+  const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+  const data = await klijentDO.getPppdvSummary(period);
+  return Response.json({ success: true, data });
 }));
 
 app.get('/api/analytics/export-excel', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
@@ -637,16 +643,20 @@ export default {
     }
 
     const url = new URL(req.url);
+    
+    // OKLOP: Detaljan debug za rute koje failuju
+    if (url.pathname.includes('webhook-setup')) {
+      console.log(`[Router Debug] Incoming: ${req.method} ${url.pathname}`);
+    }
+
     if (url.pathname.startsWith('/api')) {
       const res = await app.fetch(req, env, ctx);
-      // OKLOP: Uvek primenjujemo CORS za /api rute, čak i za 404
       const corsRes = applyCors(res, req);
       
-      // Ako ruter zaista nije našao ništa, a želimo da Nuxt proba (npr. Nuxt API rute)
-      // onda propuštamo samo ako je baš 404 i nema tela.
       if (res.status === 404) {
         const text = await res.clone().text();
         if (text === 'Not Found') {
+          console.warn(`[Router Fallback] ${url.pathname} not in Worker, passing to Nuxt.`);
           return nuxtHandler.fetch(req, env, ctx);
         }
       }

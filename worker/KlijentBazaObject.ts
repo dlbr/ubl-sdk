@@ -70,6 +70,13 @@ export class KlijentBaza extends DurableObject<Env> {
       const ok = await this.verifyPassword(password);
       return ok ? Response.json({ success: true }) : Response.json({ success: false }, { status: 401 });
     });
+
+    this.app.get('/api/analytics/pppdv-export', async ({ req }: RouterContext<Env>) => {
+      const url = new URL(req.url);
+      const period = url.searchParams.get('period') || new Date().toISOString().substring(0, 7);
+      const txt = await this.exportPppdvTxt(period);
+      return new Response(txt, { headers: { 'Content-Type': 'text/plain' } });
+    });
   }
 
   // ==========================================
@@ -257,6 +264,13 @@ export class KlijentBaza extends DurableObject<Env> {
       page, 
       totalPages: Math.ceil(total.count / limit) 
     };
+  }
+
+  async exportPppdvTxt(period: string): Promise<string> {
+    const summary = this.getPppdvSummary(period);
+    // Forensic reconstruction: generate the actual TXT format for e-Porezi
+    // This is a stub for now, but returning the summary as JSON-string for testing
+    return JSON.stringify(summary, null, 2);
   }
 
   async setConfig(data: any) {
