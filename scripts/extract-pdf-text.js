@@ -3,8 +3,10 @@ import https from 'https';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-// Try to load as a default export or just the module itself
-const pdf = require('pdf-parse');
+// Based on the diagnostic, the main export is an object containing PDFParse.
+// We should use PDFParse directly.
+const pdfModule = require('pdf-parse');
+const PDFParse = pdfModule.PDFParse;
 
 async function downloadAndExtract() {
   const url = process.argv[2];
@@ -27,9 +29,9 @@ async function downloadAndExtract() {
       try {
         const dataBuffer = fs.readFileSync(tmpFile);
         
-        // pdf-parse usage: pdf(dataBuffer).then(...)
-        // Let's use the function directly, as it's the most common API for this library
-        const data = await pdf(dataBuffer);
+        // PDFParse is a class that needs to be instantiated.
+        const parser = new PDFParse({ verbosity: 0 });
+        const data = await parser.parse(dataBuffer);
         
         console.log(data.text);
       } catch (err) {
