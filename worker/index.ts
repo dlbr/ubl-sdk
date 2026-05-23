@@ -8,6 +8,7 @@ import { posaljiHotfixTelegramAlarm } from '../shared/services/telegram-notifier
 
 export interface Env extends globalThis.Env {
   ADMIN_API_KEY: string;
+  SESSION_SECRET: string;
   PORESKI_KV: KVNamespace;
   SEF_UBL_ARHIVA: R2Bucket;
   INVOICE_QUEUE: Queue;
@@ -15,6 +16,10 @@ export interface Env extends globalThis.Env {
   SEF_QUEUE: Queue;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_CHAT_ID: string;
+  REGISTAR_DB: D1Database;
+  KLIJENT_BAZA_OBJECT: DurableObjectNamespace;
+  SEF_API_URL?: string;
+  WEBSITE_URL?: string;
 }
 export { KlijentBaza } from './KlijentBazaObject';
 
