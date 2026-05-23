@@ -28,6 +28,9 @@ jobs:
     - name: Instalacija zavisnosti
       run: npm install
 
+    - name: Build aplikacije
+      run: npm run build
+
     - name: Pokretanje lokalnih testova (UBL & JSON Matrix)
       run: npm test
 
