@@ -38,9 +38,8 @@ export class SefClient {
   constructor(config: SefClientConfig) {
     this.apiKey = config.apiKey;
     
-    // OKLOP: Koristimo isključivo URL-ove iz environment varijabli ili tajni (secrets)
     if (!config.baseUrl) {
-      throw new Error(`Kritična greška: SEF_API_URL nije definisan u okruženju [${config.environment}]. Proverite .dev.vars ili wrangler secrets.`);
+      throw new Error(`Kritična greška: SEF_API_URL (baseUrl) nije definisan.`);
     }
 
     let url = config.baseUrl.trim().replace(/\/$/, "");
@@ -50,7 +49,7 @@ export class SefClient {
       url = url.substring(0, url.length - 4);
     }
     this.baseUrl = url;
-    console.log(`[SefClient] Inicijalizovan API URL: ${this.baseUrl} [Okruženje: ${config.environment}]`);
+    console.log(`[SefClient] Inicijalizovan API URL: ${this.baseUrl}`);
   }
 
   static getCircuitStatus(): { isOpen: boolean, openUntil?: string } {

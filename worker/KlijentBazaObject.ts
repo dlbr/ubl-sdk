@@ -450,22 +450,10 @@ export class KlijentBaza extends DurableObject<Env> {
         return Response.json({ error: "Firma nije konfigurisana. Molimo prođite kroz onboarding." }, { status: 400 });
       }
 
-      // OKLOP: Ako smo na produkcionom domenu, FORSIRAMO produkciono okruženje za sync
-      if (config.environment !== 'production') {
-        console.warn(`[DO] Auto-shoveling environment to production for sync.`);
-        this.sql.exec(`UPDATE konfiguracija SET environment = 'production' WHERE id = 1`);
-        config.environment = 'production';
-      }
-
-      // OKLOP: Eksplicitni override URL-a za produkciju jer smo videli da env.SEF_API_URL nekada kasni ili je pogrešan
-      const targetUrl = config.environment === 'production' 
-        ? 'https://efaktura.mfin.gov.rs/api' 
-        : this.env.SEF_API_URL;
-
       const sefClient = new SefClient({ 
         apiKey: config.sef_api_key, 
         environment: config.environment, 
-        baseUrl: targetUrl 
+        baseUrl: this.env.SEF_API_URL 
       });
 
       // 1. DISCOVERY: Širimo opseg na 120 dana (v1 API)
@@ -473,7 +461,7 @@ export class KlijentBaza extends DurableObject<Env> {
       const dateTo = now.toISOString();
       const dateFrom = new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000).toISOString();
 
-      console.log(`[DO] Pokrećem AGRESIVNI discovery (120 dana) za ${config.klijent_id} na ${targetUrl}`);
+      console.log(`[DO] Pokrećem discovery (120 dana) za ${config.klijent_id} na ${this.env.SEF_API_URL}`);
 
       let discoveredSales = 0;
       let discoveredPurchases = 0;
@@ -581,11 +569,10 @@ export class KlijentBaza extends DurableObject<Env> {
       await this.processQueue();
       return Response.json({ 
         success: true, 
-        message: `Agresivna sinhronizacija završena. Otkriveno: ${discoveredSales} izlaznih i ${discoveredPurchases} ulaznih faktura. Okruženje: ${config.environment}`,
+        message: `Sinhronizacija završena. Otkriveno: ${discoveredSales} izlaznih i ${discoveredPurchases} ulaznih faktura.`,
         discovered_sales: discoveredSales,
         discovered_purchases: discoveredPurchases,
-        environment: config.environment,
-        target_url: targetUrl
+        target_url: this.env.SEF_API_URL
       });
     });
   }
