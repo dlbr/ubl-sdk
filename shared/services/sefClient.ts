@@ -240,6 +240,46 @@ export class SefClient {
   }
 
   /**
+   * Forenzičko otkrivanje endpoint-a (v4.16.0).
+   * Sistematski proverava dostupnost različitih endpoin-ta.
+   */
+  async discoverInvoices() {
+    const endpoints = [
+      { url: '/api/publicApi/sales-invoice/overview', method: 'GET' },
+      { url: '/api/publicApi/purchase-invoice/overview', method: 'GET' },
+      { url: '/api/publicApi/sales-invoice/changes', method: 'POST', body: {} },
+      { url: '/api/publicApi/purchase-invoice/changes', method: 'POST', body: {} },
+      { url: '/api/publicApi/sales-invoice/list', method: 'GET' },
+      { url: '/api/publicApi/sales-invoice/ids', method: 'POST', body: {} }
+    ];
+
+    console.log("🔍 Pokrećem forenzičko otkrivanje endpoint-a...");
+    const results = [];
+
+    for (const ep of endpoints) {
+      try {
+        const fullUrl = `${this.baseUrl}${ep.url}`;
+        const response = await this.fetchWithTimeout(fullUrl, {
+          method: ep.method,
+          headers: this.getHeaders(),
+          body: ep.body ? JSON.stringify(ep.body) : undefined
+        }, 10000);
+        
+        const status = response.status;
+        const text = await response.text();
+        
+        console.log(`📡 Endpoint ${ep.url} -> Status: ${status} | Body length: ${text.length}`);
+        
+        results.push({ url: ep.url, status, length: text.length });
+      } catch (e: any) {
+        console.log(`❌ Endpoint ${ep.url} nedostupan ili odbija zahtev: ${e.message}`);
+        results.push({ url: ep.url, status: 0, error: e.message });
+      }
+    }
+    return results;
+  }
+
+  /**
    * Checks the status of a specific invoice (v1 endpoint).
    */
   async getInvoiceStatus(salesInvoiceId: number): Promise<SefStatusResponse | null> {
