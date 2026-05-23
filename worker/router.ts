@@ -52,7 +52,7 @@ export const Router = <Env = any>(): RouterType<Env> => {
             let match = true
             const result = { pathname: { groups: {} as any } }
             for (let i = 0; i < parts.length; i++) {
-              if (parts[i].startsWith(':')) {
+              if (parts[i] && parts[i].startsWith(':')) {
                 const paramName = parts[i].substring(1)
                 result.pathname.groups[paramName] = pathParts[i]
               } else if (parts[i] !== pathParts[i]) {
