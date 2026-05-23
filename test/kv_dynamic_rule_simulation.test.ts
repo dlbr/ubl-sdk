@@ -108,6 +108,9 @@ await klijentDO.fetch(new Request('http://do/admin/set-status', {
       OPSTA_STOPA_PDV: 20.00
     }));
     
+    // OKLOP: Očisti keš i u Durable Object memoriji da bi pokupio nova pravila
+    await klijentDO.fetch(new Request('http://do/internal/clear-cache', { method: 'POST' }));
+
     // OKLOP: Dajemo Miniflare-u trenutak da propagira KV izmenu
     await new Promise(r => setTimeout(resolve => r(resolve), 100));
 
