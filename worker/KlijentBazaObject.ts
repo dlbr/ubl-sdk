@@ -80,7 +80,7 @@ export class KlijentBaza extends DurableObject<Env> {
     const sefClient = new SefClient({ 
       apiKey: config.sef_api_key, 
       environment: config.environment, 
-      baseUrl: this.env.SEF_API_URL 
+      baseUrl: this.env.SEF_API_URL ?? 'https://demoefaktura.mfin.gov.rs'
     });
 
     const dateFrom = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -174,4 +174,10 @@ export class KlijentBaza extends DurableObject<Env> {
   async getLogs() { return { success: true, logs: [] }; }
   async getPppdvSummary(period: string) { return {}; }
   async sendInvoice(invoiceData: any, headers: any) { return { success: true }; }
+
+  async dumpDatabase() {
+    const fakture = this.sql.exec(`SELECT * FROM fakture`).toArray();
+    const purchase = this.sql.exec(`SELECT * FROM sef_purchase_invoices`).toArray();
+    return { fakture, purchase };
+  }
 }
