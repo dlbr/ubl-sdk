@@ -10,6 +10,7 @@ import { SefUblParser } from "./ublParser";
 import { type PopdvSubmitData } from '../shared/types/popdv';
 import { Router, type RouterContext } from './router';
 import { ErrorShield } from "../shared/services/errorShield";
+import { Redacted } from "../shared/services/redacted";
 
 export interface PppdvSummary {
   period: string;
@@ -78,11 +79,10 @@ export class KlijentBaza extends DurableObject<Env> {
     if (!config) throw new Error("Firma nije konfigurisana.");
 
     const sefClient = new SefClient({ 
-      apiKey: config.sef_api_key, 
+      apiKey: new Redacted(config.sef_api_key).get(), 
       environment: config.environment, 
-      baseUrl: this.env.SEF_API_URL ?? 'https://demoefaktura.mfin.gov.rs'
+      baseUrl: this.env.SEF_API_URL ?? 'https://demoefaktura.mfin.gov.rs' 
     });
-
     const dateFrom = (new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]) ?? '';
     const dateTo = (new Date().toISOString().split('T')[0]) ?? '';
     
