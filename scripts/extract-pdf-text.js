@@ -3,8 +3,8 @@ import https from 'https';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-// Based on package.json, we should import from the node-specific entry
-const pdfModule = require('pdf-parse/node');
+const pdfModule = require('pdf-parse');
+const PDFParse = pdfModule.PDFParse;
 
 async function downloadAndExtract() {
   const url = process.argv[2];
@@ -27,8 +27,9 @@ async function downloadAndExtract() {
       try {
         const dataBuffer = fs.readFileSync(tmpFile);
         
-        // According to the exports, the node entry provides an object or function
-        const data = await pdfModule(dataBuffer);
+        // Pass the buffer as the data option directly
+        const parser = new PDFParse({ verbosity: 0, data: dataBuffer });
+        const data = await parser.getText();
         
         console.log(data.text);
       } catch (err) {
