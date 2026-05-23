@@ -293,6 +293,16 @@ export class SefClient {
   }
 
   /**
+   * Fetches sales invoice overview (ids + basic info) for a given range.
+   */
+  async getSalesInvoiceOverview(dateFrom: string, dateTo: string, status: string = ''): Promise<any[] | null> {
+    // Ako v1 nema overview za sales, koristimo IDS pa detalje, ali ovde dodajemo wrapper
+    const ids = await this.getSalesInvoiceIds(dateFrom, dateTo, status);
+    if (!ids) return null;
+    return ids.map(id => ({ invoiceId: id }));
+  }
+
+  /**
    * Downloads the raw UBL XML for a specific purchase invoice.
    * v3.8.0: Handles Base64 response from state servers.
    */

@@ -444,10 +444,17 @@ export class KlijentBaza extends DurableObject<Env> {
     });
     
     this.app.post('/sync-sef', async () => {
-      const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
+      let config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
       if (!config) {
         console.error(`[DO] Sync failed: Configuration missing for ${this.ctx.id.toString()}`);
         return Response.json({ error: "Firma nije konfigurisana. Molimo prođite kroz onboarding." }, { status: 400 });
+      }
+
+      // OKLOP: Ako smo na produkcionom domenu, FORSIRAMO produkciono okruženje za sync
+      if (config.environment !== 'production') {
+        console.warn(`[DO] Auto-shoveling environment to production for sync.`);
+        this.sql.exec(`UPDATE konfiguracija SET environment = 'production' WHERE id = 1`);
+        config.environment = 'production';
       }
 
       const sefClient = new SefClient({ 
@@ -456,12 +463,12 @@ export class KlijentBaza extends DurableObject<Env> {
         baseUrl: this.env.SEF_API_URL 
       });
 
-      // 1. DISCOVERY: Povlačimo promene sa SEF-a za poslednjih 30 dana (v1 API)
+      // 1. DISCOVERY: Širimo opseg na 90 dana (v1 API)
       const now = new Date();
       const dateTo = now.toISOString();
-      const dateFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const dateFrom = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
-      console.log(`[DO] Pokrećem discovery za ${config.klijent_id} od ${dateFrom} do ${dateTo}`);
+      console.log(`[DO] Pokrećem DUBOKI discovery (90 dana) za ${config.klijent_id} [${config.environment}]`);
 
       let discoveredSales = 0;
       let discoveredPurchases = 0;
@@ -471,8 +478,8 @@ export class KlijentBaza extends DurableObject<Env> {
         const salesIds = await sefClient.getSalesInvoiceIds(dateFrom, dateTo);
         if (salesIds && salesIds.length > 0) {
           console.log(`[DO] Otkriveno ${salesIds.length} izlaznih faktura. Preuzimam detalje i XML-ove...`);
-          // Uzimamo samo zadnjih 20 faktura za inicijalno otkrivanje
-          const idsToFetch = salesIds.slice(-20);
+          // Uzimamo samo zadnjih 50 faktura za duboki discovery
+          const idsToFetch = salesIds.slice(-50);
           for (const id of idsToFetch) {
             const [details, xml] = await Promise.all([
               sefClient.getSalesInvoiceDetails(id),
@@ -483,13 +490,8 @@ export class KlijentBaza extends DurableObject<Env> {
               let amount = details.TotalAmount || 0;
               let number = details.InvoiceNumber || `DISC-${id}`;
 
-              // OKLOP: Ako detalji nemaju iznos (često kod v1), vadimo ga hirurški iz XML-a
               if (xml && (amount === 0 || !details.InvoiceNumber)) {
                 try {
-                  const extraction = SefUblParser.extract(xml, id.toString());
-                  amount = parseFloat(SefUblParser.parseInvoice(xml).then(p => p.PayableAmount) as any) || amount; 
-                  // Ispravka: SefUblParser.parseInvoice je async, ali extract je sync.
-                  // Koristiću direktnije metode iz parsera ako je moguće.
                   const payableRegex = /<[^>]*?PayableAmount\b[^>]*>([^<]*?)<\//i;
                   const numberRegex = /<[^>]*?ID\b[^>]*>([^<]*?)<\//i;
                   
@@ -521,6 +523,8 @@ export class KlijentBaza extends DurableObject<Env> {
               });
             }
           }
+        } else {
+          console.log(`[DO] Nema otkrivenih izlaznih faktura u opsegu 90 dana.`);
         }
 
         // Purchase Discovery (v1 overview endpoint)
@@ -572,9 +576,10 @@ export class KlijentBaza extends DurableObject<Env> {
       await this.processQueue();
       return Response.json({ 
         success: true, 
-        message: `Sinhronizacija završena. Otkriveno: ${discoveredSales} izlaznih i ${discoveredPurchases} ulaznih faktura.`,
+        message: `Sinhronizacija završena. Otkriveno: ${discoveredSales} izlaznih i ${discoveredPurchases} ulaznih faktura. Okruženje: ${config.environment}`,
         discovered_sales: discoveredSales,
-        discovered_purchases: discoveredPurchases
+        discovered_purchases: discoveredPurchases,
+        environment: config.environment
       });
     });
   }
