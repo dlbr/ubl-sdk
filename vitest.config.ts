@@ -2,27 +2,12 @@ import { defineConfig } from 'vitest/config';
 import { cloudflareTest } from '@cloudflare/vitest-pool-workers';
 
 export default defineConfig({
-  poolOptions: {
-    workers: {
-      singleWorker: true,
-      miniflare: {
-        compatibilityDate: '2026-05-21',
-      },
-    },
-  },
-  plugins: [
-    cloudflareTest({
-      wrangler: { configPath: './wrangler.toml' },
-    }),
-  ],
+export default defineConfig({
   test: {
-    // 🛡️ NO ISOLATION + SINGLE THREAD to prevent esbuild deadlocks
     pool: 'threads',
-    poolOptions: {
-      threads: {
-        singleThread: true,
-        isolate: false,
-      }
+    threads: {
+      singleThread: true,
+      isolate: false,
     },
     include: [
       'worker/**/*.{test,spec}.ts', 
@@ -34,5 +19,14 @@ export default defineConfig({
     reporters: ['default', 'hanging-process'],
     testTimeout: 60000,
     teardownTimeout: 10000,
-  }
+  },
+  plugins: [
+    cloudflareTest({
+      wrangler: { 
+        configPath: './wrangler.toml',
+        // Force local execution in CI to avoid "must be logged in" error
+        mode: process.env.CI ? 'local' : 'remote' 
+      },
+    }),
+  ],
 });
