@@ -3,7 +3,7 @@ import https from 'https';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pdfModule = require('pdf-parse');
-const pdf = pdfModule.PDFParse || pdfModule; // Fallback to module itself
+const pdf = pdfModule.PDFParse || pdfModule;
 
 async function downloadAndExtract() {
   const url = process.argv[2];
@@ -25,7 +25,8 @@ async function downloadAndExtract() {
       
       try {
         const dataBuffer = fs.readFileSync(tmpFile);
-        const data = await new pdf.PDFParse(dataBuffer);
+        // Call pdf() as a function, passing an empty object as options
+        const data = await pdf(dataBuffer, {});
         
         console.log(data.text);
       } catch (err) {
