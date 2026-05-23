@@ -214,6 +214,19 @@ export class SefUblBuilder {
     return '';
   }
 
+  private static buildPaymentExchangeRate(data: any): string {
+    if (data.valuta && data.valuta !== 'RSD' && data.exchangeRate) {
+        return `
+  <cac:PaymentExchangeRate>
+    <cbc:SourceCurrencyCode>EUR</cbc:SourceCurrencyCode>
+    <cbc:TargetCurrencyCode>RSD</cbc:TargetCurrencyCode>
+    <cbc:CalculationRate>${data.exchangeRate}</cbc:CalculationRate>
+    <cbc:Date>${data.datumIzdavanja}</cbc:Date>
+  </cac:PaymentExchangeRate>`;
+    }
+    return '';
+  }
+
   private static assemble(data: any, type: string, root: 'Invoice' | 'CreditNote', body: { summary: string; lines: string; }): string {
     const isCN = root === 'CreditNote';
     const today = new Date().toISOString().split('T')[0];
@@ -225,8 +238,8 @@ export class SefUblBuilder {
     const date = `<cbc:IssueDate>${data.datumIzdavanja || data.datum || today}</cbc:IssueDate>`;
     const typeCode = `<cbc:${isCN ? 'CreditNoteTypeCode' : 'InvoiceTypeCode'}>${type}</cbc:${isCN ? 'CreditNoteTypeCode' : 'InvoiceTypeCode'}>${data.extra_notes || ''}`;
     const currency = `<cbc:DocumentCurrencyCode>${data.valuta || 'RSD'}</cbc:DocumentCurrencyCode>`;
+    const exchangeRate = this.buildPaymentExchangeRate(data);
     const period = this.buildInvoicePeriod(type, data);
-    const billing = this.buildBillingRef(data);
     const supplier = this.buildParty('Supplier', data.pibProdavca, data.nazivProdavca || 'PRODAVAC', data);
     const customer = this.buildParty('Customer', data.pibKupca, data.nazivKupca || 'KUPAC', data);
     const delivery = this.buildDelivery(data, type);
@@ -240,8 +253,8 @@ export class SefUblBuilder {
   ${date}
   ${typeCode}
   ${currency}
+  ${exchangeRate}
   ${period}
-  ${billing}
   ${supplier}
   ${customer}
   ${delivery}
