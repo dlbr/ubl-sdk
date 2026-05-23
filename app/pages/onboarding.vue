@@ -6,6 +6,17 @@ const period = route.query.period as string || 'monthly'
 
 <template>
   <div class="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
+    <div class="mb-8 mx-auto w-full max-w-md">
+      <div class="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg shadow-sm">
+        <div class="flex">
+          <div class="flex-shrink-0 text-amber-600 font-bold text-xl">⚠️</div>
+          <div class="ml-3">
+            <p class="text-sm text-amber-800 font-bold uppercase tracking-tight">SISTEM JE U DEMO REŽIMU</p>
+            <p class="text-xs text-amber-700 mt-1">Sve transakcije se vrše na državnom MFIN sandbox-u. Podaci nisu fiskalno validni.</p>
+          </div>
+        </div>
+      </div>
+    </div>
     <OnboardingForm :plan="plan" :period="period" />
 ...
     <p class="mt-8 text-center text-xs text-gray-400 font-bold uppercase tracking-widest">
