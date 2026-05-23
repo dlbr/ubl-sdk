@@ -25,7 +25,7 @@ async function downloadAndExtract() {
       
       try {
         const dataBuffer = fs.readFileSync(tmpFile);
-        const data = await pdf(dataBuffer);
+        const data = await new pdf.PDFParse(dataBuffer);
         
         console.log(data.text);
       } catch (err) {
