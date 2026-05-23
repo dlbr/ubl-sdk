@@ -366,47 +366,52 @@ app.get('/api/auth/session', auth(async (c: RouterContext<Env> & { klijentId?: s
 
 app.get('/api/webhook-setup', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/config/webhook-instructions'));
-}));
-
-// OKLOP: Alias za webhook-setup da bi se izbegli potencijalni 404 problemi sa trailing slash
-app.get('/api/webhook-setup/', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
-  const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/config/webhook-instructions'));
+  const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+  const data = await klijentDO.getWebhookInstructions();
+  return Response.json(data);
 }));
 
 app.get('/api/dashboard/stats', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/stats'));
+  const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+  const stats = await klijentDO.getStats();
+  return Response.json(stats);
 }));
 
 app.get('/api/dashboard/logs', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/logs'));
+  const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+  const logs = await klijentDO.getLogs();
+  return Response.json(logs);
 }));
+
 app.post('/api/fakture/batch', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const telo = await c.req.json();
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-
-  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/fakture/batch', {
-    method: 'POST',
-    body: JSON.stringify(telo),
-    headers: { 
-      'Content-Type': 'application/json',
-      'X-Test-Now': c.req.headers.get('X-Test-Now') || ''
-    }
-  }));
+  const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+  
+  // Refactor to use sendInvoice in a loop or implement batch RPC
+  const results = [];
+  for (const f of telo.fakture) {
+    results.push(await klijentDO.sendInvoice(f, c.req.headers.get('X-Test-Now')));
+  }
+  return Response.json({ success: true, results });
 }));
 
 app.get('/api/fakture', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
+  const page = parseInt(url.searchParams.get('page') || '1');
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request(`http://durableobject/fakture${url.search}`));
+  const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+  const data = await klijentDO.getFakture(page);
+  return Response.json(data);
 }));
 
 app.post('/api/fakture/sync', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/sync-sef', { method: 'POST' }));
+  const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+  const result = await klijentDO.syncWithSef();
+  return Response.json(result);
 }));
 
 app.get('/api/analytics/pppdv-summary', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
