@@ -1,5 +1,13 @@
 <script setup lang="ts">
 // SEF Bridge Index Page - v4.21.0
+useHead({
+  title: 'SEF Bridge | Steel Fortress za e-fakture',
+  meta: [
+    { name: 'description', content: 'Automatizovano i poreski ispravno izdavanje faktura uz Steel Fortress arhitekturu. Lokalni read-model, MasterValidator štit i potpuna usklađenost sa UBL 2.1.' },
+    { property: 'og:title', content: 'SEF Bridge | Steel Fortress za e-fakture' },
+    { property: 'og:description', content: 'Inženjerski optimizovan sistem za e-fakture. UBL 2.1 standard, FSM tranzicije, automatska validacija.' }
+  ]
+})
 </script>
 
 <template>
