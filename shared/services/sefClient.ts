@@ -37,13 +37,20 @@ export class SefClient {
 
   constructor(config: SefClientConfig) {
     this.apiKey = config.apiKey;
-    let url = (config.baseUrl || '').trim().replace(/\/$/, "");
+    
+    // OKLOP: Ako baseUrl nije poslat, koristimo zvanične državne endpointe na osnovu okruženja
+    let url = config.baseUrl || (config.environment === 'production' 
+      ? 'https://efaktura.mfin.gov.rs/api' 
+      : 'https://demoefaktura.mfin.gov.rs/api');
+
+    url = url.trim().replace(/\/$/, "");
+    
     // OKLOP: Sprečavamo dupli /api sufiks
     if (url.endsWith("/api")) {
       url = url.substring(0, url.length - 4);
     }
     this.baseUrl = url;
-    console.log(`[SefClient] Inicijalizovan API URL: ${this.baseUrl}`);
+    console.log(`[SefClient] Inicijalizovan API URL: ${this.baseUrl} [Okruženje: ${config.environment}]`);
   }
 
   static getCircuitStatus(): { isOpen: boolean, openUntil?: string } {

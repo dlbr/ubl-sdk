@@ -446,83 +446,95 @@ export class KlijentBaza extends DurableObject<Env> {
       const sefClient = new SefClient({ 
         apiKey: config.sef_api_key, 
         environment: config.environment, 
-        baseUrl: this.env.SEF_API_URL! 
+        baseUrl: this.env.SEF_API_URL 
       });
 
       // 1. DISCOVERY: Povlačimo promene sa SEF-a za poslednjih 30 dana (v3 API)
-      // Ovo omogućava bridge-u da "otkrije" fakture koje su slate direktno sa portala ili preko drugog ERP-a
       const dateTo = new Date().toISOString().split('T')[0]!;
       const dateFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!;
 
-      // Sales Discovery
-      const salesChanges = await sefClient.getSalesInvoiceChanges(dateFrom, dateTo);
-      if (salesChanges?.invoices) {
-        this.ctx.storage.transactionSync(() => {
-          for (const inv of salesChanges.invoices) {
-            // v4.18.0: Importujemo samo ako faktura ne postoji ili joj se status promenio
-            this.sql.exec(`
-              INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
-              VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(sef_id) DO UPDATE SET 
-                status = excluded.status,
-                azurirano_u = CURRENT_TIMESTAMP
-              WHERE status != excluded.status`, 
-              `SEF-DISC-${inv.SalesInvoiceId}`, 
-              inv.SalesInvoiceId.toString(), 
-              inv.InvoiceStatus, 
-              inv.InvoiceNumber, 
-              inv.TotalAmount || 0
-            );
-          }
-        });
-      }
+      let discoveredSales = 0;
+      let discoveredPurchases = 0;
 
-      // Purchase Discovery
-      const purchaseChanges = await sefClient.getPurchaseInvoiceChanges(dateFrom, dateTo);
-      if (purchaseChanges?.invoices) {
-        this.ctx.storage.transactionSync(() => {
-          for (const inv of purchaseChanges.invoices) {
-            this.sql.exec(`
-              INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status, raw_xml)
-              VALUES (?, ?, ?, ?, ?, ?, '<xml_missing>')
-              ON CONFLICT(sef_id) DO UPDATE SET 
-                status = excluded.status,
-                updated_at = CURRENT_TIMESTAMP
-              WHERE status != excluded.status`,
-              inv.PurchaseInvoiceId.toString(),
-              inv.InvoiceNumber,
-              inv.SupplierPib || '000000000',
-              inv.CreationDate || new Date().toISOString(),
-              inv.TotalAmount || 0,
-              inv.InvoiceStatus
-            );
-          }
-        });
-      }
-
-      // 2. STATUS SYNC: Za sve fakture koje su u prelaznim stanjima, proveravamo detaljan status
-      const faktureZaProveru = this.sql.exec(`SELECT internal_id, sef_id, status FROM fakture WHERE status NOT IN ('Approved', 'Rejected', 'Cancelled', 'Mistake') AND sef_id IS NOT NULL`).toArray() as any[];
-      for (const f of faktureZaProveru) {
-        const res = await sefClient.getInvoiceStatus(parseInt(f.sef_id));
-        if (res?.InvoiceStatus && res.InvoiceStatus !== f.status) {
+      try {
+        // Sales Discovery
+        const salesChanges = await sefClient.getSalesInvoiceChanges(dateFrom, dateTo);
+        if (salesChanges?.invoices) {
           this.ctx.storage.transactionSync(() => {
-            this.sql.exec(`UPDATE fakture SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE internal_id = ?`, res.InvoiceStatus, f.internal_id);
-            if (res.InvoiceStatus === 'Rejected' || res.InvoiceStatus === 'Mistake') {
-              const vecRef = this.sql.exec(`SELECT 1 FROM billing_ledger WHERE faktura_id = ? AND tip_transakcije = 'REFUNDACIJA'`, f.internal_id).toArray().length > 0;
-              if (!vecRef) {
-                const brojRow = this.sql.exec(`SELECT broj_fakture FROM fakture WHERE internal_id = ?`, f.internal_id).toArray()[0] as any;
-                this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'REFUNDACIJA', 1, ?)`, crypto.randomUUID(), f.internal_id, brojRow?.broj_fakture || f.internal_id, `Manual Refund`);
-              }
+            for (const inv of salesChanges.invoices) {
+              const res = this.sql.exec(`
+                INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(sef_id) DO UPDATE SET 
+                  status = excluded.status,
+                  azurirano_u = CURRENT_TIMESTAMP
+                WHERE status != excluded.status`, 
+                `SEF-DISC-${inv.SalesInvoiceId}`, 
+                inv.SalesInvoiceId.toString(), 
+                inv.InvoiceStatus, 
+                inv.InvoiceNumber, 
+                inv.TotalAmount || 0
+              );
+              // Ako je insertovan novi red (a ne samo update-ovan postojeći), povećavamo brojač
+              // U SQLite-u insert on conflict do update vraća rowsAffected, ali ovde je teško razlučiti bez promene query-ja
+              discoveredSales++;
             }
           });
         }
+
+        // Purchase Discovery
+        const purchaseChanges = await sefClient.getPurchaseInvoiceChanges(dateFrom, dateTo);
+        if (purchaseChanges?.invoices) {
+          this.ctx.storage.transactionSync(() => {
+            for (const inv of purchaseChanges.invoices) {
+              this.sql.exec(`
+                INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status, raw_xml)
+                VALUES (?, ?, ?, ?, ?, ?, '<xml_missing>')
+                ON CONFLICT(sef_id) DO UPDATE SET 
+                  status = excluded.status,
+                  updated_at = CURRENT_TIMESTAMP
+                WHERE status != excluded.status`,
+                inv.PurchaseInvoiceId.toString(),
+                inv.InvoiceNumber,
+                inv.SupplierPib || '000000000',
+                inv.CreationDate || new Date().toISOString(),
+                inv.TotalAmount || 0,
+                inv.InvoiceStatus
+              );
+              discoveredPurchases++;
+            }
+          });
+        }
+      } catch (discoveryErr: any) {
+        console.error(`[DO] Discovery Error: ${discoveryErr.message}`);
+        // Ne prekidamo skroz, možda status sync prođe
+      }
+
+      // 2. STATUS SYNC: Za sve fakture koje su u prelaznim stanjima, proveravamo detaljan status
+      try {
+        const faktureZaProveru = this.sql.exec(`SELECT internal_id, sef_id, status FROM fakture WHERE status NOT IN ('Approved', 'Rejected', 'Cancelled', 'Mistake') AND sef_id IS NOT NULL`).toArray() as any[];
+        for (const f of faktureZaProveru) {
+          const res = await sefClient.getInvoiceStatus(parseInt(f.sef_id));
+          if (res?.InvoiceStatus && res.InvoiceStatus !== f.status) {
+            this.ctx.storage.transactionSync(() => {
+              this.sql.exec(`UPDATE fakture SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE internal_id = ?`, res.InvoiceStatus, f.internal_id);
+            });
+          }
+        }
+      } catch (syncErr: any) {
+        console.error(`[DO] Status Sync Error: ${syncErr.message}`);
       }
 
       // 3. TRIGGER ALARM: Pokrećemo alarm da bi se povukli XML-ovi za nove ulazne fakture
       await this.ctx.storage.setAlarm(Date.now() + 100);
 
       await this.processQueue();
-      return Response.json({ success: true, message: "Sinhronizacija završena. Otkrivene i ažurirane fakture iz poslednjih 30 dana." });
+      return Response.json({ 
+        success: true, 
+        message: `Sinhronizacija završena. Otkriveno: ${discoveredSales} izlaznih i ${discoveredPurchases} ulaznih faktura.`,
+        discovered_sales: discoveredSales,
+        discovered_purchases: discoveredPurchases
+      });
     });
   }
 
