@@ -2,7 +2,8 @@ import fs from 'fs';
 import https from 'https';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const pdf = require('pdf-parse');
+const pdfModule = require('pdf-parse');
+const pdf = pdfModule.PDFParse || pdfModule; // Fallback to module itself
 
 async function downloadAndExtract() {
   const url = process.argv[2];
