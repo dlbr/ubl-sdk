@@ -83,9 +83,9 @@ export class KlijentBaza extends DurableObject<Env> {
       baseUrl: this.env.SEF_API_URL ?? 'https://demoefaktura.mfin.gov.rs'
     });
 
-    const dateFrom = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const dateTo = new Date().toISOString().split('T')[0];
-
+    const dateFrom = (new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]) ?? '';
+    const dateTo = (new Date().toISOString().split('T')[0]) ?? '';
+    
     console.log(`[DO RPC] Pokrećem Tolerant Discovery za ${config.klijent_id || 'unknown'}`);
 
     let discoveredSales = 0;
