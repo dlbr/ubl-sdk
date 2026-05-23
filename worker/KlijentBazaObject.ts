@@ -147,7 +147,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json(config);
     });
 
-    this.app.get('/api/config/webhook-instructions', async () => {
+    this.app.get('/config/webhook-instructions', async () => {
       const config = this.sql.exec(`SELECT klijent_id, environment FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
       if (!config) return Response.json({ error: "Firma nije konfigurisana" }, { status: 404 });
       
@@ -212,7 +212,8 @@ export class KlijentBaza extends DurableObject<Env> {
       const validation = v.safeParse(SefInvoiceSchema, invoiceData);
       if (!validation.success) return Response.json({ error: "Invalid data", details: validation.issues }, { status: 422 });
 
-      const limit = await this.checkLimit(1, invoiceData);
+      const testNow = req.headers.get('X-Test-Now');
+      const limit = await this.checkLimit(1, invoiceData, testNow);
       if (!limit.moze) return Response.json(limit.error, { status: 402 });
 
       this.ctx.storage.transactionSync(() => {
@@ -226,7 +227,8 @@ export class KlijentBaza extends DurableObject<Env> {
 
     this.app.post('/fakture/batch', async ({ req }: RouterContext<Env>) => {
       const { fakture } = await req.json() as { fakture: any[] };
-      const limit = await this.checkLimit(fakture.length, fakture[0]);
+      const testNow = req.headers.get('X-Test-Now');
+      const limit = await this.checkLimit(fakture.length, fakture[0], testNow);
       if (!limit.moze) return Response.json(limit.error, { status: 402 });
 
       this.ctx.storage.transactionSync(() => {
@@ -308,7 +310,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return new Response(excelXml, { headers: { 'Content-Type': 'application/vnd.ms-excel', 'Content-Disposition': `attachment; filename="Poreska_Evidencija_${period}.xls"` } });
     });
 
-    this.app.post('/api/popdv/submit-draft', async ({ req }: RouterContext<Env>) => {
+    this.app.post('/popdv/submit-draft', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const period = url.searchParams.get('period');
       const pib = url.searchParams.get('pib');
@@ -326,7 +328,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ error: "Failed", details: res.error }, { status: 422 });
     });
 
-    this.app.post('/api/popdv/finalize', async ({ req }: RouterContext<Env>) => {
+    this.app.post('/popdv/finalize', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const period = url.searchParams.get('period');
       if (!period) return Response.json({ error: "Missing period" }, { status: 400 });
@@ -363,7 +365,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ success: true });
     });
 
-    this.app.post('/api/evidencija/eeo', async ({ req }: RouterContext<Env>) => {
+    this.app.post('/evidencija/eeo', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
       const period = data.poreski_period;
       const existing = this.sql.exec(`SELECT status FROM sef_poreske_evidencije_eeo WHERE poreski_period = ?`, period).toArray() as any[];
@@ -376,6 +378,22 @@ export class KlijentBaza extends DurableObject<Env> {
       const { status } = await req.json() as { status: string };
       this.sql.exec(`UPDATE konfiguracija SET status_pretplate = ? WHERE id = 1`, status);
       return Response.json({ success: true, status });
+    });
+    // Alias for internal calls
+    this.app.post('/admin/set-status', async ({ req }: RouterContext<Env>) => {
+      const { status } = await req.json() as { status: string };
+      this.sql.exec(`UPDATE konfiguracija SET status_pretplate = ? WHERE id = 1`, status);
+      return Response.json({ success: true, status });
+    });
+
+    this.app.post('/internal/clear-cache', async () => {
+      SefLiveValidator.clearCache();
+      return Response.json({ success: true, message: "Cache cleared" });
+    });
+    // Alias for internal calls
+    this.app.post('/internal/clear-cache', async () => {
+      SefLiveValidator.clearCache();
+      return Response.json({ success: true, message: "Cache cleared" });
     });
 
     this.app.post('/fakture/send-queued', async ({ req }: RouterContext<Env>) => {
@@ -514,7 +532,7 @@ export class KlijentBaza extends DurableObject<Env> {
     } catch (e) {}
   }
 
-  private async checkLimit(noviBroj: number, invoiceData?: SefInvoiceData): Promise<{ moze: boolean, error?: any }> {
+  private async checkLimit(noviBroj: number, invoiceData?: SefInvoiceData, testNowHeader?: string | null): Promise<{ moze: boolean, error?: any }> {
     const config = this.sql.exec(`SELECT plan_name, status_pretplate, limit_faktura FROM konfiguracija WHERE id = 1`).toArray()[0] as any || {};
     
     // OKLOP: KV Adapter for DI
@@ -525,8 +543,11 @@ export class KlijentBaza extends DurableObject<Env> {
       const kvRules = await SefLiveValidator.getLiveTaxRules(kvStore);
       if (kvRules?.ZAKONSKI_ROK_DANA) zakonskiRok = kvRules.ZAKONSKI_ROK_DANA;
     } catch (e) {}
+    
     if (config.status_pretplate === 'BLOKIRAN') {
-      const danas = new Date();
+      // OKLOP: Temporal synchronization for tests
+      const danas = testNowHeader ? new Date(testNowHeader) : new Date();
+      
       if (danas.getDate() <= zakonskiRok && invoiceData?.IssueDate) {
         const datumF = new Date(invoiceData.IssueDate);
         const prevM = new Date(); prevM.setMonth(danas.getMonth() - 1);

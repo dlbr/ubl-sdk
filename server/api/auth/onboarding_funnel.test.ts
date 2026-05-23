@@ -64,11 +64,9 @@ describe('Onboarding Funnel - End-to-End Simulation', () => {
     // 1. Mock-ujemo SEF API odgovor za verifikaciju ključa
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockImplementation(async (url) => {
-       if (url.includes('/purchase-invoice/v3/changes')) {
-         return new Response(JSON.stringify({ invoices: [] }), { status: 200 });
+       if (url.includes('/purchase-invoice/v3/changes') || url.includes('/get-unit-measures')) {
+         return new Response(JSON.stringify([{ Code: 'H87' }]), { status: 200 });
        }
-       // Ako statsHandler poziva stats, to ide kroz globalThis.fetch u integracionom testu? 
-       // Ne, statsHandler koristi doStub.fetch.
        return new Response(null, { status: 404 });
     });
 
@@ -100,9 +98,9 @@ describe('Onboarding Funnel - End-to-End Simulation', () => {
     const statsRes = { setHeader: vi.fn(), getHeader: () => '' } as any;
     const statsEvent = createEvent(statsReq, statsRes);
     
-    // Simuliramo dešifrovanu sesiju koju middleware postavlja
+    // Simuliramo dešifrovanu sesiju koju middleware postavlja (KRAJ v4.18.3 format)
     statsEvent.context.session = {
-      klijentId: 'mock_do_id_klijent_123456789',
+      klijentId: 'klijent_123456789',
       pib: '123456789'
     };
     statsEvent.context.cloudflare = { env: { ...mockEnv, SESSION_SECRET } };

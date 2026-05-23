@@ -370,7 +370,7 @@ app.get('/api/auth/session', auth(async (c: RouterContext<Env> & { klijentId?: s
 
 app.get('/api/webhook-setup', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/api/config/webhook-instructions'));
+  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/config/webhook-instructions'));
 }));
 
 app.get('/api/dashboard/stats', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
@@ -382,14 +382,17 @@ app.get('/api/dashboard/logs', auth(async (c: RouterContext<Env> & { klijentId?:
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/logs'));
 }));
-
-app.post('/api/dashboard/webhook', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
+app.post('/api/fakture/batch', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const telo = await c.req.json();
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/config', {
+
+  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/fakture/batch', {
     method: 'POST',
     body: JSON.stringify(telo),
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-Test-Now': c.req.headers.get('X-Test-Now') || ''
+    }
   }));
 }));
 
@@ -419,7 +422,7 @@ app.get('/api/analytics/export-excel', auth(async (c: RouterContext<Env> & { kli
 app.post('/api/analytics/popdv/submit-draft', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request(`http://durableobject/api/popdv/submit-draft${url.search}`, {
+  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request(`http://durableobject/popdv/submit-draft${url.search}`, {
     method: 'POST'
   }));
 }));
@@ -427,7 +430,7 @@ app.post('/api/analytics/popdv/submit-draft', auth(async (c: RouterContext<Env> 
 app.post('/api/analytics/popdv/finalize', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request(`http://durableobject/api/popdv/finalize${url.search}`, {
+  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request(`http://durableobject/popdv/finalize${url.search}`, {
     method: 'POST'
   }));
 }));
@@ -446,13 +449,15 @@ app.patch('/api/fakture/:id/odbitak', auth(async (c: RouterContext<Env> & { klij
 
 app.post('/api/fakture/send', auth(validateJson(SefInvoiceSchema, async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  
-  const doResponse = await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/fakture/send', { 
-    method: 'POST', 
-    body: JSON.stringify(c.validJson),
-    headers: { 'Content-Type': 'application/json' }
-  }));
 
+  const doResponse = await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/fakture/send', { 
+    method: 'POST',
+    body: JSON.stringify(c.validJson),
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-Test-Now': c.req.headers.get('X-Test-Now') || ''
+    }
+  }));
   if (doResponse.ok) {
     c.ctx.waitUntil(c.env.REGISTAR_DB.prepare(
       `UPDATE klijenti SET ima_aktivne_fakture = 1 WHERE klijent_id = ?`
@@ -465,16 +470,22 @@ app.post('/api/fakture/send', auth(validateJson(SefInvoiceSchema, async (c: Rout
 app.post('/api/fakture/batch', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const telo = await c.req.json();
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
-  
-  const doResponse = await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/fakture/batch', { 
-    method: 'POST', 
+
+  const doResponse = await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/fakture/batch', {
+    method: 'POST',
     body: JSON.stringify(telo),
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-Test-Now': c.req.headers.get('X-Test-Now') || ''
+    }
   }));
 
   if (doResponse.ok) {
-    await c.env.REGISTAR_DB.prepare(`UPDATE klijenti SET ima_aktivne_fakture = 1 WHERE klijent_id = ?`).bind(c.klijentId).run();
+    c.ctx.waitUntil(c.env.REGISTAR_DB.prepare(
+      `UPDATE klijenti SET ima_aktivne_fakture = 1 WHERE klijent_id = ?`
+    ).bind(c.klijentId).run());
   }
+
   return doResponse;
 }));
 

@@ -44,8 +44,8 @@ describe('Edge Session Management - Integracioni Testovi', () => {
   it('Scenario 1: Uspešan login mora izvršiti registraciju i generisati __Host- kolačić', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockImplementation(async (url) => {
-       if (url.includes('/purchase-invoice/v3/changes')) {
-         return new Response(JSON.stringify({ invoices: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+       if (url.includes('/get-unit-measures')) {
+         return new Response(JSON.stringify([{ Code: 'H87' }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
        }
        return new Response(null, { status: 404 });
     });

@@ -7,8 +7,12 @@
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "types": [
       "./worker-configuration.d.ts",
-      "node"
+      "node",
+      "@cloudflare/vitest-pool-workers"
     ],
+    "paths": {
+      "cloudflare:test": ["./node_modules/@cloudflare/vitest-pool-workers/dist/index.d.ts"]
+    },
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,

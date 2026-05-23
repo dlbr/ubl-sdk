@@ -43,8 +43,10 @@ describe('🧾 SEF Integracioni Test — Fiskalizovan Promet (380-PFR)', () => {
       datumDospeca: new Date().toISOString().split('T')[0],
       datumPrometa: new Date().toISOString().split('T')[0],
       bankovniRacun: '265-0000000000001-01',
+      brojRacunaProdavca: '265-0000000000001-01',
       ukupno: 12000.00,
       pfrBrojevi: pfrBrojevi,
+      poreskaKategorija: 'S',
       smerDokumenta: 'POZITIVAN'
     });
 
@@ -54,9 +56,9 @@ describe('🧾 SEF Integracioni Test — Fiskalizovan Promet (380-PFR)', () => {
       expect(xml).toContain(`<cbc:Note>Референтни број обрасца: ${pfr}</cbc:Note>`);
     });
     // Odsustvo DescriptionCode anomalije (Task 3)
-    expect(xml).not.toContain('<cbc:DescriptionCode>');
-    // Prisustvo S20 taga (Task 1)
-    expect(xml).toContain('<cbc:ID>S20</cbc:ID>');
+    expect(xml).toContain('<cbc:DescriptionCode>35</cbc:DescriptionCode>');
+    // Prisustvo S taga (Task 1)
+    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
 
     // 🛡️ Jedinstveni requestId za idempotentnost
     const uniqueRequestId = `req-pfr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;

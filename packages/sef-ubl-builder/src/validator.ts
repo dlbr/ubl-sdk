@@ -16,9 +16,10 @@ export interface KeyValueStore {
  */
 export class SefLiveValidator {
   private static cache: Map<string, any> = new Map();
-  private static CACHE_TTL = 300000; // 5 minutes in-memory
+  private static CACHE_TTL = (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') ? 0 : 300000;
 
   private static getCached(key: string) {
+    if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') return null;
     const entry = this.cache.get(key);
     if (entry && (Date.now() - entry.timestamp < this.CACHE_TTL)) {
       return entry.data;
@@ -28,6 +29,13 @@ export class SefLiveValidator {
 
   private static setCache(key: string, data: any) {
     this.cache.set(key, { data, timestamp: Date.now() });
+  }
+
+  /**
+   * Resets the in-memory cache. Primary use case is for testing dynamic rule changes.
+   */
+  static clearCache() {
+    this.cache.clear();
   }
 
   /**

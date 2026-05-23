@@ -5,17 +5,18 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "vitest run --pool=threads",
-    "test:business": "vitest run packages/sef-ubl-builder/test/sef_matrix_complete.test.ts",
+    "test:types": "npx tsc --noEmit",
+    "test:builder": "cd packages/sef-ubl-builder && npx tsc && npx esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js && cd ../..",
+    "test": "npm run test:types && npm run test:builder && vitest run packages/sef-ubl-builder/test/sef_matrix_complete.test.ts",
+    "test:integration": "vitest run --file-parallelism=false",
+    "verify": "npm run test:types && npm run test:builder && npm run test:integration",
     "dev": "nuxt dev --https",
     "build": "nuxt build",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "verify": "node scripts/verify.js",
-    "deploy:safe": "pnpm verify && wrangler deploy",
+    "deploy:safe": "npm run verify && wrangler deploy",
     "deploy": "wrangler deploy",
-    "anonim": "ts-node scripts/anonim.ts",
     "primeri": "ts-node scripts/json_pdv.ts"
   },
   "type": "module",

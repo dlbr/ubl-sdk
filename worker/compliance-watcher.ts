@@ -9,6 +9,11 @@ export interface Env {
   PORESKI_KV: KVNamespace;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_CHAT_ID: string;
+  SEF_UBL_ARHIVA?: R2Bucket; // Optional for watcher
+  INVOICE_QUEUE?: Queue;
+  AI?: any;
+  SEF_QUEUE?: Queue;
+  ADMIN_API_KEY?: string;
 }
 
 interface SefUpdate {

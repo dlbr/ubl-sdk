@@ -15,9 +15,15 @@ export default defineConfig({
       wrangler: { configPath: './wrangler.toml' },
     }),
   ],
-  // 🛡️ VITEST 4 REWORK: poolOptions is now a top-level property of the main config
-  
   test: {
+    // 🛡️ NO ISOLATION + SINGLE THREAD to prevent esbuild deadlocks
+    pool: 'threads',
+    poolOptions: {
+      threads: {
+        singleThread: true,
+        isolate: false,
+      }
+    },
     include: [
       'worker/**/*.{test,spec}.ts', 
       'server/**/*.{test,spec}.ts', 
@@ -26,7 +32,7 @@ export default defineConfig({
     ],
     setupFiles: ['./test/vitest-setup.ts'],
     reporters: ['default', 'hanging-process'],
-    testTimeout: 30000,
-    teardownTimeout: 5000,
+    testTimeout: 60000,
+    teardownTimeout: 10000,
   }
 });

@@ -1,9 +1,9 @@
+import { env } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 
 describe('SEF Bridge - Dead Letter Queue test', () => {
   it('treba da prebaci fakturu u DLQ nakon 3 neuspela pokušaja', async () => {
-    // Inicijalizacija bindings-a
-    const env = getMiniflareBindings();
+    // Koristimo env direktno iz cloudflare:test
     const invoiceId = 'POISON-PILL-001';
     
     // 1. Simuliramo payload koji uvek izaziva grešku
@@ -18,15 +18,16 @@ describe('SEF Bridge - Dead Letter Queue test', () => {
             if (i < 3) {
                 console.log(`Retry pokušaj ${i + 1}`);
             } else {
-                // Nakon 3 pokušaja, prebacujemo u DLQ
-                await env.SEF_DLQ.put(invoiceId, JSON.stringify({ error: e.message, payload: badPayload }));
+                // Nakon 3 pokušaja, prebacujemo u DLQ (u ovom slučaju SEF_UBL_ARHIVA ili namenska KV/D1 tabela za DLQ)
+                // U našoj arhitekturi v4.x DLQ je obično Queue mehanizam, ali ovde testiramo izolaciju u R2/KV
+                await env.PORESKI_KV.put(`dlq:${invoiceId}`, JSON.stringify({ error: e.message, payload: badPayload }));
                 console.log(`☠️ Faktura ${invoiceId} arhivirana u DLQ.`);
             }
         }
     }
 
-    // 3. Forenzička provera: Faktura mora biti u DLQ
-    const dlqEntry = await env.SEF_DLQ.get(invoiceId);
+    // 3. Forenzička provera
+    const dlqEntry = await env.PORESKI_KV.get(`dlq:${invoiceId}`);
     expect(dlqEntry).toBeDefined();
     expect(JSON.parse(dlqEntry!).error).toBe('XSD Validation Failed');
     

@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect, beforeEach, beforeAll, vi, afterAll } from 'vitest';
 import { app } from '../worker/index';
+import { SefLiveValidator } from '../packages/sef-ubl-builder/src/index';
 
 describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
 
@@ -24,6 +25,14 @@ describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
   });
 
   beforeEach(async () => {
+    // OKLOP: Očisti keš validatora u test memoriji
+    SefLiveValidator.clearCache();
+
+    const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
+    const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
+    // OKLOP: Očisti keš i u Durable Object memoriji
+    await klijentDO.fetch(new Request('http://do/internal/clear-cache', { method: 'POST' }));
+
     // 1. Resetuj KV
     await env.PORESKI_KV.delete("DRZAVNA_PORESKA_PRAVILA_RS");
     
@@ -45,12 +54,12 @@ describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sef_api_key: 'test_key' })
     }));
-
-    await klijentDO.fetch(new Request('http://do/admin/set-status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'BLOKIRAN' })
-    }));
+// 2. Blokiraj pretplatu
+await klijentDO.fetch(new Request('http://do/admin/set-status', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ status: 'BLOKIRAN' })
+}));
 
     // Simuliramo datum: 11. Maj 2026.
     vi.setSystemTime(new Date('2026-05-11T10:00:00Z'));
@@ -83,7 +92,11 @@ describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
 
     const res1 = await app.request('/api/fakture/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Klijent-ID': klijentId },
+      headers: { 
+        'Content-Type': 'application/json', 
+        'X-Klijent-ID': klijentId,
+        'X-Test-Now': new Date('2026-05-11T10:00:00Z').toISOString()
+      },
       body: JSON.stringify(invoiceData)
     }, env, mockCtx as any);
 
@@ -94,10 +107,17 @@ describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
       ZAKONSKI_ROK_DANA: 10,
       OPSTA_STOPA_PDV: 20.00
     }));
+    
+    // OKLOP: Dajemo Miniflare-u trenutak da propagira KV izmenu
+    await new Promise(r => setTimeout(resolve => r(resolve), 100));
 
     const res2 = await app.request('/api/fakture/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Klijent-ID': klijentId },
+      headers: { 
+        'Content-Type': 'application/json', 
+        'X-Klijent-ID': klijentId,
+        'X-Test-Now': new Date('2026-05-11T10:00:00Z').toISOString()
+      },
       body: JSON.stringify({ ...invoiceData, ID: "FAK-APRIL-2" })
     }, env, mockCtx as any);
 

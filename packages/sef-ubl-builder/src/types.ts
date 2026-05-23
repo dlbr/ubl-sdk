@@ -147,6 +147,7 @@ export interface ValutaData extends BaseInvoiceData {
 export interface FiskalizacijaData extends BaseInvoiceData {
   ukupno: number;
   pfrBrojevi: string[];
+  brojRacunaProdavca?: string;
 }
 
 export interface KonacnaValutaData extends BaseInvoiceData {

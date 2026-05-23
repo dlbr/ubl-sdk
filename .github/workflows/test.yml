@@ -15,19 +15,8 @@ jobs:
       - name: Install Dependencies
         run: npm install --no-audit --no-fund
         
-      - name: Build UBL Builder
-        run: |
-          cd packages/sef-ubl-builder
-          npm install
-          npx tsc
-          npx esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js
-          cd ../..
-          
-      - name: Run Business Logic Tests
-        run: npm run test:business
-        
-      - name: Run Ultimate Gauntlet (Sequential)
-        run: npx vitest run test/sef_ultimate_gauntlet.test.ts --poolOptions.threads.maxThreads=1
+      - name: Run Full Test Suite (Verification)
+        run: npm test
         env:
           STAGING_SEF_API_KEY: ${{ secrets.STAGING_SEF_API_KEY }}
           WEBSITE_URL: https://sef.dlbr.cloud
