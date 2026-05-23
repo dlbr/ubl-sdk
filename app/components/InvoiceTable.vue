@@ -27,10 +27,6 @@ const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleString('sr-RS')
 }
 
-watch(currentPage, () => {
-  refresh()
-})
-
 defineExpose({ refresh })
 </script>
 
@@ -38,7 +34,14 @@ defineExpose({ refresh })
   <div class="space-y-4">
     <div class="flex justify-between items-center px-1">
       <h2 class="text-lg font-bold text-gray-900">Sve Fakture</h2>
-      <button @click="() => refresh()" class="text-sm text-blue-600 font-medium hover:underline">Osveži listu</button>
+      <button 
+        @click="() => refresh()" 
+        :disabled="pending"
+        class="text-sm text-blue-600 font-medium hover:underline disabled:text-gray-400 disabled:no-underline flex items-center gap-1"
+      >
+        <span v-if="pending" class="animate-spin text-[10px]">🔄</span>
+        {{ pending ? 'Osvežavanje...' : 'Osveži listu' }}
+      </button>
     </div>
 
     <div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { getStats, getLogs, triggerSync, updateWebhook } = useSefApi()
+const { getStats, getLogs, triggerSync, updateWebhook, downloadPppdvTxt } = useSefApi()
 const { klijentId, login, logout } = useSefAuth()
 
 const invoiceTableRef = ref()
@@ -9,6 +9,9 @@ const { data: statsData, pending: statsPending, refresh: refreshStats } = await 
 const { data: logsData, pending: logsPending, refresh: refreshLogs } = await getLogs()
 
 const syncLoading = ref(false)
+const downloadLoading = ref(false)
+const webhookLoading = ref(false)
+const cancelLoading = ref(false)
 const webhookUrl = ref('')
 const showCopyStatus = ref(false)
 const currentPeriod = ref(new Date().toISOString().substring(0, 7))
@@ -50,10 +53,39 @@ const handleSync = async () => {
   }
 }
 
+const handleDownload = async () => {
+  if (downloadLoading.value) return
+  downloadLoading.value = true
+  try {
+    await downloadPppdvTxt(currentPeriod.value)
+  } finally {
+    downloadLoading.value = false
+  }
+}
+
 const handleWebhookUpdate = async () => {
-  if (!webhookUrl.value) return
-  await updateWebhook(webhookUrl.value)
-  alert('Webhook uspešno ažuriran!')
+  if (!webhookUrl.value || webhookLoading.value) return
+  webhookLoading.value = true
+  try {
+    await updateWebhook(webhookUrl.value)
+    alert('Webhook uspešno ažuriran!')
+  } finally {
+    webhookLoading.value = false
+  }
+}
+
+const handleCancelSubscription = async () => {
+  if (cancelLoading.value) return
+  if (!confirm('Da li ste sigurni da želite da otkažete obnovu pretplate?')) return
+  
+  cancelLoading.value = true
+  try {
+    const { cancelSubscription } = useSefApi()
+    await cancelSubscription()
+    await refreshStats()
+  } finally {
+    cancelLoading.value = false
+  }
 }
 
 const copyId = async () => {
@@ -166,7 +198,14 @@ const copyId = async () => {
           <div class="space-y-4">
             <div class="flex justify-between items-center">
               <h2 class="text-base font-bold text-gray-900">Zadnje greške na SEF API-ju</h2>
-              <button @click="() => refreshLogs()" class="text-xs text-blue-600 font-semibold hover:underline">Osveži logove</button>
+              <button 
+                @click="() => refreshLogs()" 
+                :disabled="logsPending"
+                class="text-xs text-blue-600 font-semibold hover:underline disabled:text-gray-400 disabled:no-underline flex items-center gap-1"
+              >
+                <span v-if="logsPending" class="animate-spin text-[10px]">🔄</span>
+                {{ logsPending ? 'Osvežavanje...' : 'Osveži logove' }}
+              </button>
             </div>
             <div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
               <table class="w-full text-left border-collapse">
@@ -234,9 +273,10 @@ const copyId = async () => {
             </div>
             <button 
               @click="handleWebhookUpdate"
-              class="w-full py-2.5 bg-gray-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-sm"
+              :disabled="webhookLoading"
+              class="w-full py-2.5 bg-gray-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-sm disabled:opacity-50"
             >
-              Sačuvaj Webhook URL
+              {{ webhookLoading ? 'Sačuvavanje...' : 'Sačuvaj Webhook URL' }}
             </button>
           </div>
           
@@ -247,10 +287,16 @@ const copyId = async () => {
               Preuzmite zvanični <strong>.txt</strong> fajl za automatski uvoz poreske prijave na portal <strong>demoppppdv.mfin.gov.rs</strong>.
             </p>
             <button 
-              @click="() => useSefApi().downloadPppdvTxt(currentPeriod)"
-              class="w-full py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-green-100 flex items-center justify-center gap-2"
+              @click="handleDownload"
+              :disabled="downloadLoading"
+              class="w-full py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-green-100 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span>📥</span> Preuzmi za e-Porezi
+              <template v-if="downloadLoading">
+                <span class="animate-spin text-lg">⏳</span> Generisanje...
+              </template>
+              <template v-else>
+                <span>📥</span> Preuzmi za e-Porezi
+              </template>
             </button>
           </div>
 
@@ -271,10 +317,11 @@ const copyId = async () => {
             </div>
             <button 
               v-if="statsData?.status_pretplate === 'AKTIVAN'"
-              @click="async () => { await useSefApi().cancelSubscription(); refreshStats(); }"
-              class="w-full py-2 border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-200 rounded-lg text-[10px] font-bold uppercase transition"
+              @click="handleCancelSubscription"
+              :disabled="cancelLoading"
+              class="w-full py-2 border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-200 rounded-lg text-[10px] font-bold uppercase transition disabled:opacity-50"
             >
-              Otkaži obnovu
+              {{ cancelLoading ? 'Otkazivanje...' : 'Otkaži obnovu' }}
             </button>
             <div v-else-if="statsData?.status_pretplate === 'U_OTKAZNOM_ROKU'" class="text-[10px] text-orange-600 font-bold text-center bg-orange-50 p-2 rounded-lg">
               Automatska obnova je isključena.
