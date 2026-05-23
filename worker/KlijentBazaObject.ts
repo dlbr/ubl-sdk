@@ -457,18 +457,23 @@ export class KlijentBaza extends DurableObject<Env> {
         config.environment = 'production';
       }
 
+      // OKLOP: Eksplicitni override URL-a za produkciju jer smo videli da env.SEF_API_URL nekada kasni ili je pogrešan
+      const targetUrl = config.environment === 'production' 
+        ? 'https://efaktura.mfin.gov.rs/api' 
+        : this.env.SEF_API_URL;
+
       const sefClient = new SefClient({ 
         apiKey: config.sef_api_key, 
         environment: config.environment, 
-        baseUrl: this.env.SEF_API_URL 
+        baseUrl: targetUrl 
       });
 
-      // 1. DISCOVERY: Širimo opseg na 90 dana (v1 API)
+      // 1. DISCOVERY: Širimo opseg na 120 dana (v1 API)
       const now = new Date();
       const dateTo = now.toISOString();
-      const dateFrom = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      const dateFrom = new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000).toISOString();
 
-      console.log(`[DO] Pokrećem DUBOKI discovery (90 dana) za ${config.klijent_id} [${config.environment}]`);
+      console.log(`[DO] Pokrećem AGRESIVNI discovery (120 dana) za ${config.klijent_id} na ${targetUrl}`);
 
       let discoveredSales = 0;
       let discoveredPurchases = 0;
@@ -478,7 +483,7 @@ export class KlijentBaza extends DurableObject<Env> {
         const salesIds = await sefClient.getSalesInvoiceIds(dateFrom, dateTo);
         if (salesIds && salesIds.length > 0) {
           console.log(`[DO] Otkriveno ${salesIds.length} izlaznih faktura. Preuzimam detalje i XML-ove...`);
-          // Uzimamo samo zadnjih 50 faktura za duboki discovery
+          // Uzimamo samo zadnjih 50 faktura za agresivni discovery
           const idsToFetch = salesIds.slice(-50);
           for (const id of idsToFetch) {
             const [details, xml] = await Promise.all([
@@ -524,7 +529,7 @@ export class KlijentBaza extends DurableObject<Env> {
             }
           }
         } else {
-          console.log(`[DO] Nema otkrivenih izlaznih faktura u opsegu 90 dana.`);
+          console.log(`[DO] Nema otkrivenih izlaznih faktura (Response: ${JSON.stringify(salesIds)})`);
         }
 
         // Purchase Discovery (v1 overview endpoint)
@@ -552,10 +557,10 @@ export class KlijentBaza extends DurableObject<Env> {
           });
         }
       } catch (discoveryErr: any) {
-        console.error(`[DO] Discovery Error: ${discoveryErr.message}`);
+        console.error(`[DO] Discovery Fatal Error: ${discoveryErr.message}`);
       }
 
-      // 2. STATUS SYNC: Za sve fakture koje su u prelaznim stanjima, proveravamo detaljan status
+      // 2. STATUS SYNC
       try {
         const faktureZaProveru = this.sql.exec(`SELECT internal_id, sef_id, status FROM fakture WHERE status NOT IN ('Approved', 'Rejected', 'Cancelled', 'Mistake') AND sef_id IS NOT NULL`).toArray() as any[];
         for (const f of faktureZaProveru) {
@@ -570,16 +575,17 @@ export class KlijentBaza extends DurableObject<Env> {
         console.error(`[DO] Status Sync Error: ${syncErr.message}`);
       }
 
-      // 3. TRIGGER ALARM: Pokrećemo alarm da bi se povukli XML-ovi za nove ulazne fakture
+      // 3. TRIGGER ALARM
       await this.ctx.storage.setAlarm(Date.now() + 100);
 
       await this.processQueue();
       return Response.json({ 
         success: true, 
-        message: `Sinhronizacija završena. Otkriveno: ${discoveredSales} izlaznih i ${discoveredPurchases} ulaznih faktura. Okruženje: ${config.environment}`,
+        message: `Agresivna sinhronizacija završena. Otkriveno: ${discoveredSales} izlaznih i ${discoveredPurchases} ulaznih faktura. Okruženje: ${config.environment}`,
         discovered_sales: discoveredSales,
         discovered_purchases: discoveredPurchases,
-        environment: config.environment
+        environment: config.environment,
+        target_url: targetUrl
       });
     });
   }

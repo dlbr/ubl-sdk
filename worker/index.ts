@@ -369,6 +369,12 @@ app.get('/api/webhook-setup', auth(async (c: RouterContext<Env> & { klijentId?: 
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/config/webhook-instructions'));
 }));
 
+// OKLOP: Alias za webhook-setup da bi se izbegli potencijalni 404 problemi sa trailing slash
+app.get('/api/webhook-setup/', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
+  return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/config/webhook-instructions'));
+}));
+
 app.get('/api/dashboard/stats', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   return await c.env.KLIJENT_BAZA_OBJECT.get(doId).fetch(new Request('http://durableobject/stats'));
