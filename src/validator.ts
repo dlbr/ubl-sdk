@@ -1,99 +1,42 @@
-/**
- * SefLiveValidator - Dynamic validation based on state-cached metadata.
- * Uses Cloudflare KV as a fast Edge source for official state codebooks.
- */
-/**
- * KeyValueStore - Abstraction layer for metadata retrieval.
- * Allows SEF Bridge logic to be agnostic of the storage provider.
- */
-export interface KeyValueStore {
-  get(key: string): Promise<any>;
-}
+import { SefPoreskiJsonBuilder } from './builder-poreski.js';
+import { PAYMENT_MEANS } from './constants.js';
+import { Normalizer } from './normalizer.js';
 
 /**
- * SefLiveValidator - Dynamic validation based on abstract state storage.
- * Aligned with 2026 MFIN forensic rules.
+ * MasterValidator v4.19.1 — Centralni Digitalni Štit + Harmonizacija
  */
-export class SefLiveValidator {
-  private static cache: Map<string, any> = new Map();
-  private static CACHE_TTL = (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') ? 0 : 300000;
+export class MasterValidator {
+  static validate(data: any) {
+    // 1. Harmonizacija
+    const cleanData = Normalizer.sanitize(data);
 
-  private static getCached(key: string) {
-    if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') return null;
-    const entry = this.cache.get(key);
-    if (entry && (Date.now() - entry.timestamp < this.CACHE_TTL)) {
-      return entry.data;
+    // 2. Validacija
+    const errors: string[] = [];
+
+    if (!cleanData.ID || !cleanData.broj || !cleanData.datumIzdavanja || !cleanData.pibProdavca || !cleanData.pibKupca) {
+      errors.push("Nedostaju obavezna polja (ID, broj, datum, PIB)");
     }
-    return null;
-  }
 
-  private static setCache(key: string, data: any) {
-    this.cache.set(key, { data, timestamp: Date.now() });
-  }
+    const amount = parseFloat(cleanData.LegalMonetaryTotal?.PayableAmount || cleanData.osnovica || 0);
+    if (amount < 0) errors.push("Iznos ne može biti negativan");
 
-  /**
-   * Resets the in-memory cache. Primary use case is for testing dynamic rule changes.
-   */
-  static clearCache() {
-    this.cache.clear();
-  }
-
-  /**
-   * Validates unit measure code against the provided store (e.g., H87, PCE, KGM).
-   */
-  static async validateUnitMeasure(code: string, store: KeyValueStore): Promise<boolean> {
-    const cached = this.getCached("unit_measures");
-    if (cached) return cached.includes(code);
-
-    try {
-      const raw = await store.get("DRZAVNE_JEDINICE_MERA") as string[] | null;
-      if (!raw) {
-        console.warn("[Validator] STORE_MISSING_FALLBACK: Koristim dozvoljene default kodove (H87, PCE, KGM, DAY, HUR).");
-        const defaults = ["H87", "PCE", "KGM", "DAY", "HUR"];
-        return defaults.includes(code);
-      }
-
-      this.setCache("unit_measures", raw);
-      return raw.includes(code);
-    } catch (e) {
-      console.error("[Validator] STORE_FETCH_ERROR for units:", e);
-      return true; // Permissive fallback
+    if (cleanData.InvoiceTypeCode === '386') {
+      if (!cleanData.datumUplate) errors.push("Avans zahteva datum uplate");
     }
-  }
-
-  /**
-   * Retrieves live tax rules from the provided store.
-   */
-  static async getLiveTaxRules(store: KeyValueStore): Promise<any> {
-    const cached = this.getCached("tax_rules");
-    if (cached) return cached;
-
-    const defaults = {
-      ZAKONSKI_ROK_DANA: 10,
-      OPSTA_STOPA_PDV: 20.00,
-      POSEBNA_STOPA_PDV: 10.00,
-      DOZVOLJENE_KATEGORIJE: ["S", "E", "AE", "Z", "OE", "R", "G", "O", "N", "S20", "S10", "AE20", "AE10"],
-      UBL_VERSION: "2.1",
-      COMPLIANCE_YEAR: 2026
-    };
-
-    try {
-      const raw = await store.get("DRZAVNA_PORESKA_PRAVILA_RS");
-      const rules = raw || defaults;
-      this.setCache("tax_rules", rules);
-      return rules;
-    } catch (e) {
-      console.error("[Validator] STORE_FETCH_ERROR for tax rules:", e);
-      return defaults;
+    
+    if (cleanData.InvoiceTypeCode === '381') {
+      if (!cleanData.billingReference?.invoiceId) errors.push("381 zahteva BillingReference");
+      if (!cleanData.correctionReason) errors.push("Razlog korekcije je obavezan");
     }
-  }
 
-  /**
-   * Validates tax category code against the provided store.
-   */
-  static async validateTaxCategory(category: string, store: KeyValueStore): Promise<boolean> {
-    const rules = await this.getLiveTaxRules(store);
-    const allowed = rules.DOZVOLJENE_KATEGORIJE || ["S", "E", "AE", "Z", "OE", "R", "G", "O", "N"];
-    return allowed.includes(category);
+    if (cleanData.valuta !== 'RSD' && (!cleanData.exchangeRate || cleanData.exchangeRate <= 0)) {
+      errors.push("Strana valuta zahteva kurs");
+    }
+
+    if (errors.length > 0) {
+      throw new Error(`🛡️ [MasterValidator] FATAL: ${errors.join(' | ')}`);
+    }
+    
+    return cleanData;
   }
 }
