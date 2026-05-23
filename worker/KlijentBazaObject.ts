@@ -150,69 +150,61 @@ export class KlijentBaza extends DurableObject<Env> {
     const dateTo = formatSefDate(now);
     const dateFrom = formatSefDate(new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000));
 
-    console.log(`[Agresivni Integrator] Pokrećem discovery za ${config.klijent_id || 'UNK'} [${dateFrom} do ${dateTo}]`);
+    console.log(`[Agresivni Integrator] Pokrećem DUBOKU pretragu za ${config.klijent_id || 'UNK'} [od ${dateFrom}]`);
 
     let discoveredSales = 0;
     let discoveredPurchases = 0;
 
-    // --- SALES STAGE 1: Dual-Path Changes (Modern & Standard) ---
+    // --- SALES DISCOVERY: The "Gold Mine" Search ---
     try {
-      // Pokušavamo v3, ako ne prođe, automatski hvatamo grešku i idemo dalje
-      const salesChanges = await sefClient.getSalesInvoiceChanges(dateFrom, dateTo).catch(() => null);
-      
-      const processSales = (invoices: any[]) => {
+      const invoices = await sefClient.getSalesInvoiceSearch(dateFrom);
+      if (invoices && Array.isArray(invoices) && invoices.length > 0) {
+        console.log(`[Agresivni Integrator] POGODAK PRETRAGE: ${invoices.length} faktura pronađeno.`);
         this.ctx.storage.transactionSync(() => {
           for (const inv of invoices) {
+            // Mapiramo SmallInvoiceDto na našu bazu
             this.sql.exec(`
               INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
               VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, azurirano_u = CURRENT_TIMESTAMP WHERE status != excluded.status`, 
-              `SEF-v3-${inv.SalesInvoiceId}`, inv.SalesInvoiceId.toString(), inv.InvoiceStatus, inv.InvoiceNumber, inv.TotalAmount || 0
+              ON CONFLICT(sef_id) DO UPDATE SET 
+                status = excluded.status,
+                azurirano_u = CURRENT_TIMESTAMP
+              WHERE status != excluded.status`, 
+              `SEF-SEARCH-${inv.invoiceId}`, 
+              inv.invoiceId.toString(), 
+              inv.status || 'Approved', 
+              inv.invoiceNumber || `DISC-${inv.invoiceId}`, 
+              inv.sumWithVat || 0
             );
             discoveredSales++;
           }
         });
-      };
-
-      if (salesChanges?.invoices && salesChanges.invoices.length > 0) {
-        processSales(salesChanges.invoices);
       } else {
-        // Ako v3 nije našao ništa, probamo IDs (v1) jer je on najpouzdaniji za "mrtve" fakture
-        const salesIds = await sefClient.getSalesInvoiceIds(dateFrom, dateTo);
-        if (salesIds && salesIds.length > 0) {
-          console.log(`[Agresivni Integrator] v1/ids POGODAK: ${salesIds.length} faktura.`);
-          const idsToFetch = salesIds.slice(-50);
-          for (const id of idsToFetch) {
-            const xml = await sefClient.downloadSalesInvoiceXml(id);
-            if (xml) {
-              const payableRegex = /<[^>]*?PayableAmount\b[^>]*>([^<]*?)<\//i;
-              const numberRegex = /<[^>]*?ID\b[^>]*>([^<]*?)<\//i;
-              const amountMatch = xml.match(payableRegex);
-              const numberMatch = xml.match(numberRegex);
-              const amount = amountMatch ? parseFloat(amountMatch[1]) : 0;
-              const number = numberMatch ? numberMatch[1] : `ID-${id}`;
-
-              this.ctx.storage.transactionSync(() => {
-                this.sql.exec(`
-                  INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
-                  VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                  ON CONFLICT(sef_id) DO UPDATE SET azurirano_u = CURRENT_TIMESTAMP`, 
-                  `SEF-v1-${id}`, id.toString(), 'Approved', number, amount
-                );
-                discoveredSales++;
-              });
+        console.warn(`[Agresivni Integrator] Primarna pretraga prazna. Pokušavam fallback na v3/changes...`);
+        const salesChanges = await sefClient.getSalesInvoiceChanges(dateFrom, dateTo).catch(() => null);
+        if (salesChanges?.invoices && salesChanges.invoices.length > 0) {
+          this.ctx.storage.transactionSync(() => {
+            for (const inv of salesChanges.invoices) {
+              this.sql.exec(`
+                INSERT INTO fakture (internal_id, sef_id, status, broj_fakture, iznos, azurirano_u)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, azurirano_u = CURRENT_TIMESTAMP WHERE status != excluded.status`, 
+                `SEF-v3-${inv.SalesInvoiceId}`, inv.SalesInvoiceId.toString(), inv.InvoiceStatus, inv.InvoiceNumber, inv.TotalAmount || 0
+              );
+              discoveredSales++;
             }
-          }
+          });
         }
       }
     } catch (e: any) {
       console.error(`[Agresivni Integrator] Greška u Sales Discovery: ${e.message}`);
     }
 
-    // --- PURCHASE STAGE: Overview + v3 Fallback ---
+    // --- PURCHASE DISCOVERY: Robustni v1 Overview ---
     try {
       const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo).catch(() => null);
       if (purchaseOverviews && Array.isArray(purchaseOverviews) && purchaseOverviews.length > 0) {
+        console.log(`[Agresivni Integrator] NABAVKA POGODAK: ${purchaseOverviews.length} faktura.`);
         this.ctx.storage.transactionSync(() => {
           for (const inv of purchaseOverviews) {
             this.sql.exec(`
@@ -224,21 +216,6 @@ export class KlijentBaza extends DurableObject<Env> {
             discoveredPurchases++;
           }
         });
-      } else {
-        const purchaseChanges = await sefClient.getPurchaseInvoiceChanges(dateFrom, dateTo).catch(() => null);
-        if (purchaseChanges?.invoices && purchaseChanges.invoices.length > 0) {
-          this.ctx.storage.transactionSync(() => {
-            for (const inv of purchaseChanges.invoices) {
-              this.sql.exec(`
-                INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status, raw_xml)
-                VALUES (?, ?, ?, ?, ?, ?, '<xml_missing>')
-                ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP WHERE status != excluded.status`,
-                inv.PurchaseInvoiceId.toString(), inv.InvoiceNumber, inv.SupplierPib || '000000000', inv.CreationDate || new Date().toISOString(), inv.TotalAmount || 0, inv.InvoiceStatus
-              );
-              discoveredPurchases++;
-            }
-          });
-        }
       }
     } catch (e: any) {
       console.error(`[Agresivni Integrator] Greška u Purchase Discovery: ${e.message}`);

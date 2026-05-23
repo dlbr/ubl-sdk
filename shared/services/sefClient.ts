@@ -294,6 +294,53 @@ export class SefClient {
   }
 
   /**
+   * Performs an exhaustive search for sales invoices (v1 hidden endpoint).
+   * This is the "Gold Mine" endpoint that returns full details in a list.
+   */
+  async getSalesInvoiceSearch(dateFrom: string, page: number = 1): Promise<any[] | null> {
+    const endpoint = `${this.baseUrl}/api/publicApi/sales-invoice/search`;
+
+    const body = {
+      pagingOptions: {
+        pageIndex: page,
+        pageSize: 100
+      },
+      restrictions: [
+        {
+          field: "Invoice_AccountingDateUtc_After",
+          values: [dateFrom]
+        }
+      ],
+      sortItems: [
+        {
+          sortColumn: "Invoice_InvoiceDateUtc",
+          sortDirection: "Descending"
+        }
+      ]
+    };
+
+    try {
+      console.log(`[SEF Mreža] Pozivam sales/search (Agresivna Pretraga): ${endpoint}`);
+      const response = await this.fetchWithTimeout(endpoint, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(body)
+      }, 30000);
+
+      if (!response.ok) {
+        console.error(`[SEF Mreža] Neuspešan poziv sales/search (${response.status}):`, await response.text());
+        return null;
+      }
+
+      const data = await response.json() as any;
+      return data.invoices || [];
+    } catch (err) {
+      console.error('[SEF Mreža] Fatalna greška tokom sales pretrage:', err);
+      return null;
+    }
+  }
+
+  /**
    * Fetches sales invoice changes (POST as per v1 swagger, but using v3 path if available).
    */
   async getSalesInvoiceChanges(dateFrom: string, dateTo: string, page: number = 1): Promise<SefChangesResponse | null> {
