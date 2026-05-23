@@ -116,15 +116,11 @@ app.get('/api/webhook-setup', auth(async (c: RouterContext<Env> & { klijentId?: 
   return Response.json(await klijentDO.getWebhookInstructions());
 }));
 
-app.get('/api/debug/discover', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
-  const config = await c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!)).getConfig();
-  const sefClient = new SefClient({ 
-    apiKey: config.sef_api_key, 
-    environment: config.environment, 
-    baseUrl: c.env.SEF_API_URL 
-  });
-  const results = await sefClient.discoverInvoices();
-  return Response.json({ success: true, results });
+app.get('/api/debug/dump-db', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
+  const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+  const data = await klijentDO.dumpDatabase();
+  return Response.json(data);
 }));
 
 app.get('/api/dashboard/stats', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {

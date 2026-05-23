@@ -264,9 +264,10 @@ export class KlijentBaza extends DurableObject<Env> {
     return { success: true, id: invoiceData.ID };
   }
 
-  async clearCache() {
-    SefLiveValidator.clearCache();
-    return { success: true, message: "Cache cleared" };
+  async dumpDatabase() {
+    const fakture = this.sql.exec(`SELECT * FROM fakture`).toArray();
+    const purchase = this.sql.exec(`SELECT * FROM sef_purchase_invoices`).toArray();
+    return { fakture, purchase };
   }
 
   async cancelSubscription() {
