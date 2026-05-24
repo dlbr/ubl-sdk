@@ -23,7 +23,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11
 
       - name: 🛠️ Podešavanje Node.js okruženja
         uses: actions/setup-node@v4
@@ -33,7 +33,7 @@ jobs:
           cache-dependency-path: 'pnpm-lock.yaml'
 
       - name: 📦 Instalacija zavisnosti
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: 📄 Ekstrakcija teksta iz PDF-a i AI analiza
         id: ai_patcher
