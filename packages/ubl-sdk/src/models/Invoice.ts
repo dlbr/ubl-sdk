@@ -11,6 +11,7 @@ export interface Party {
   zip?: string;
   maticniBroj?: string;
   jbkjs?: string;
+  bankAccount?: string;
 }
 
 export interface InvoiceLine {
@@ -36,19 +37,27 @@ export interface Invoice {
   };
   typeCode: '380' | '381' | '383' | '386';
   currency: string;
+  exchangeRate?: number;
   documentDirection?: 'POZITIVAN' | 'NEGATIVAN';
   seller: Party;
   buyer: Party;
   lines: InvoiceLine[];
-  note?: string;
+  notes?: string[];
   
   // Reference handling
   billingReference?: {
     id: string;
     date: string;
+    typeCode?: string;
   };
   
   // Totals (can be calculated but often provided)
   taxTotal?: number;
   payableAmount?: number;
+  
+  // SEF specific extensions
+  prepaymentReference?: {
+    id: string;
+    taxAmount: number;
+  };
 }

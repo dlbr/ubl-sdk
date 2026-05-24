@@ -27,7 +27,9 @@ describe('🚀 Final Run — Izvozna Faktura (380) sa MasterValidator-om', () =>
         correctionReason: 'test' 
     };
 
-    expect(MasterValidator.validate(validationData)).toBe(true);
+    const clean = MasterValidator.validate(validationData);
+    expect(clean).toBeDefined();
+    expect(clean.ID).toBe('INV-001');
     
     // 2. Generisanje XML-a (Sloj 1)
     const xml = SefUblBuilder.build(validationData);

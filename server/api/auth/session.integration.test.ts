@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createEvent, eventHandler, setCookie, getHeader } from 'h3'; 
+import { mockEvent, eventHandler, setCookie, getHeader, getResponseHeaders } from 'h3'; 
 import authMiddleware from '../../middleware/auth';
 import loginHandler from './login.post';
 import logoutHandler from './logout.post';
@@ -9,6 +9,8 @@ import logoutHandler from './logout.post';
  * Verno preslikano okruženje Cloudflare mreže za testiranje.
  */
 const mockEnv = {
+  ADMIN_API_KEY: 'admin_secret',
+  SEF_API_URL: 'https://demoefaktura.mfin.gov.rs',
   REGISTAR_DB: {
     prepare: () => ({
       bind: () => ({
@@ -50,24 +52,20 @@ describe('Edge Session Management - Integracioni Testovi', () => {
        return new Response(null, { status: 404 });
     });
 
-    const req = { method: 'POST', url: '/api/auth/login', headers: { 'content-type': 'application/json' } } as any;
-    const headers = new Headers();
-    const res = {
-      getHeader: (n: string) => headers.get(n) || '',
-      setHeader: (n: string, v: string) => { headers.set(n, v); }
-    } as any;
-    
-    const event = createEvent(req, res);
-    event.context.cloudflare = { env: mockEnv };
-
-    event.context.__body = {
+    const body = {
       pib: '100000010',
       api_key: 'sk_live_blindirani_kljuc_2026',
       operater: 'Knjigovođa Nikola',
       password: 'lozinka123'
     };
-    Object.defineProperty(event.node.req, 'body', { value: event.context.__body });
 
+    const event = mockEvent('/api/auth/login', { 
+      method: 'POST', 
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    event.context.cloudflare = { env: mockEnv };
+    
     const odgovor = await loginHandler(event);
     
     globalThis.fetch = originalFetch;
@@ -75,7 +73,8 @@ describe('Edge Session Management - Integracioni Testovi', () => {
     expect(odgovor.success).toBe(true);
 
     // VERIFIKACIJA OKLOPA: Da li je postavljen ispravan __Host- kolačić?
-    const setCookieHeader = headers.get('set-cookie');
+    const respHeaders = getResponseHeaders(event);
+    const setCookieHeader = respHeaders['set-cookie'] as string;
     expect(setCookieHeader).toBeDefined();
     expect(setCookieHeader).toContain('__Host-sef_bridge_session=');
     expect(setCookieHeader).toContain('HttpOnly');
@@ -84,9 +83,7 @@ describe('Edge Session Management - Integracioni Testovi', () => {
   });
 
   it('Scenario 2: Auth middleware mora blokirati zahteve bez prisutnog kolačića', async () => {
-    const req = { method: 'GET', url: '/api/analytics/pppdv-summary?period=2026-05', headers: {} } as any;
-    const res = { getHeader: () => '', setHeader: () => {} } as any;
-    const event = createEvent(req, res);
+    const event = mockEvent('/api/analytics/pppdv-summary?period=2026-05', { method: 'GET' });
     event.context.cloudflare = { env: mockEnv };
 
     await expect(authMiddleware(event)).rejects.toThrowError(/Sesija istekla ili ne postoji/);
@@ -95,37 +92,27 @@ describe('Edge Session Management - Integracioni Testovi', () => {
   it('Scenario 3: Auth middleware mora detektovati i odbiti hakovan/korigovan kolačić', async () => {
     const malformedCookieValue = 'mockIv.KORUMPIRANI_BASE64_STRING_KOJI_NE_MOZE_DA_SE_DESIFRUJE';
     
-    const req = { 
+    const event = mockEvent('/api/analytics/pppdv-summary?period=2026-05', { 
       method: 'GET', 
-      url: '/api/analytics/pppdv-summary?period=2026-05', 
       headers: { 'cookie': `__Host-sef_bridge_session=${malformedCookieValue}` } 
-    } as any;
-    
-    const res = { getHeader: () => '', setHeader: () => {} } as any;
-    const event = createEvent(req, res);
+    });
     event.context.cloudflare = { env: mockEnv };
 
     await expect(authMiddleware(event)).rejects.toThrowError(/Kompromitovana ili nevalidna sesija/);
   });
 
   it('Scenario 4: Uspešan logout mora izbrisati kolačić i zabraniti keširanje stanja', async () => {
-    const req = { method: 'POST', url: '/api/auth/logout', headers: {} } as any;
-    const headers = new Headers();
-    const res = {
-      getHeader: (n: string) => headers.get(n) || '',
-      setHeader: (n: string, v: string) => { headers.set(n, v); }
-    } as any;
-
-    const event = createEvent(req, res);
+    const event = mockEvent('/api/auth/logout', { method: 'POST' });
     event.context.cloudflare = { env: mockEnv };
 
     const odgovor = await logoutHandler(event);
     expect(odgovor.success).toBe(true);
 
-    const setCookieHeader = headers.get('set-cookie');
+    const respHeaders = getResponseHeaders(event);
+    const setCookieHeader = respHeaders['set-cookie'] as string;
     expect(setCookieHeader).toContain('Max-Age=0');
 
-    const cacheControlHeader = headers.get('cache-control');
+    const cacheControlHeader = respHeaders['cache-control'] as string;
     expect(cacheControlHeader).toContain('no-store, must-revalidate');
   });
 });

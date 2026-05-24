@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createEvent, setCookie } from 'h3'; 
+import { mockEvent, setCookie } from 'h3'; 
 import loginHandler from './login.post';
 import statsHandler from '../dashboard/stats.get';
 
@@ -8,6 +8,8 @@ import statsHandler from '../dashboard/stats.get';
  * Verifikuje putanju od landing stranice do aktiviranog dashboard-a sa ispravnim limitima.
  */
 const mockEnv = {
+  ADMIN_API_KEY: 'admin_secret',
+  SEF_API_URL: 'https://demoefaktura.mfin.gov.rs',
   REGISTAR_DB: {
     prepare: () => ({
       bind: () => ({
@@ -24,13 +26,13 @@ const mockEnv = {
         if (url.endsWith('/config')) {
           if (options?.method === 'POST') {
              const data = JSON.parse(options.body);
-             globalThis.__MOCK_DO_CONFIG = data; // Privremeno čuvamo za verifikaciju
+             (globalThis as any).__MOCK_DO_CONFIG = data; // Privremeno čuvamo za verifikaciju
              return { ok: true };
           }
           return { ok: false }; // Prvi poziv (pre aktivacije) je 404
         }
         if (url.endsWith('/stats')) {
-          const config = globalThis.__MOCK_DO_CONFIG || {};
+          const config = (globalThis as any).__MOCK_DO_CONFIG || {};
           return {
             ok: true,
             json: async () => ({
@@ -71,39 +73,35 @@ describe('Onboarding Funnel - End-to-End Simulation', () => {
     });
 
     // 2. SIMULACIJA: Onboarding POST zahtev (kao sa forme)
-    const loginReq = { 
-      method: 'POST', 
-      url: '/api/auth/login',
-      headers: { 'content-type': 'application/json' }
-    } as any;
-    const loginRes = { setHeader: vi.fn(), getHeader: () => '' } as any;
-    const loginEvent = createEvent(loginReq, loginRes);
-    loginEvent.context.cloudflare = { env: { ...mockEnv, SESSION_SECRET } };
-    
-    // Payload sa Landing -> Onboarding parametrima
-    loginEvent.context.__body = {
+    const body = {
       pib: '123456789',
       api_key: 'sk_test_valid_key',
       operater: 'Test Operater',
       plan: 'Plus',
       billing_period: 'annual'
     };
-    Object.defineProperty(loginEvent.node.req, 'body', { value: loginEvent.context.__body });
+
+    const loginEvent = mockEvent('/api/auth/login', { 
+      method: 'POST', 
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    loginEvent.context.cloudflare = { env: { ...mockEnv, SESSION_SECRET } as any };
 
     const loginResponse = await loginHandler(loginEvent);
     expect(loginResponse.success).toBe(true);
 
     // 3. SIMULACIJA: Dashboard STATS zahtev (nakon login-a)
-    const statsReq = { method: 'GET', url: '/api/dashboard/stats' } as any;
-    const statsRes = { setHeader: vi.fn(), getHeader: () => '' } as any;
-    const statsEvent = createEvent(statsReq, statsRes);
+    const statsEvent = mockEvent('/api/dashboard/stats', { method: 'GET' });
     
     // Simuliramo dešifrovanu sesiju koju middleware postavlja (KRAJ v4.18.3 format)
     statsEvent.context.session = {
       klijentId: 'klijent_123456789',
-      pib: '123456789'
-    };
-    statsEvent.context.cloudflare = { env: { ...mockEnv, SESSION_SECRET } };
+      pib: '123456789',
+      operater: 'Test Operater',
+      createdAt: Date.now()
+    } as any;
+    statsEvent.context.cloudflare = { env: { ...mockEnv, SESSION_SECRET } as any };
 
     const statsResponse = await statsHandler(statsEvent) as any;
 
@@ -111,16 +109,14 @@ describe('Onboarding Funnel - End-to-End Simulation', () => {
     expect(statsResponse.success).toBe(true);
     expect(statsResponse.usage.limit).toBe(500); // Mesečni Plus limit (defaultni se vraća iz DO stats ako nismo implementirali punu annual logiku u mocku)
     
-    // Zapravo, naša logika u KlijentBazaObject kaže:
-    // if (billing_period === 'annual') limit = parseInt(config.limit_faktura_godisnje)
-    
     // Proverimo šta je stvarno sačuvano u "Durable Objectu"
-    expect(globalThis.__MOCK_DO_CONFIG.plan).toBe('Plus');
-    expect(globalThis.__MOCK_DO_CONFIG.billing_period).toBe('annual');
-    expect(globalThis.__MOCK_DO_CONFIG.limit).toBe(500);
-    expect(globalThis.__MOCK_DO_CONFIG.licenca_istice_timestamp).toBeDefined();
+    const mockConfig = (globalThis as any).__MOCK_DO_CONFIG;
+    expect(mockConfig.plan).toBe('Plus');
+    expect(mockConfig.billing_period).toBe('annual');
+    expect(mockConfig.limit).toBe(500);
+    expect(mockConfig.licenca_istice_timestamp).toBeDefined();
 
     globalThis.fetch = originalFetch;
-    delete globalThis.__MOCK_DO_CONFIG;
+    delete (globalThis as any).__MOCK_DO_CONFIG;
   });
 });

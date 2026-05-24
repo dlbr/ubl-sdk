@@ -2,7 +2,7 @@ import { defineEventHandler, readBody, createError, type H3Event } from 'h3';
 
 export default defineEventHandler(async (event: H3Event) => {
   // Provera administratorskog Bearer ključa (Sistemska bezbednost)
-  const authHeader = event.node.req.headers['authorization'];
+  const authHeader = event.node!.req.headers['authorization'];
   const env = event.context.cloudflare.env;
   if (!authHeader || authHeader !== `Bearer ${env.ADMIN_API_KEY}`) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized admin access.' });

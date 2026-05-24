@@ -1,4 +1,4 @@
-import { Invoice, Party, InvoiceLine, SefPoreskaKategorija } from '../models/Invoice.js';
+import type { Invoice, Party, InvoiceLine, SefPoreskaKategorija } from '../models/Invoice.js';
 import { XmlTransformer } from '../transformer/XmlTransformer.js';
 import { MasterValidator } from '../validator.js';
 
@@ -39,7 +39,8 @@ export class InvoiceBuilder {
   }
 
   setNote(note: string): this {
-    this.invoice.note = note;
+    if (!this.invoice.notes) this.invoice.notes = [];
+    this.invoice.notes.push(note);
     return this;
   }
 

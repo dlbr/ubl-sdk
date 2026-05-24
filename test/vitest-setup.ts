@@ -12,7 +12,4 @@ afterAll(async () => {
   if (globalThis.gc) {
     globalThis.gc();
   }
-
-  // 3. 🛡️ STOP ALARMU: Ne pozivamo process.exit(). Puštamo Vitest 4 pool 
-  // da sam ugasi Miniflare nit. Koristimo --forceExit u CLI komandi.
 });

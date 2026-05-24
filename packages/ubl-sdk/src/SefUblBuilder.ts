@@ -1,6 +1,6 @@
 import { SefPoreskiJsonBuilder } from './services/PoreskiJsonBuilder.js';
 import { MasterValidator } from './validator.js';
-import { Invoice, Party, InvoiceLine, SefPoreskaKategorija } from './models/Invoice.js';
+import type { Invoice, Party, InvoiceLine, SefPoreskaKategorija } from './models/Invoice.js';
 import { XmlTransformer } from './transformer/XmlTransformer.js';
 
 /**
@@ -22,11 +22,16 @@ export class SefUblBuilder {
       issueDate: data.IssueDate || data.datumIzdavanja || data.datum || new Date().toISOString().split('T')[0],
       dueDate: data.DueDate || data.datumDospeca || data.datumUplate || data.datumIzdavanja || new Date().toISOString().split('T')[0],
       paymentDate: data.datumUplate || data.avansDatum,
-      deliveryDate: data.ActualDeliveryDate || data.datumPrometa,
+      deliveryDate: type === '386' ? undefined : (data.ActualDeliveryDate || data.datumPrometa),
       typeCode: type,
       currency: data.DocumentCurrencyCode || data.valuta || 'RSD',
+      exchangeRate: parseFloat(data.PaymentExchangeRate || data.exchangeRate || 0),
       documentDirection: data.smerDokumenta,
-      note: data.Note || data.note,
+      notes: [
+        ...(data.notes || []),
+        data.note || data.Note ? (data.note || data.Note) : null,
+        ...(data.pfrBrojevi || []).map((pfr: string) => `Референтни број обрасца: ${pfr}`)
+      ].filter(Boolean),
       seller: {
         pib: data.Supplier?.Pib || data.pibProdavca,
         name: data.Supplier?.Name || data.nazivProdavca || 'PRODAVAC',
@@ -34,7 +39,8 @@ export class SefUblBuilder {
         city: data.Supplier?.Address?.City || data.gradProdavca,
         zip: data.Supplier?.Address?.Zip || data.postanskiBrojProdavca,
         maticniBroj: data.Supplier?.Mb || data.maticniBrojProdavca,
-        jbkjs: data.Supplier?.Jbkjs || data.jbkjsProdavca
+        jbkjs: data.Supplier?.Jbkjs || data.jbkjsProdavca,
+        bankAccount: data.Supplier?.BankAccount || data.brojRacunaProdavca || '840-0000000000000-00'
       },
       buyer: {
         pib: data.Customer?.Pib || data.pibKupca,
@@ -47,7 +53,12 @@ export class SefUblBuilder {
       },
       billingReference: (data.BillingReference?.ID || data.referentniRacun || data.avansBroj) ? {
         id: data.BillingReference?.ID || data.referentniRacun || data.avansBroj,
-        date: data.BillingReference?.IssueDate || data.referentniDatum || data.avansDatum || ''
+        date: data.BillingReference?.IssueDate || data.referentniDatum || data.avansDatum || '',
+        typeCode: data.tipReferentnogDokumenta || (data.avansBroj ? '386' : '380')
+      } : undefined,
+      prepaymentReference: (data.avansBroj || data.odbitakAvansaSaPdv || data.avansPdv || data.iznosSmanjenjaPdv || (type === '386' && data.referentniRacun)) ? {
+        id: data.avansBroj || data.referentniRacun,
+        taxAmount: parseFloat(data.avansPdv || data.iznosSmanjenjaPdv || (data.odbitakAvansaSaPdv ? (parseFloat(data.odbitakAvansaSaPdv) - (parseFloat(data.odbitakAvansaSaPdv) / 1.2)) : 0))
       } : undefined,
       invoicePeriod: data.InvoicePeriod ? {
         startDate: data.InvoicePeriod.StartDate,

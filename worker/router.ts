@@ -17,6 +17,7 @@ type Route = {
 
 export type RouterType<Env = any> = {
   fetch: (req: Request, env: Env, ctx: ExecutionContext) => Promise<Response>
+  request: (path: string, options: any, env: Env, ctx?: ExecutionContext) => Promise<Response>
   on: (method: string, path: string, handler: Handler<Env>) => RouterType<Env>
   [key: string]: any 
 }
@@ -70,6 +71,12 @@ export const Router = <Env = any>(): RouterType<Env> => {
       return new Response('Not Found', { status: 404 })
     },
 
+    request: async (path: string, options: any, env: Env, ctx?: ExecutionContext): Promise<Response> => {
+      const url = `http://localhost${path}`
+      const req = new Request(url, options)
+      return core.fetch(req, env, ctx || ({ waitUntil: () => {} } as any))
+    },
+
     on: (method: string, path: string, handler: Handler<Env>) => {
       routes.push({ path, method: method.toUpperCase(), handler })
       return receiverProxy
@@ -78,7 +85,7 @@ export const Router = <Env = any>(): RouterType<Env> => {
 
   const receiverProxy = new Proxy(core as unknown as RouterType<Env>, {
     get: (target, prop: string) => {
-      if (prop === 'fetch' || prop === 'on') return (target as any)[prop].bind(target)
+      if (prop === 'fetch' || prop === 'on' || prop === 'request') return (target as any)[prop].bind(target)
       return (path: string, handler: Handler<Env>) => target.on(prop, path, handler)
     },
   })

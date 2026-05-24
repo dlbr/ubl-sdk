@@ -56,6 +56,8 @@ describe('⛓️ SEF Master Gauntlet — Sve Opcije, Poreski Režimi i Edge Odbr
       description: '2. Avansni Račun (Tip 386 - Kategorija S)',
       payload: () => SefUblBuilder.buildAvansni({
         ...getCleanMetadata(`FKT-386-AV-${Date.now()}`),
+        datumUplate: new Date().toISOString().split('T')[0],
+        referentniRacun: 'PONUDA-100',
         osnovica: 5000.00, pdv: 500.00, poreskaKategorija: 'S', pdvStopa: 10.00
       }),
       assertions: (xml: string) => {
@@ -106,6 +108,10 @@ describe('⛓️ SEF Master Gauntlet — Sve Opcije, Poreski Režimi i Edge Odbr
     it(scenario.description, async () => {
       const xml = scenario.payload();
       scenario.assertions(xml);
+
+      if (scenario.id === 'OPCIJA-1' || scenario.id === 'OPCIJA-5') {
+        console.log(`XML FOR ${scenario.id}:`, xml);
+      }
 
       if (index > 0) await delay(1500);
 

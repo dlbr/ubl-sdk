@@ -8,8 +8,11 @@ describe('Agency Dashboard & Multi-Tenant Security Suite', () => {
   let MASTER_TOKEN = '';
   let AGENCY_ID = '';
 
-  const kIdAlfa = 'klijent_102345678';
-  const kIdBeta = 'klijent_987654321';
+  const suffix = Date.now();
+  const kIdAlfa = `klijent_alfa_${suffix}`;
+  const kIdBeta = `klijent_beta_${suffix}`;
+  const testPibAlfa = `111${suffix}`.substring(0, 9);
+  const testPibBeta = `222${suffix}`.substring(0, 9);
 
   beforeAll(async () => {
     // Inicijalizacija centralne baze
@@ -22,12 +25,6 @@ describe('Agency Dashboard & Multi-Tenant Security Suite', () => {
 
     await env.REGISTAR_DB.prepare(`CREATE TABLE IF NOT EXISTS agencije (id TEXT PRIMARY KEY, naziv TEXT, email TEXT, master_token TEXT UNIQUE, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP)`).run();
     await env.REGISTAR_DB.prepare(`CREATE TABLE IF NOT EXISTS agencija_klijenti (agencija_id TEXT, pib_firme TEXT PRIMARY KEY, tenant_klijent_id TEXT, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP)`).run();
-  });
-
-  beforeEach(async () => {
-    await env.REGISTAR_DB.prepare("DELETE FROM klijenti").run();
-    await env.REGISTAR_DB.prepare("DELETE FROM agencije").run();
-    await env.REGISTAR_DB.prepare("DELETE FROM agencija_klijenti").run();
 
     // 1. Registruj agenciju
     const regRes = await app.request('/api/agency/register', {
@@ -40,7 +37,7 @@ describe('Agency Dashboard & Multi-Tenant Security Suite', () => {
     AGENCY_ID = regData.agencyId;
 
     // 2. Registruj i konfiguriši dva klijenta (Alfa i Beta)
-    for (const id of [kIdAlfa, kIdBeta]) {
+    for (const [id, pib] of [[kIdAlfa, testPibAlfa], [kIdBeta, testPibBeta]]) {
       await env.REGISTAR_DB.prepare("INSERT INTO klijenti (klijent_id, naziv) VALUES (?, ?)")
         .bind(id, `Firma ${id}`).run();
       
@@ -57,13 +54,13 @@ describe('Agency Dashboard & Multi-Tenant Security Suite', () => {
     await app.request('/api/agency/link-client', {
       method: 'POST',
       headers: { 'X-Agency-Token': MASTER_TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pib_firme: '102345678', tenant_id: kIdAlfa })
+      body: JSON.stringify({ pib_firme: testPibAlfa, tenant_id: kIdAlfa })
     }, env);
 
     await app.request('/api/agency/link-client', {
       method: 'POST',
       headers: { 'X-Agency-Token': MASTER_TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pib_firme: '987654321', tenant_id: kIdBeta })
+      body: JSON.stringify({ pib_firme: testPibBeta, tenant_id: kIdBeta })
     }, env);
   });
 
@@ -77,7 +74,7 @@ describe('Agency Dashboard & Multi-Tenant Security Suite', () => {
     const data = await res.json() as any;
     expect(data.klijenti.length).toBe(2);
     
-    const alfa = data.klijenti.find((k: any) => k.pib === '102345678');
+    const alfa = data.klijenti.find((k: any) => k.pib === testPibAlfa);
     expect(alfa.krediti).toBe(100);
     expect(alfa.status).toBe('AKTIVAN');
   });

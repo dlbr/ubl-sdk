@@ -48,10 +48,10 @@ describe('SefUblParser - Forensic Edge Hardening Tests', () => {
 
     expect(result.invoiceId).toBe(invoiceId);
     expect(result.items).toHaveLength(1);
-    expect(result.items[0].itemName).toBe('Premium Beton-Blokovi');
-    expect(result.items[0].unitCode).toBe('TNE'); // Provera da li je zadržana tona umesto fallback šifre
-    expect(result.items[0].lineExtensionAmount).toBe(15000.00);
-    expect(result.taxes[0].taxCategoryCode).toBe('S');
+    expect(result.items?.[0]?.itemName).toBe('Premium Beton-Blokovi');
+    expect(result.items?.[0]?.unitCode).toBe('TNE'); // Provera da li je zadržana tona umesto fallback šifre
+    expect(result.items?.[0]?.lineExtensionAmount).toBe(15000.00);
+    expect(result.taxes?.[0]?.taxCategoryCode).toBe('S');
   });
 
   it('Scenario 2: Treba da izoluje root poreze od poreza na nivou stavke i ignorise prljave razmake i navodnike u atributima', () => {
@@ -85,10 +85,10 @@ describe('SefUblParser - Forensic Edge Hardening Tests', () => {
 
     const result = SefUblParser.extract(malformedAttributesXml, invoiceId);
 
-    expect(result.items[0].unitCode).toBe('KGM'); // Kilogrami uspešno mapirani uprkos tabulatorima i jednostrukim navodnicima
+    expect(result.items?.[0]?.unitCode).toBe('KGM'); // Kilogrami uspešno mapirani uprkos tabulatorima i jednostrukim navodnicima
     expect(result.taxes).toHaveLength(1);
-    expect(result.taxes[0].taxCategoryCode).toBe('AE'); // Provera poreza na nivou celog dokumenta (Reverzibilna obaveza)
-    expect(result.taxes[0].taxAmount).toBe(250.00);
+    expect(result.taxes?.[0]?.taxCategoryCode).toBe('AE'); // Provera poreza na nivou celog dokumenta (Reverzibilna obaveza)
+    expect(result.taxes?.[0]?.taxAmount).toBe(250.00);
   });
 
   it('Scenario 3: Treba da baci kontrolisanu grešku ako Valibot presretne nevalidne tipove podataka u XML-u', () => {

@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { SefInvoiceData } from '../shared/types/sef';
+import type { SefInvoiceData } from '../shared/types/sef';
 
 describe('KlijentBaza: SEF E2E Integration', () => {
   const klijentId = 'klijent_test_pib';
@@ -97,7 +97,7 @@ describe('KlijentBaza: SEF E2E Integration', () => {
     await klijentDO.fetch(new Request('http://do/test/seed', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'RESET_LEDGER', saldo: 0 })
+      body: JSON.stringify({ config: { limit_faktura: 0 } })
     }));
 
     const invoiceData: any = {

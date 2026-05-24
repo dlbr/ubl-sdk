@@ -2,7 +2,7 @@ import { defineEventHandler, createError, type H3Event } from 'h3';
 
 export default defineEventHandler(async (event: H3Event) => {
   const session = event.context.session;
-  if (!session) throw createError({ statusCode: 401, statusMessage: 'Niste autorizovani.' });
+  if (!session || !session.pib) throw createError({ statusCode: 401, statusMessage: 'Niste autorizovani.' });
 
   const env = event.context.cloudflare.env;
 

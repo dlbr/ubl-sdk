@@ -2,21 +2,50 @@
 
 exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 1. Avansna Faktura (386) sa obračunatim PDV-om 1`] = `
 "<?xml version="1.0" encoding="utf-8"?>
-<Invoice 
-  xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
-  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
-  xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
-  xmlns:sbt="http://faktura.mfin.gov.rs/sefs/ubl/standard-business-document-extension-2">
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
   
   <cec:UBLExtensions>
     <cec:UBLExtension>
       <cec:ExtensionContent>
-        <sbt:SrbDtExt>
+        <sbt:SrbDtExt xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
           <sbt:InvoicedPrepaymentAmount>
             <cbc:ID>PONUDA-1</cbc:ID>
-            <cac:TaxTotal><cbc:TaxAmount currencyID="RSD">200.00</cbc:TaxAmount></cac:TaxTotal>
+            <cac:TaxTotal>
+              <cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>
+              <cac:TaxSubtotal>
+                <cbc:TaxableAmount currencyID="RSD">0.00</cbc:TaxableAmount>
+                <cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>
+                <cac:TaxCategory>
+                  <cbc:ID>S</cbc:ID>
+                  <cbc:Percent>20.00</cbc:Percent>
+                  <cac:TaxScheme>
+                    <cbc:ID>VAT</cbc:ID>
+                  </cac:TaxScheme>
+                </cac:TaxCategory>
+              </cac:TaxSubtotal>
+            </cac:TaxTotal>
           </sbt:InvoicedPrepaymentAmount>
+          <sbt:ReducedTotals>
+            <cac:TaxTotal>
+              <cbc:TaxAmount currencyID="RSD">200.00</cbc:TaxAmount>
+              <cac:TaxSubtotal>
+                <cbc:TaxableAmount currencyID="RSD">1000.00</cbc:TaxableAmount>
+                <cbc:TaxAmount currencyID="RSD">200.00</cbc:TaxAmount>
+                <cac:TaxCategory>
+                  <cbc:ID>S</cbc:ID>
+                  <cbc:Percent>20.00</cbc:Percent>
+                  <cac:TaxScheme>
+                    <cbc:ID>VAT</cbc:ID>
+                  </cac:TaxScheme>
+                </cac:TaxCategory>
+              </cac:TaxSubtotal>
+            </cac:TaxTotal>
+            <cac:LegalMonetaryTotal>
+              <cbc:TaxExclusiveAmount currencyID="RSD">1000.00</cbc:TaxExclusiveAmount>
+              <cbc:TaxInclusiveAmount currencyID="RSD">1200.00</cbc:TaxInclusiveAmount>
+              <cbc:PayableAmount currencyID="RSD">1200.00</cbc:PayableAmount>
+            </cac:LegalMonetaryTotal>
+          </sbt:ReducedTotals>
         </sbt:SrbDtExt>
       </cec:ExtensionContent>
     </cec:UBLExtension>
@@ -24,9 +53,24 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 1. A
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>AV-1</cbc:ID>
   <cbc:IssueDate>2026-05-20</cbc:IssueDate>
+  <cbc:DueDate>2026-05-20</cbc:DueDate>
   <cbc:InvoiceTypeCode>386</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
+  
+  <cac:InvoicePeriod>
+    <cbc:StartDate>2026-05-20</cbc:StartDate>
+    <cbc:EndDate>2026-05-20</cbc:EndDate>
+    <cbc:DescriptionCode>432</cbc:DescriptionCode>
+  </cac:InvoicePeriod>
+  
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>PONUDA-1</cbc:ID>
+      <cbc:IssueDate>2026-05-20</cbc:IssueDate>
+      <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
   
   <cac:AccountingSupplierParty>
     <cac:Party>
@@ -58,7 +102,13 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 1. A
     </cac:Party>
   </cac:AccountingCustomerParty>
   
-  <cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode></cac:PaymentMeans>
+  
+  <cac:PaymentMeans>
+    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>840-0000000000000-00</cbc:ID>
+    </cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>
   
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="RSD">200.00</cbc:TaxAmount>
@@ -103,21 +153,50 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 1. A
 
 exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 2. Konačna faktura sa zatvaranjem avansa (380) 1`] = `
 "<?xml version="1.0" encoding="utf-8"?>
-<Invoice 
-  xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
-  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
-  xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
-  xmlns:sbt="http://faktura.mfin.gov.rs/sefs/ubl/standard-business-document-extension-2">
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
   
   <cec:UBLExtensions>
     <cec:UBLExtension>
       <cec:ExtensionContent>
-        <sbt:SrbDtExt>
+        <sbt:SrbDtExt xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
           <sbt:InvoicedPrepaymentAmount>
             <cbc:ID>AV-1</cbc:ID>
-            <cac:TaxTotal><cbc:TaxAmount currencyID="RSD">300.00</cbc:TaxAmount></cac:TaxTotal>
+            <cac:TaxTotal>
+              <cbc:TaxAmount currencyID="RSD">100.00</cbc:TaxAmount>
+              <cac:TaxSubtotal>
+                <cbc:TaxableAmount currencyID="RSD">500.00</cbc:TaxableAmount>
+                <cbc:TaxAmount currencyID="RSD">100.00</cbc:TaxAmount>
+                <cac:TaxCategory>
+                  <cbc:ID>S</cbc:ID>
+                  <cbc:Percent>20.00</cbc:Percent>
+                  <cac:TaxScheme>
+                    <cbc:ID>VAT</cbc:ID>
+                  </cac:TaxScheme>
+                </cac:TaxCategory>
+              </cac:TaxSubtotal>
+            </cac:TaxTotal>
           </sbt:InvoicedPrepaymentAmount>
+          <sbt:ReducedTotals>
+            <cac:TaxTotal>
+              <cbc:TaxAmount currencyID="RSD">200.00</cbc:TaxAmount>
+              <cac:TaxSubtotal>
+                <cbc:TaxableAmount currencyID="RSD">1000.00</cbc:TaxableAmount>
+                <cbc:TaxAmount currencyID="RSD">200.00</cbc:TaxAmount>
+                <cac:TaxCategory>
+                  <cbc:ID>S</cbc:ID>
+                  <cbc:Percent>20.00</cbc:Percent>
+                  <cac:TaxScheme>
+                    <cbc:ID>VAT</cbc:ID>
+                  </cac:TaxScheme>
+                </cac:TaxCategory>
+              </cac:TaxSubtotal>
+            </cac:TaxTotal>
+            <cac:LegalMonetaryTotal>
+              <cbc:TaxExclusiveAmount currencyID="RSD">1000.00</cbc:TaxExclusiveAmount>
+              <cbc:TaxInclusiveAmount currencyID="RSD">1200.00</cbc:TaxInclusiveAmount>
+              <cbc:PayableAmount currencyID="RSD">1200.00</cbc:PayableAmount>
+            </cac:LegalMonetaryTotal>
+          </sbt:ReducedTotals>
         </sbt:SrbDtExt>
       </cec:ExtensionContent>
     </cec:UBLExtension>
@@ -125,9 +204,24 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 2. K
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>KON-1</cbc:ID>
   <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+  <cbc:DueDate>2026-05-24</cbc:DueDate>
   <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
+  
+  <cac:InvoicePeriod>
+    <cbc:StartDate>2026-05-24</cbc:StartDate>
+    <cbc:EndDate>2026-05-24</cbc:EndDate>
+    <cbc:DescriptionCode>35</cbc:DescriptionCode>
+  </cac:InvoicePeriod>
+  
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>AV-1</cbc:ID>
+      <cbc:IssueDate>2026-05-21</cbc:IssueDate>
+      <cbc:DocumentTypeCode>386</cbc:DocumentTypeCode>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
   
   <cac:AccountingSupplierParty>
     <cac:Party>
@@ -159,7 +253,13 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 2. K
     </cac:Party>
   </cac:AccountingCustomerParty>
   
-  <cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode></cac:PaymentMeans>
+  
+  <cac:PaymentMeans>
+    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>840-0000000000000-00</cbc:ID>
+    </cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>
   
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="RSD">300.00</cbc:TaxAmount>
@@ -179,7 +279,8 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 2. K
     <cbc:LineExtensionAmount currencyID="RSD">1500.00</cbc:LineExtensionAmount>
     <cbc:TaxExclusiveAmount currencyID="RSD">1500.00</cbc:TaxExclusiveAmount>
     <cbc:TaxInclusiveAmount currencyID="RSD">1800.00</cbc:TaxInclusiveAmount>
-    <cbc:PayableAmount currencyID="RSD">1800.00</cbc:PayableAmount>
+    <cbc:PrepaidAmount currencyID="RSD">600.00</cbc:PrepaidAmount>
+    <cbc:PayableAmount currencyID="RSD">1200.00</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
   
   <cac:InvoiceLine>
@@ -221,31 +322,23 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 2. K
 
 exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 3. Knjižno Odobrenje / Smanjenje (381) — Pozitivni iznosi u CreditNote 1`] = `
 "<?xml version="1.0" encoding="utf-8"?>
-<CreditNote 
-  xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
-  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
-  xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
-  xmlns:sbt="http://faktura.mfin.gov.rs/sefs/ubl/standard-business-document-extension-2">
+<CreditNote xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
   
-  <cec:UBLExtensions>
-    <cec:UBLExtension>
-      <cec:ExtensionContent>
-        <sbt:SrbDtExt>
-          <sbt:InvoicedPrepaymentAmount>
-            <cbc:ID>KON-1</cbc:ID>
-            <cac:TaxTotal><cbc:TaxAmount currencyID="RSD">200.00</cbc:TaxAmount></cac:TaxTotal>
-          </sbt:InvoicedPrepaymentAmount>
-        </sbt:SrbDtExt>
-      </cec:ExtensionContent>
-    </cec:UBLExtension>
-  </cec:UBLExtensions>
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>STO-1</cbc:ID>
   <cbc:IssueDate>2026-05-24</cbc:IssueDate>
   <cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
+  
+  
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>KON-1</cbc:ID>
+      <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+      <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
   
   <cac:AccountingSupplierParty>
     <cac:Party>
@@ -277,7 +370,13 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 3. K
     </cac:Party>
   </cac:AccountingCustomerParty>
   
-  <cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode></cac:PaymentMeans>
+  
+  <cac:PaymentMeans>
+    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>840-0000000000000-00</cbc:ID>
+    </cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>
   
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="RSD">200.00</cbc:TaxAmount>
@@ -322,31 +421,27 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 3. K
 
 exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 4. Knjižno Zaduženje / Povećanje (383) 1`] = `
 "<?xml version="1.0" encoding="utf-8"?>
-<Invoice 
-  xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
-  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
-  xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
-  xmlns:sbt="http://faktura.mfin.gov.rs/sefs/ubl/standard-business-document-extension-2">
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
   
-  <cec:UBLExtensions>
-    <cec:UBLExtension>
-      <cec:ExtensionContent>
-        <sbt:SrbDtExt>
-          <sbt:InvoicedPrepaymentAmount>
-            <cbc:ID>KON-1</cbc:ID>
-            <cac:TaxTotal><cbc:TaxAmount currencyID="RSD">100.00</cbc:TaxAmount></cac:TaxTotal>
-          </sbt:InvoicedPrepaymentAmount>
-        </sbt:SrbDtExt>
-      </cec:ExtensionContent>
-    </cec:UBLExtension>
-  </cec:UBLExtensions>
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>ZAD-1</cbc:ID>
   <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+  <cbc:DueDate>2026-05-24</cbc:DueDate>
   <cbc:InvoiceTypeCode>383</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
+  
+  <cac:InvoicePeriod>
+    <cbc:DescriptionCode>35</cbc:DescriptionCode>
+  </cac:InvoicePeriod>
+  
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>KON-1</cbc:ID>
+      <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+      <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
   
   <cac:AccountingSupplierParty>
     <cac:Party>
@@ -378,7 +473,13 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 4. K
     </cac:Party>
   </cac:AccountingCustomerParty>
   
-  <cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode></cac:PaymentMeans>
+  
+  <cac:PaymentMeans>
+    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>840-0000000000000-00</cbc:ID>
+    </cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>
   
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="RSD">100.00</cbc:TaxAmount>
@@ -423,21 +524,50 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 4. K
 
 exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 5. Dokument o smanjenju avansa (381 SrbDtExt) 1`] = `
 "<?xml version="1.0" encoding="utf-8"?>
-<CreditNote 
-  xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
-  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
-  xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
-  xmlns:sbt="http://faktura.mfin.gov.rs/sefs/ubl/standard-business-document-extension-2">
+<CreditNote xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
   
   <cec:UBLExtensions>
     <cec:UBLExtension>
       <cec:ExtensionContent>
-        <sbt:SrbDtExt>
+        <sbt:SrbDtExt xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
           <sbt:InvoicedPrepaymentAmount>
             <cbc:ID>AV-1</cbc:ID>
-            <cac:TaxTotal><cbc:TaxAmount currencyID="RSD">-100.00</cbc:TaxAmount></cac:TaxTotal>
+            <cac:TaxTotal>
+              <cbc:TaxAmount currencyID="RSD">100.00</cbc:TaxAmount>
+              <cac:TaxSubtotal>
+                <cbc:TaxableAmount currencyID="RSD">500.00</cbc:TaxableAmount>
+                <cbc:TaxAmount currencyID="RSD">100.00</cbc:TaxAmount>
+                <cac:TaxCategory>
+                  <cbc:ID>S</cbc:ID>
+                  <cbc:Percent>20.00</cbc:Percent>
+                  <cac:TaxScheme>
+                    <cbc:ID>VAT</cbc:ID>
+                  </cac:TaxScheme>
+                </cac:TaxCategory>
+              </cac:TaxSubtotal>
+            </cac:TaxTotal>
           </sbt:InvoicedPrepaymentAmount>
+          <sbt:ReducedTotals>
+            <cac:TaxTotal>
+              <cbc:TaxAmount currencyID="RSD">-200.00</cbc:TaxAmount>
+              <cac:TaxSubtotal>
+                <cbc:TaxableAmount currencyID="RSD">-1000.00</cbc:TaxableAmount>
+                <cbc:TaxAmount currencyID="RSD">-200.00</cbc:TaxAmount>
+                <cac:TaxCategory>
+                  <cbc:ID>S</cbc:ID>
+                  <cbc:Percent>20.00</cbc:Percent>
+                  <cac:TaxScheme>
+                    <cbc:ID>VAT</cbc:ID>
+                  </cac:TaxScheme>
+                </cac:TaxCategory>
+              </cac:TaxSubtotal>
+            </cac:TaxTotal>
+            <cac:LegalMonetaryTotal>
+              <cbc:TaxExclusiveAmount currencyID="RSD">-1000.00</cbc:TaxExclusiveAmount>
+              <cbc:TaxInclusiveAmount currencyID="RSD">-1200.00</cbc:TaxInclusiveAmount>
+              <cbc:PayableAmount currencyID="RSD">-1200.00</cbc:PayableAmount>
+            </cac:LegalMonetaryTotal>
+          </sbt:ReducedTotals>
         </sbt:SrbDtExt>
       </cec:ExtensionContent>
     </cec:UBLExtension>
@@ -448,6 +578,15 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 5. D
   <cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
+  
+  
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>AV-1</cbc:ID>
+      <cbc:IssueDate>2026-05-21</cbc:IssueDate>
+      <cbc:DocumentTypeCode>386</cbc:DocumentTypeCode>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
   
   <cac:AccountingSupplierParty>
     <cac:Party>
@@ -479,7 +618,13 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 5. D
     </cac:Party>
   </cac:AccountingCustomerParty>
   
-  <cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode></cac:PaymentMeans>
+  
+  <cac:PaymentMeans>
+    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>840-0000000000000-00</cbc:ID>
+    </cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>
   
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="RSD">-100.00</cbc:TaxAmount>
@@ -524,36 +669,27 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 5. D
 
 exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 6. Dokument o smanjenju u periodu (381 InvoicePeriod) 1`] = `
 "<?xml version="1.0" encoding="utf-8"?>
-<CreditNote 
-  xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
-  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
-  xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
-  xmlns:sbt="http://faktura.mfin.gov.rs/sefs/ubl/standard-business-document-extension-2">
+<CreditNote xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
   
-  <cec:UBLExtensions>
-    <cec:UBLExtension>
-      <cec:ExtensionContent>
-        <sbt:SrbDtExt>
-          <sbt:InvoicedPrepaymentAmount>
-            <cbc:ID>PERIOD</cbc:ID>
-            <cac:TaxTotal><cbc:TaxAmount currencyID="RSD">-200.00</cbc:TaxAmount></cac:TaxTotal>
-          </sbt:InvoicedPrepaymentAmount>
-        </sbt:SrbDtExt>
-      </cec:ExtensionContent>
-    </cec:UBLExtension>
-  </cec:UBLExtensions>
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>SMPER-1</cbc:ID>
   <cbc:IssueDate>2026-05-24</cbc:IssueDate>
   <cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
+  
   <cac:InvoicePeriod>
     <cbc:StartDate>2026-01-01</cbc:StartDate>
     <cbc:EndDate>2026-03-31</cbc:EndDate>
-    <cbc:DescriptionCode>35</cbc:DescriptionCode>
   </cac:InvoicePeriod>
+  
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>PERIOD</cbc:ID>
+      <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+      <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
   
   <cac:AccountingSupplierParty>
     <cac:Party>
@@ -585,7 +721,13 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 6. D
     </cac:Party>
   </cac:AccountingCustomerParty>
   
-  <cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode></cac:PaymentMeans>
+  
+  <cac:PaymentMeans>
+    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>840-0000000000000-00</cbc:ID>
+    </cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>
   
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="RSD">-200.00</cbc:TaxAmount>
@@ -630,18 +772,21 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 6. D
 
 exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 8. Faktura sa oslobođenjem od PDV-a (380 TaxCategory E) 1`] = `
 "<?xml version="1.0" encoding="utf-8"?>
-<Invoice 
-  xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
-  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
-  xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
-  xmlns:sbt="http://faktura.mfin.gov.rs/sefs/ubl/standard-business-document-extension-2">
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
   
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>OSL-1</cbc:ID>
   <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+  <cbc:DueDate>2026-05-24</cbc:DueDate>
   <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
+  
+  
+  <cac:InvoicePeriod>
+    <cbc:StartDate>2026-05-24</cbc:StartDate>
+    <cbc:EndDate>2026-05-24</cbc:EndDate>
+    <cbc:DescriptionCode>35</cbc:DescriptionCode>
+  </cac:InvoicePeriod>
   
   
   <cac:AccountingSupplierParty>
@@ -674,7 +819,13 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 8. F
     </cac:Party>
   </cac:AccountingCustomerParty>
   
-  <cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode></cac:PaymentMeans>
+  
+  <cac:PaymentMeans>
+    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>840-0000000000000-00</cbc:ID>
+    </cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>
   
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>
@@ -719,31 +870,23 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 8. F
 
 exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊 v3.8.0 Master Specifikacija Alignment Audit > 1. Poreska kategorija N (Anuliranje) sa POZITIVNIM smerom 1`] = `
 "<?xml version="1.0" encoding="utf-8"?>
-<CreditNote 
-  xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
-  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
-  xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
-  xmlns:sbt="http://faktura.mfin.gov.rs/sefs/ubl/standard-business-document-extension-2">
+<CreditNote xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
   
-  <cec:UBLExtensions>
-    <cec:UBLExtension>
-      <cec:ExtensionContent>
-        <sbt:SrbDtExt>
-          <sbt:InvoicedPrepaymentAmount>
-            <cbc:ID>INV-1</cbc:ID>
-            <cac:TaxTotal><cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount></cac:TaxTotal>
-          </sbt:InvoicedPrepaymentAmount>
-        </sbt:SrbDtExt>
-      </cec:ExtensionContent>
-    </cec:UBLExtension>
-  </cec:UBLExtensions>
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>STR-N-POS</cbc:ID>
   <cbc:IssueDate>2026-05-24</cbc:IssueDate>
   <cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
+  
+  
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>INV-1</cbc:ID>
+      <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+      <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
   
   <cac:AccountingSupplierParty>
     <cac:Party>
@@ -775,7 +918,13 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
     </cac:Party>
   </cac:AccountingCustomerParty>
   
-  <cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode></cac:PaymentMeans>
+  
+  <cac:PaymentMeans>
+    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>840-0000000000000-00</cbc:ID>
+    </cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>
   
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>
@@ -820,31 +969,23 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
 
 exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊 v3.8.0 Master Specifikacija Alignment Audit > 2. Poreska kategorija N (Anuliranje) sa NEGATIVNIM smerom 1`] = `
 "<?xml version="1.0" encoding="utf-8"?>
-<CreditNote 
-  xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
-  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
-  xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
-  xmlns:sbt="http://faktura.mfin.gov.rs/sefs/ubl/standard-business-document-extension-2">
+<CreditNote xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
   
-  <cec:UBLExtensions>
-    <cec:UBLExtension>
-      <cec:ExtensionContent>
-        <sbt:SrbDtExt>
-          <sbt:InvoicedPrepaymentAmount>
-            <cbc:ID>INV-1</cbc:ID>
-            <cac:TaxTotal><cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount></cac:TaxTotal>
-          </sbt:InvoicedPrepaymentAmount>
-        </sbt:SrbDtExt>
-      </cec:ExtensionContent>
-    </cec:UBLExtension>
-  </cec:UBLExtensions>
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>STR-N-NEG</cbc:ID>
   <cbc:IssueDate>2026-05-24</cbc:IssueDate>
   <cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
+  
+  
+  <cac:BillingReference>
+    <cac:InvoiceDocumentReference>
+      <cbc:ID>INV-1</cbc:ID>
+      <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+      <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
+    </cac:InvoiceDocumentReference>
+  </cac:BillingReference>
   
   <cac:AccountingSupplierParty>
     <cac:Party>
@@ -876,7 +1017,13 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
     </cac:Party>
   </cac:AccountingCustomerParty>
   
-  <cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode></cac:PaymentMeans>
+  
+  <cac:PaymentMeans>
+    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>840-0000000000000-00</cbc:ID>
+    </cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>
   
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>

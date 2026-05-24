@@ -27,9 +27,13 @@ describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
     const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
     const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
     
-    // 2. Resetuj DO keš
+    // 2. Resetuj DO keš i ledger
     await klijentDO.fetch(new Request('http://do/internal/clear-cache', { method: 'POST' }));
-
+    await klijentDO.fetch(new Request('http://do/test/seed', { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'RESET_LEDGER', saldo: 100 }) 
+    }));
     // 3. Resetuj KV
     await env.PORESKI_KV.delete("DRZAVNA_PORESKA_PRAVILA_RS");
     

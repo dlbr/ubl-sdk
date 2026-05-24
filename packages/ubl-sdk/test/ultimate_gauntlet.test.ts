@@ -1,36 +1,37 @@
 import { describe, it, expect } from 'vitest';
-import { SefUblBuilder } from '../src/SefUblBuilder';
+import { InvoiceBuilder } from '../src/builder/InvoiceBuilder';
 
 describe('🛡️ Ultimate Gauntlet — Pure Builder Coverage', () => {
 
   it('01. Standard B2B (380) - Output Validation', () => {
-    const invoice = SefUblBuilder.create()
-      .withID('STD-1')
-      .withTypeCode('380')
-      .withAmount(1000)
+    const invoice = InvoiceBuilder.create()
+      .setBasicInfo('STD-1', '380', '2026-05-24', '2026-06-07')
+      .setSeller({ pib: '111111111', name: 'Prodavac' })
+      .setBuyer({ pib: '222222222', name: 'Kupac' })
       .build();
     
-    expect(invoice.InvoiceTypeCode).toBe('380');
-    expect(invoice.osnovica).toBe(1000);
+    expect(invoice.typeCode).toBe('380');
+    expect(invoice.id).toBe('STD-1');
   });
 
   it('07. Fail: PIB prodavca i kupca', () => {
-    const invoice = SefUblBuilder.create()
-      .withPib('111111111', '123')
-      .build();
+    const builder = InvoiceBuilder.create()
+      .setBasicInfo('STD-1', '380', '2026-05-24', '2026-06-07')
+      .setSeller({ pib: '111111111', name: 'Prodavac' })
+      .setBuyer({ pib: '123', name: 'Kupac' }); // Invalid PIB
     
-    // U realnom scenariju, Builder je "glup" i gradi sta mu das. 
-    // Compliance validator bi ovo kasnije ulovio.
-    expect(invoice.pibKupca).toBe('123');
+    const invoice = builder.build();
+    expect(invoice.buyer.pib).toBe('123');
   });
 
   it('08. Fail: Rok plaćanja pre datuma izdavanja', () => {
-    const invoice = SefUblBuilder.create()
-      .withIssueDate('2026-05-23')
-      .withDueDate('2026-05-20')
+    const invoice = InvoiceBuilder.create()
+      .setBasicInfo('STD-1', '380', '2026-05-24', '2026-05-20')
+      .setSeller({ pib: '111111111', name: 'Prodavac' })
+      .setBuyer({ pib: '222222222', name: 'Kupac' })
       .build();
     
-    expect(invoice.datumIzdavanja).toBe('2026-05-23');
-    expect(invoice.datumUplate).toBe('2026-05-20');
+    expect(invoice.issueDate).toBe('2026-05-24');
+    expect(invoice.dueDate).toBe('2026-05-20');
   });
 });

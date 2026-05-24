@@ -11,7 +11,7 @@
       "@cloudflare/vitest-pool-workers"
     ],
     "paths": {
-      "cloudflare:test": ["./node_modules/@cloudflare/vitest-pool-workers/dist/index.d.ts"],
+      "cloudflare:test": ["./node_modules/@cloudflare/vitest-pool-workers/types/cloudflare-test.d.ts"],
       "@dlbr/ubl-sdk": ["./packages/ubl-sdk/src/index.ts"]
     },
     "strict": true,
@@ -28,7 +28,8 @@
     "shared/**/*",
     "packages/ubl-sdk/src/**/*",
     "worker-configuration.d.ts",
-    ".nuxt/types/imports.d.ts",
-    ".nuxt/nuxt.d.ts"
+    "shared/types/h3.d.ts",
+    ".nuxt/nuxt.d.ts",
+    ".nuxt/types/imports.d.ts"
   ]
 }

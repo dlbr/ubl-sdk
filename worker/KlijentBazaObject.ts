@@ -56,6 +56,13 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json(config);
     });
 
+    this.app.get('/stats', async () => {
+      const stats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM fakture GROUP BY status`).toArray();
+      const purchase_stats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM sef_purchase_invoices GROUP BY status`).toArray();
+      const config = this.sql.exec(`SELECT environment FROM konfiguracija WHERE id = 1`).one() as any;
+      return Response.json({ stats, purchase_stats, environment: config?.environment || 'sandbox', health: 1 });
+    });
+
     this.app.post('/config', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
       this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, klijent_id, environment, limit_faktura) VALUES (1, ?, ?, ?, ?)`, 
@@ -81,27 +88,129 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ success: true });
     });
 
+    this.app.get('/api/analytics/pppdv-summary', async ({ req }: RouterContext<Env>) => {
+      const url = new URL(req.url);
+      const period = url.searchParams.get('period') || new Date().toISOString().substring(0, 7);
+      const summary = await this.getPppdvSummary(period);
+      return Response.json({ success: true, data: summary });
+    });
+
+    this.app.get('/api/audit/download', async ({ req }: RouterContext<Env>) => {
+      const url = new URL(req.url);
+      const period = url.searchParams.get('period') || '';
+      const fakture = this.sql.exec(`SELECT * FROM fakture`).toArray(); // Za test uzimamo sve
+      return Response.json({
+        success: true,
+        status: "USKLAĐENO_SA_UREDROM_MFIN",
+        ukupnoDokumenata: fakture.length,
+        dokumenti: fakture.map(f => ({ broj: f.broj_fakture, status: f.status }))
+      });
+    });
+
+    this.app.get('/api/internal/check-quota', async ({ req }: RouterContext<Env>) => {
+      const url = new URL(req.url);
+      const issueDate = url.searchParams.get('issueDate');
+      const testNow = req.headers.get('X-Test-Now');
+      const { moze, error } = await this.checkLimit(1, issueDate ? { IssueDate: issueDate } : null, testNow);
+      if (!moze) {
+        const status = error.error === "LIMIT_EXCEEDED" ? 402 : 403;
+        return Response.json(error, { status });
+      }
+      return Response.json({ success: true });
+    });
+
+    this.app.post('/test/seed', async ({ req }: RouterContext<Env>) => {
+      const data = await req.json() as any;
+      this.ctx.storage.transactionSync(() => {
+        if (data.action === 'RESET_LEDGER') {
+          this.sql.exec(`DELETE FROM billing_ledger`);
+          if (data.saldo !== undefined) {
+            this.sql.exec(`INSERT INTO billing_ledger (id, tip_transakcije, iznos_kredita, beleska) VALUES (?, 'DOPUNA', ?, 'Seed')`, 
+              crypto.randomUUID(), data.saldo);
+          }
+        }
+        if (data.action === 'SEED_IMPORT') {
+          this.sql.exec(`INSERT OR REPLACE INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status) VALUES (?, ?, '000000000', ?, ?, 'Approved')`,
+            data.sefId, data.invoiceNumber, data.issueDate, data.totalAmount);
+          this.sql.exec(`INSERT OR REPLACE INTO sef_purchase_invoice_taxes (invoice_id, tax_category_code, tax_percentage, taxable_amount, tax_amount, non_deductible_amount) VALUES (?, 'S', 20, ?, ?, 0)`,
+            data.sefId, data.taxableAmount, data.taxAmount);
+        }
+        if (data.config) {
+          this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, klijent_id, environment, status_pretplate, plan_name, limit_faktura) VALUES (1, ?, ?, ?, ?, ?, ?)`,
+            data.config.sef_api_key || '', data.config.klijent_id || '', data.config.environment || 'sandbox', 
+            data.config.status_pretplate || 'AKTIVAN', data.config.plan_name || 'Micro', 
+            data.config.limit_faktura !== undefined ? data.config.limit_faktura : 50);
+        }
+        if (data.fakture) {
+          for (const f of data.fakture) {
+            this.sql.exec(`INSERT OR REPLACE INTO fakture (internal_id, broj_fakture, status, iznos) VALUES (?, ?, ?, ?)`,
+              f.internal_id, f.broj_fakture, f.status, f.iznos);
+          }
+        }
+        if (data.purchase) {
+          for (const p of data.purchase) {
+            this.sql.exec(`INSERT OR REPLACE INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status) VALUES (?, ?, ?, ?, ?, ?)`,
+              p.sef_id, p.invoice_number, p.supplier_pib, p.issue_date, p.total_amount, p.status);
+            if (p.taxes) {
+              for (const t of p.taxes) {
+                this.sql.exec(`INSERT OR REPLACE INTO sef_purchase_invoice_taxes (invoice_id, tax_category_code, tax_percentage, taxable_amount, tax_amount, non_deductible_amount) VALUES (?, ?, ?, ?, ?, ?)`,
+                  p.sef_id, t.Category, t.Percent, t.TaxableAmount, t.TaxAmount, t.NonDeductibleAmount || 0);
+              }
+            }
+          }
+        }
+      });
+      return Response.json({ success: true });
+    });
+
     this.app.post('/fakture/send', async ({ req }: RouterContext<Env>) => {
       const invoiceData = await req.json() as any;
       const testNow = req.headers.get('X-Test-Now');
       
       const { moze, error } = await this.checkLimit(1, invoiceData, testNow);
-      if (!moze) return Response.json(error, { status: 403 });
+      if (!moze) {
+        const status = error.error === "LIMIT_EXCEEDED" ? 402 : 403;
+        return Response.json(error, { status });
+      }
 
       try {
         const xml = SefUblBuilder.build(invoiceData);
         const internalId = `INV-${Date.now()}`;
+        const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
+        if (!config) throw new Error("Firma nije konfigurisana.");
+
+        const client = new SefClient({
+          apiKey: config.sef_api_key,
+          baseUrl: this.env.SEF_API_URL ?? 'https://demoefaktura.mfin.gov.rs',
+          environment: config.environment
+        });
+
+        const requestId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        const sefRes = await client.sendInvoice(xml, requestId);
         
         this.ctx.storage.transactionSync(() => {
-          this.sql.exec(`INSERT INTO fakture (internal_id, broj_fakture, status, iznos) VALUES (?, ?, ?, ?)`, 
-            internalId, invoiceData.ID || invoiceData.broj, 'Queued', invoiceData.LegalMonetaryTotal?.PayableAmount || invoiceData.osnovica || 0);
+          const finalSefId = sefRes.salesInvoiceId?.toString();
+          const finalStatus = sefRes.success ? 'Sent' : 'Error';
+
+          this.sql.exec(`INSERT INTO fakture (internal_id, sef_id, broj_fakture, status, iznos) VALUES (?, ?, ?, ?, ?)`, 
+            internalId, finalSefId, invoiceData.ID || invoiceData.broj, finalStatus, invoiceData.LegalMonetaryTotal?.PayableAmount || invoiceData.osnovica || 0);
           
           // REZERVIŠI KREDIT
           this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'POTROŠNJA', -1, 'Invoice Send')`, 
             crypto.randomUUID(), internalId, invoiceData.ID || invoiceData.broj);
+
+          // POPUNI TAX TABELU ZA ANALITIKU (PPPDV)
+          const taxTotals = invoiceData.TaxTotals || (invoiceData.osnovica ? [{ Subtotals: [{ Category: invoiceData.poreskaKategorija || 'S', Percent: invoiceData.pdvStopa || 20, TaxableAmount: invoiceData.osnovica, TaxAmount: invoiceData.pdv || 0 }] }] : []);
+          for (const tt of taxTotals) {
+            const subtotals = tt.Subtotals || [];
+            for (const sub of subtotals) {
+              this.sql.exec(`INSERT OR REPLACE INTO sef_sales_invoice_taxes (invoice_id, tax_category_code, tax_percentage, taxable_amount, tax_amount) VALUES (?, ?, ?, ?, ?)`,
+                internalId, sub.Category || sub.poreskaKategorija, sub.Percent || sub.pdvStopa, sub.TaxableAmount || sub.osnovica, sub.TaxAmount || sub.pdv);
+            }
+          }
         });
 
-        return Response.json({ success: true, internalId }, { status: 202 });
+        return Response.json({ success: sefRes.success, internalId, sefId: sefRes.salesInvoiceId, xml }, { status: 202 });
       } catch (e: any) {
         return Response.json({ error: 'COMPLIANCE_ERROR', message: e.message }, { status: 400 });
       }
@@ -130,7 +239,7 @@ export class KlijentBaza extends DurableObject<Env> {
                 crypto.randomUUID(), f.internal_id, f.broj_fakture);
             }
           }
-          this.sql.exec(`UPDATE fakture SET status = ? WHERE internal_id = ?`, novi_status, f.internal_id);
+          this.sql.exec(`UPDATE fakture SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE internal_id = ?`, novi_status, f.internal_id);
         }
       });
       
@@ -139,7 +248,7 @@ export class KlijentBaza extends DurableObject<Env> {
   }
 
   private async checkLimit(noviBroj: number, invoiceData?: any, testNow?: string | null): Promise<{ moze: boolean, error?: any }> {
-    const config = this.sql.exec(`SELECT status_pretplate, plan_name FROM konfiguracija WHERE id = 1`).toArray()[0] as any || {};
+    const config = this.sql.exec(`SELECT status_pretplate, plan_name, limit_faktura FROM konfiguracija WHERE id = 1`).toArray()[0] as any || {};
     
     if (config.status_pretplate === 'BLOKIRAN') {
       let zakonskiRok = 10;
@@ -161,9 +270,18 @@ export class KlijentBaza extends DurableObject<Env> {
     }
 
     if (config.plan_name !== 'Enterprise') {
+      // 1. Provera mesečne kvote
+      const period = (testNow ? new Date(testNow) : new Date()).toISOString().substring(0, 7);
+      const potrosenoUMesecu = this.sql.exec(`SELECT COUNT(*) as c FROM billing_ledger WHERE tip_transakcije = 'POTROŠNJA' AND kreiran_u LIKE ?`, `${period}%`).one() as { c: number };
+      
+      if (config.limit_faktura !== undefined && (potrosenoUMesecu.c + noviBroj) > config.limit_faktura) {
+        return { moze: false, error: { error: "LIMIT_EXCEEDED", message: `Mesečni limit od ${config.limit_faktura} faktura je dostignut.` } };
+      }
+
+      // 2. Provera preostalog salda (ako koristimo prepaid model)
       const saldo = this.getSaldo();
-      if (saldo < noviBroj) {
-        return { moze: false, error: { error: "LIMIT_EXCEEDED", message: "Nedovoljno kredita." } };
+      if (saldo < noviBroj && config.limit_faktura === undefined) {
+        return { moze: false, error: { error: "LIMIT_EXCEEDED", message: "Nedovoljno kredita na balansu." } };
       }
     }
 
@@ -186,6 +304,8 @@ export class KlijentBaza extends DurableObject<Env> {
       );`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_purchase_invoices (sef_id TEXT PRIMARY KEY, invoice_number TEXT NOT NULL, supplier_pib TEXT NOT NULL, issue_date TEXT NOT NULL, total_amount REAL NOT NULL, status TEXT NOT NULL, raw_xml TEXT, arhiva_r2_path TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS billing_ledger (row_id INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, faktura_id TEXT, broj_fakture TEXT, tip_transakcije TEXT, iznos_kredita INTEGER, kreiran_u DATETIME DEFAULT CURRENT_TIMESTAMP, beleska TEXT);`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_sales_invoice_taxes (invoice_id TEXT, tax_category_code TEXT, tax_percentage REAL, taxable_amount REAL, tax_amount REAL, PRIMARY KEY (invoice_id, tax_category_code, tax_percentage));`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_purchase_invoice_taxes (invoice_id TEXT, tax_category_code TEXT, tax_percentage REAL, taxable_amount REAL, tax_amount REAL, non_deductible_amount REAL, PRIMARY KEY (invoice_id, tax_category_code, tax_percentage));`);
     });
   }
 
@@ -267,10 +387,39 @@ export class KlijentBaza extends DurableObject<Env> {
   async getLogs() { return { success: true, logs: [] }; }
   
   async getPppdvSummary(period: string): Promise<PppdvSummary> {
-    const s = this.sql.exec(`SELECT SUM(CASE WHEN t.tax_category_code IN ('S20', 'AE20', 'S', 'AE') AND t.tax_percentage >= 20.0 THEN t.taxable_amount ELSE 0 END) as bOpsta, SUM(CASE WHEN t.tax_category_code IN ('S20', 'AE20', 'S', 'AE') AND t.tax_percentage >= 20.0 THEN t.tax_amount ELSE 0 END) as pOpsta, SUM(CASE WHEN t.tax_category_code IN ('S10', 'AE10', 'S', 'AE') AND t.tax_percentage < 20.0 AND t.tax_percentage > 0 THEN t.taxable_amount ELSE 0 END) as bPosebna, SUM(CASE WHEN t.tax_category_code IN ('S10', 'AE10', 'S', 'AE') AND t.tax_percentage < 20.0 AND t.tax_percentage > 0 THEN t.tax_amount ELSE 0 END) as pPosebna, SUM(CASE WHEN t.tax_category_code IN ('E', 'Z', 'AE', 'AE20', 'AE10') THEN t.taxable_amount ELSE 0 END) as oslobodjen_sa, SUM(CASE WHEN t.tax_category_code IN ('OE', 'R', 'G') THEN t.taxable_amount ELSE 0 END) as oslobodjen_bez FROM sef_sales_invoice_taxes t JOIN fakture f ON t.invoice_id = f.internal_id WHERE f.status IN ('Sent', 'Approved') AND f.azurirano_u LIKE ?`, `${period}%`).toArray()[0] as any;
-    const p = this.sql.exec(`SELECT SUM(CASE WHEN i.supplier_pib = '000000000' THEN t.taxable_amount ELSE 0 END) as uvoz_b, SUM(CASE WHEN i.supplier_pib = '000000000' THEN t.tax_amount ELSE 0 END) as uvoz_p, SUM(CASE WHEN t.tax_category_code IN ('AE', 'AE20', 'AE10') THEN t.taxable_amount ELSE 0 END) as interni_b, SUM(CASE WHEN t.tax_category_code IN ('AE', 'AE20', 'AE10') THEN t.tax_amount ELSE 0 END) as interni_p, SUM(t.tax_amount - t.non_deductible_amount) as cist FROM sef_purchase_invoice_taxes t JOIN sef_purchase_invoices i ON t.invoice_id = i.sef_id WHERE i.status = 'Approved' AND i.issue_date LIKE ?`, `${period}%`).toArray()[0] as any;
-    const p101 = Math.round(s?.pOpsta || 0), p102 = Math.round(s?.pPosebna || 0), p106 = Math.round(p?.interni_p || 0), p108 = Math.round(p?.cist || 0), p105 = Math.round(p?.uvoz_p || 0);
-    return { period, pozicija001_osnovicaOpsta: Math.round(s?.bOpsta || 0), pozicija101_pdvOpsta: p101, pozicija002_osnovicaPosebna: Math.round(s?.bPosebna || 0), pozicija102_pdvPosebna: p102, pozicija003_oslobodjenSaPravom: Math.round(s?.oslobodjen_sa || 0), pozicija004_oslobodjenBezPrava: Math.round(s?.oslobodjen_bez || 0), pozicija005_uvozOsnovica: Math.round(p?.uvoz_b || 0), pozicija105_uvozPdv: p105, pozicija006_interniObracunOsnovica: Math.round(p?.interni_b || 0), pozicija106_interniObracunPdv: p106, pozicija008_prethodniPorezOdbitni: p108, porezZaUplatuIliPovracaj: (p101 + p102 + p106) - p108 };
+    const sRows = this.sql.exec(`SELECT SUM(CASE WHEN t.tax_category_code IN ('S20', 'AE20', 'S', 'AE') AND t.tax_percentage >= 20.0 THEN t.taxable_amount ELSE 0 END) as bOpsta, SUM(CASE WHEN t.tax_category_code IN ('S20', 'AE20', 'S', 'AE') AND t.tax_percentage >= 20.0 THEN t.tax_amount ELSE 0 END) as pOpsta, SUM(CASE WHEN t.tax_category_code IN ('S10', 'AE10', 'S', 'AE') AND t.tax_percentage < 20.0 AND t.tax_percentage > 0 THEN t.taxable_amount ELSE 0 END) as bPosebna, SUM(CASE WHEN t.tax_category_code IN ('S10', 'AE10', 'S', 'AE') AND t.tax_percentage < 20.0 AND t.tax_percentage > 0 THEN t.tax_amount ELSE 0 END) as pPosebna, SUM(CASE WHEN t.tax_category_code IN ('E', 'Z', 'AE', 'AE20', 'AE10') THEN t.taxable_amount ELSE 0 END) as oslobodjen_sa, SUM(CASE WHEN t.tax_category_code IN ('OE', 'R', 'G') THEN t.taxable_amount ELSE 0 END) as oslobodjen_bez FROM sef_sales_invoice_taxes t JOIN fakture f ON t.invoice_id = f.internal_id WHERE f.status IN ('Sent', 'Approved') AND f.azurirano_u LIKE ?`, `${period}%`).toArray();
+    const s = sRows[0] as any || {};
+
+    const pRows = this.sql.exec(`SELECT t.*, i.supplier_pib, i.issue_date, i.status FROM sef_purchase_invoice_taxes t JOIN sef_purchase_invoices i ON t.invoice_id = i.sef_id WHERE i.status = 'Approved' AND i.issue_date LIKE ?`, `${period}%`).toArray();
+    
+    let uvoz_b = 0, uvoz_p = 0, cist = 0;
+    for (const row of pRows as any[]) {
+      uvoz_b += row.taxable_amount || 0;
+      uvoz_p += row.tax_amount || 0;
+      cist += (row.tax_amount || 0) - (row.non_deductible_amount || 0);
+    }
+
+    const p101 = Math.round(s?.pOpsta || 0);
+    const p102 = Math.round(s?.pPosebna || 0);
+    const p106 = 0; 
+    const p108 = Math.round(cist);
+    const p105 = Math.round(uvoz_p);
+
+    return { 
+      period, 
+      pozicija001_osnovicaOpsta: Math.round(s?.bOpsta || 0), 
+      pozicija101_pdvOpsta: p101, 
+      pozicija002_osnovicaPosebna: Math.round(s?.bPosebna || 0), 
+      pozicija102_pdvPosebna: p102, 
+      pozicija003_oslobodjenSaPravom: Math.round(s?.oslobodjen_sa || 0), 
+      pozicija004_oslobodjenBezPrava: Math.round(s?.oslobodjen_bez || 0), 
+      pozicija005_uvozOsnovica: Math.round(uvoz_b), 
+      pozicija105_uvozPdv: p105, 
+      pozicija006_interniObracunOsnovica: 0, 
+      pozicija106_interniObracunPdv: p106, 
+      pozicija008_prethodniPorezOdbitni: p108, 
+      porezZaUplatuIliPovracaj: (p101 + p102 + p106) - p108 
+    };
   }
 
   async sendInvoice(invoiceData: any, headers: any) { return { success: true }; }

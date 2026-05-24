@@ -2,7 +2,7 @@ import { defineEventHandler, createError, getQuery, type H3Event } from 'h3';
 
 export default defineEventHandler(async (event: H3Event) => {
   const session = event.context.session;
-  if (!session) throw createError({ statusCode: 401, statusMessage: 'Niste autorizovani.' });
+  if (!session || !session.pib) throw createError({ statusCode: 401, statusMessage: 'Niste autorizovani.' });
 
   const query = getQuery(event);
   const period = query.period as string || new Date().toISOString().substring(0, 7);
@@ -22,8 +22,8 @@ export default defineEventHandler(async (event: H3Event) => {
     const txt = await res.text();
 
     // Postavljamo zaglavlja za preuzimanje fajla
-    event.node.res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    event.node.res.setHeader('Content-Disposition', `attachment; filename="pppdv_${period}.txt"`);
+    event.node!.res!.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    event.node!.res!.setHeader('Content-Disposition', `attachment; filename="pppdv_${period}.txt"`);
     
     return txt;
 

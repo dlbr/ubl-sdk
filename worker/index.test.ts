@@ -34,7 +34,7 @@ describe('SEF Bridge - Integration Tests', () => {
         naziv: 'Test Firma DOO',
         sef_api_key: 'test_key_123'
       })
-    }, env);
+    }, env as any);
 
     expect(res.status).toBe(200);
     const data = await res.json() as any;

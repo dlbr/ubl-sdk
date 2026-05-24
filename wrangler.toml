@@ -1,7 +1,10 @@
 name = "sef-bridge"
 main = "worker/index.ts"
-compatibility_date = "2026-05-15"
+compatibility_date = "2026-05-21"
 compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ADMIN_API_KEY = "admin_secret"
 
 [[routes]]
 pattern = "sef.dlbr.cloud"
@@ -41,7 +44,7 @@ crons = ["0 2 * * *"]
 
 [ai]
 binding = "AI"
-# remote = true
+remote = true
 
 [[queues.producers]]
 binding = "SEF_QUEUE"
