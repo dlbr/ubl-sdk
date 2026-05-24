@@ -23,6 +23,8 @@ jobs:
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          PNPM_SKIP_CHECK_BUILT_DEPENDENCIES: true
 
       - name: Build SDK
         run: pnpm run test:builder

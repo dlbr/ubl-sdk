@@ -34,6 +34,8 @@ jobs:
 
       - name: 📦 Instalacija zavisnosti
         run: pnpm install --frozen-lockfile
+        env:
+          PNPM_SKIP_CHECK_BUILT_DEPENDENCIES: true
 
       - name: 📄 Ekstrakcija teksta iz PDF-a i AI analiza
         id: ai_patcher
