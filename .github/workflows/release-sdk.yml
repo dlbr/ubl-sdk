@@ -29,8 +29,6 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
-        env:
-          PNPM_SKIP_CHECK_BUILT_DEPENDENCIES: true
 
       - name: Build
         run: pnpm --filter @dlbr/ubl-sdk run build
