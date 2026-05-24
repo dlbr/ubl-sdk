@@ -37,3 +37,9 @@ jobs:
         run: |
           pnpm run test:builder
           pnpm --filter @dlbr/ubl-sdk test
+
+      - name: Integration Tests
+        env:
+          ADMIN_API_KEY: "admin_secret"
+          SESSION_SECRET: "test_secret_32_chars_long_ver_2026"
+        run: pnpm run test:integration

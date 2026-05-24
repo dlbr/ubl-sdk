@@ -35,6 +35,9 @@ jobs:
         run: pnpm run build
 
       - name: Run Integration Tests
+        env:
+          STAGING_SEF_API_KEY: ${{ secrets.STAGING_SEF_API_KEY }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
         run: pnpm run test:integration
 
       - name: Sandbox Compliance Check
