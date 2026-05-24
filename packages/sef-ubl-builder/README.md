@@ -1,7 +1,7 @@
-# SEF UBL Builder
+# UBL SDK
 ![Builder CI](https://github.com/dlbr/sef-ubl-builder/actions/workflows/ci.yml/badge.svg)
 
-Biblioteka za programsko generisanje UBL 2.1 XML dokumenata za srpski Sistem za elektronske fakture (SEF).
+Biblioteka za programsko generisanje UBL 2.1 XML dokumenata za srpski Sistem za elektronske fakture (SEF). Kao `@dlbr/ubl-sdk`, ovaj paket nudi ultra-brzi, Edge-native JSON-to-UBL 2.1 XML generator.
 
 ## Fokus
 Ovaj alat nije "samo" generator XML-a. On je infrastrukturni štit koji sprečava generisanje poreski neispravnih dokumenata pre nego što stignu do MFIN API-ja.
