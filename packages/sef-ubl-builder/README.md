@@ -1,5 +1,5 @@
 # SEF UBL Builder
-![Compliance Status](https://github.com/dlbr/sef/actions/workflows/production-compliance.yml/badge.svg)
+![Builder CI](https://github.com/dlbr/sef-ubl-builder/actions/workflows/ci.yml/badge.svg)
 
 Biblioteka za programsko generisanje UBL 2.1 XML dokumenata za srpski Sistem za elektronske fakture (SEF).
 
