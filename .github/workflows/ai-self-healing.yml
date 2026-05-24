@@ -20,14 +20,20 @@ jobs:
       - name: 📥 Povlačenje koda sa GitHub-a
         uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: 🛠️ Podešavanje Node.js okruženja
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: 'pnpm'
+          cache-dependency-path: 'pnpm-lock.yaml'
 
-      - name: 📦 Instalacija zavisnosti (npm)
-        run: npm ci
+      - name: 📦 Instalacija zavisnosti
+        run: pnpm install
 
       - name: 📄 Ekstrakcija teksta iz PDF-a i AI analiza
         id: ai_patcher
@@ -48,7 +54,7 @@ jobs:
           
       - name: 🧪 Pokretanje Lokalnog Test Suita (Vitest)
         if: steps.ai_patcher.outputs.patch_applied == 'true'
-        run: npm test
+        run: pnpm test
 
       - name: 🛡️ Verifikacija na Državnom Sandbox-u (CI/CD Bedem)
         if: steps.ai_patcher.outputs.patch_applied == 'true'
