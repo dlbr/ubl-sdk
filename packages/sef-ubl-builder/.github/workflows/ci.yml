@@ -11,14 +11,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: node:24-slim
+      image: ghcr.io/dlbr/sef-ci-env:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
-      - name: Install System Deps
-        run: |
-          apt-get update && apt-get install -y libxml2-utils default-jre git
       - name: Install Dependencies
         run: npm install
       - name: Run Tests
