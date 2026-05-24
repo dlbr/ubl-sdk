@@ -1,13 +1,10 @@
 {
   "name": "sef",
   "version": "1.0.0",
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
     "test:types": "npx tsc --noEmit",
-    "test:builder": "cd packages/sef-ubl-builder && npx tsc && npx esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js && cd ../..",
-    "test": "npm run test:types && npm run test:builder && vitest run packages/sef-ubl-builder/test/sef_matrix_complete.test.ts",
+    "test:builder": "cd packages/ubl-sdk && npx tsc && npx esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js && cd ../..",
+    "test": "npm run test:types && npm run test:builder && vitest run packages/ubl-sdk/test/sef_matrix_complete.test.ts",
     "test:integration": "vitest run --file-parallelism=false",
     "verify": "npm run test:types && npm run test:builder && npm run test:integration",
     "dev": "nuxt dev --https",
@@ -34,8 +31,7 @@
     "wrangler": "^4.92.0"
   },
   "dependencies": {
-    "@dlbr/sef-ubl-builder": "workspace:*",
-    "@google/genai": "^2.2.0",
+    "@dlbr/ubl-sdk": "workspace:*",
     "fast-xml-builder": "^1.2.0",
     "fast-xml-parser": "^5.8.0",
     "pdf-parse": "^2.4.5",

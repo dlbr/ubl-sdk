@@ -5,11 +5,11 @@ const isCI = !!process.env.CI;
 
 export default defineConfig({
   test: {
-    pool: 'threads',
-    threads: {
-      singleThread: true,
-      isolate: false,
-    },
+    // Top-level konfiguracija umesto poolOptions
+    isolate: true,
+    threads: true,
+    singleThread: true, // Direktno ovde, sada je top-level
+    
     include: [
       'worker/**/*.{test,spec}.ts', 
       'server/**/*.{test,spec}.ts', 
@@ -23,10 +23,8 @@ export default defineConfig({
   },
   plugins: isCI ? [] : [
     cloudflareTest({
-      wrangler: { 
-        configPath: './wrangler.toml',
-        mode: 'local'
-      },
+      wrangler: { configPath: './wrangler.toml' },
+      // Cloudflare plugin i dalje koristi specifičnu strukturu za svoje pool-ove
       poolOptions: {
         workers: {
           isolatedStorage: true,

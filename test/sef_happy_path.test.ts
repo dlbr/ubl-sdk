@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { SefUblBuilder } from '../packages/sef-ubl-builder/src/index';
+import { SefUblBuilder } from '@dlbr/ubl-sdk';
 import { SefClient } from '../shared/services/sefClient';
 
 describe('🎯 SEF Happy Path — Živo slanje ispravne fakture na Demo', () => {

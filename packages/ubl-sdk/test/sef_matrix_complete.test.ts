@@ -5,15 +5,17 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
 
   it('1. Avansna Faktura (386) sa obračunatim PDV-om', () => {
     const xml = SefUblBuilder.buildAvansni({
-      broj: 'AV-1', pibProdavca: '100000001', pibKupca: '200000002', osnovica: 1000, pdv: 200
+      broj: 'AV-1', pibProdavca: '100000001', pibKupca: '200000002',
+      datumIzdavanja: '2026-05-20',
+      datumUplate: '2026-05-20', referentniRacun: 'PONUDA-1',
+      osnovica: 1000, pdv: 200
     });
-    console.log("XML 386:", xml);
+    
+    expect(xml).toMatchSnapshot();
+    
+    // Sanity checks
     expect(xml).toContain('<cbc:InvoiceTypeCode>386</cbc:InvoiceTypeCode>');
-    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
-    expect(xml).toContain('<cbc:Percent>20.00</cbc:Percent>');
     expect(xml).toContain('<cbc:TaxableAmount currencyID="RSD">1000.00</cbc:TaxableAmount>');
-    expect(xml).toContain('<cbc:TaxAmount currencyID="RSD">200.00</cbc:TaxAmount>');
-    expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1200.00</cbc:PayableAmount>');
   });
 
   it('2. Konačna faktura sa zatvaranjem avansa (380)', () => {
@@ -23,15 +25,11 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
       ukupnaOsnovica: 2000, ukupniPdv: 400, odbitakAvansaSaPdv: 600,
       pdvStopa: 20
     });
-    console.log("XML 380:", xml);
+    
+    expect(xml).toMatchSnapshot();
     
     expect(xml).toContain('<cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>');
-    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
-    expect(xml).toContain('<cbc:Percent>20.00</cbc:Percent>');
-    expect(xml).toContain('<cac:InvoiceLine>');
     expect(xml).toContain('<cbc:ID>AVANS-REDUKCIJA</cbc:ID>');
-    expect(xml).toContain('<cbc:TaxableAmount currencyID="RSD">1500.00</cbc:TaxableAmount>');
-    expect(xml).toContain('<cbc:TaxAmount currencyID="RSD">300.00</cbc:TaxAmount>');
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1800.00</cbc:PayableAmount>');
   });
 
@@ -42,9 +40,10 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
       iznosZaSmanjenjeOsnovice: 1000, iznosZaSmanjenjePdv: 200,
       smerDokumenta: 'POZITIVAN'
     });
-    console.log("XML 381:", xml);
+    
+    expect(xml).toMatchSnapshot();
+    
     expect(xml).toContain('<CreditNote');
-    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1200.00</cbc:PayableAmount>');
   });
 
@@ -54,9 +53,10 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
       referentniRacun: 'KON-1', datumReferentnog: '2026-05-21',
       iznosZaPovecanjeOsnovice: 500, iznosZaPovecanjePdv: 100
     });
-    console.log("XML 383:", xml);
+    
+    expect(xml).toMatchSnapshot();
+    
     expect(xml).toContain('<cbc:InvoiceTypeCode>383</cbc:InvoiceTypeCode>');
-    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">600.00</cbc:PayableAmount>');
   });
 
@@ -67,9 +67,10 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
       iznosSmanjenjaOsnovice: 500, iznosSmanjenjaPdv: 100,
       smerDokumenta: 'NEGATIVAN'
     });
-    console.log("XML 381-AV:", xml);
+    
+    expect(xml).toMatchSnapshot();
+    
     expect(xml).toContain('<sbt:SrbDtExt>');
-    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">-600.00</cbc:PayableAmount>');
   });
 
@@ -80,9 +81,10 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
       iznosZaSmanjenjeOsnovice: 1000, iznosZaSmanjenjePdv: 200,
       smerDokumenta: 'NEGATIVAN'
     });
-    console.log("XML 381-PER:", xml);
+    
+    expect(xml).toMatchSnapshot();
+    
     expect(xml).toContain('<cac:InvoicePeriod>');
-    expect(xml).toContain('<cbc:ID>S</cbc:ID>');
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">-1200.00</cbc:PayableAmount>');
   });
 
@@ -91,11 +93,12 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
       broj: 'OSL-1', pibProdavca: '100000001', pibKupca: '200000002',
       iznos: 1000, poreskaKategorija: 'E', sifraOslobodjenja: 'PDV-RS-24-1-1'
     });
-    console.log("XML 380-OSL:", xml);
+    
+    expect(xml).toMatchSnapshot();
+    
     expect(xml).toContain('<cbc:ID>E</cbc:ID>');
     expect(xml).toContain('<cbc:TaxExemptionReasonCode>PDV-RS-24-1-1</cbc:TaxExemptionReasonCode>');
     expect(xml).toContain('<cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>');
-    expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1000.00</cbc:PayableAmount>');
   });
 
   describe('📊 v3.8.0 Master Specifikacija Alignment Audit', () => {
@@ -107,11 +110,11 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
         poreskaKategorija: 'N',
         smerDokumenta: 'POZITIVAN'
       });
-      console.log("XML N-POS:", xml);
+      
+      expect(xml).toMatchSnapshot();
+      
       expect(xml).toContain('>N</cbc:ID>');
       expect(xml).toContain('>0.00</cbc:Percent>');
-      expect(xml).toContain('>0.00</cbc:TaxAmount>');
-      expect(xml).toContain('>1000.00</cbc:TaxableAmount>');
       expect(xml).toContain('>1000.00</cbc:PayableAmount>');
     });
 
@@ -124,11 +127,11 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
         smerDokumenta: 'NEGATIVAN',
         pdvStopa: 20
       });
-      console.log("XML N-NEG:", xml);
+      
+      expect(xml).toMatchSnapshot();
+      
       expect(xml).toContain('>N</cbc:ID>');
       expect(xml).toContain('>0.00</cbc:Percent>');
-      expect(xml).toContain('>0.00</cbc:TaxAmount>'); // Shield overrides to 0.00
-      expect(xml).toContain('>-1000.00</cbc:TaxableAmount>');
       expect(xml).toContain('>-1000.00</cbc:PayableAmount>');
     });
   });

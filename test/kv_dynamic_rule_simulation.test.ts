@@ -1,14 +1,14 @@
 import { env } from 'cloudflare:test';
-import { describe, it, expect, beforeEach, beforeAll, vi, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
 import { app } from '../worker/index';
-import { SefLiveValidator } from '../packages/sef-ubl-builder/src/index';
+import { SefLiveValidator } from '@dlbr/ubl-sdk';
 
 describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
 
   const klijentId = 'klijent_dynamic_shock';
 
   beforeAll(async () => {
-    // Inicijalizacija baze
+    // Inicijalizacija baze (centralne)
     await env.REGISTAR_DB.prepare(`
       CREATE TABLE IF NOT EXISTS klijenti (
         klijent_id TEXT PRIMARY KEY,
@@ -20,31 +20,28 @@ describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
     `).run();
   });
 
-  afterAll(() => {
-    vi.useRealTimers();
-  });
-
   beforeEach(async () => {
-    // OKLOP: Očisti keš validatora u test memoriji
+    // 1. Očisti keš validatora
     SefLiveValidator.clearCache();
 
     const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
     const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
-    // OKLOP: Očisti keš i u Durable Object memoriji
+    
+    // 2. Resetuj DO keš
     await klijentDO.fetch(new Request('http://do/internal/clear-cache', { method: 'POST' }));
 
-    // 1. Resetuj KV
+    // 3. Resetuj KV
     await env.PORESKI_KV.delete("DRZAVNA_PORESKA_PRAVILA_RS");
     
-    // 2. Resetuj D1
+    // 4. Resetuj D1
     await env.REGISTAR_DB.prepare("DELETE FROM klijenti").run();
     
-    // 3. Registruj klijenta u D1
+    // 5. Registruj klijenta u D1
     await env.REGISTAR_DB.prepare("INSERT OR REPLACE INTO klijenti (klijent_id, naziv) VALUES (?, ?)")
       .bind(klijentId, 'Shock Test Firma').run();
   });
 
-  it('Treba da reaguje na promenu roka u realnom vremenu (Step 1 & 2)', async () => {
+  it('Treba da reaguje na promenu roka u realnom vremenu (Header Injection)', async () => {
     const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
     const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
     
@@ -54,35 +51,53 @@ describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sef_api_key: 'test_key' })
     }));
-// 2. Blokiraj pretplatu
-await klijentDO.fetch(new Request('http://do/admin/set-status', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ status: 'BLOKIRAN' })
-}));
+    
+    await klijentDO.fetch(new Request('http://do/admin/set-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'BLOKIRAN' })
+    }));
 
-    // Simuliramo datum: 11. Maj 2026.
-    vi.setSystemTime(new Date('2026-05-11T10:00:00Z'));
-
-    // --- SCENARIO 1: Rok je 12 ---
+    // --- SCENARIO 1: Zakonski rok je 12 dana ---
     await env.PORESKI_KV.put("DRZAVNA_PORESKA_PRAVILA_RS", JSON.stringify({
       ZAKONSKI_ROK_DANA: 12,
       OPSTA_STOPA_PDV: 20.00
     }));
 
-    const invoiceData = {
+    // Compliant SefInvoiceSchema data
+    const invoiceData1 = {
       ID: "FAK-APRIL-1",
       IssueDate: "2026-04-30",
       DueDate: "2026-05-15",
       InvoiceTypeCode: "380",
       DocumentCurrencyCode: "RSD",
-      Supplier: { Pib: "123456789", Name: "Test", Address: { City: "BG", CountryCode: "RS" } },
-      Customer: { Pib: "987654321", Name: "Kupac", Address: { City: "BG", CountryCode: "RS" } },
-      LegalMonetaryTotal: { 
-        LineExtensionAmount: 100, TaxExclusiveAmount: 100, TaxInclusiveAmount: 120, 
-        AllowanceTotalAmount: 0, PrepaidAmount: 0, PayableRoundingAmount: 0, PayableAmount: 120 
+      Supplier: { 
+        Pib: "123456789", Name: "Prodavac", 
+        Address: { City: "Beograd", CountryCode: "RS" } 
       },
-      Lines: []
+      Customer: { 
+        Pib: "987654321", Name: "Kupac", 
+        Address: { City: "Novi Sad", CountryCode: "RS" } 
+      },
+      LegalMonetaryTotal: {
+        LineExtensionAmount: 100,
+        TaxExclusiveAmount: 100,
+        TaxInclusiveAmount: 120,
+        AllowanceTotalAmount: 0,
+        PrepaidAmount: 0,
+        PayableRoundingAmount: 0,
+        PayableAmount: 120,
+      },
+      Lines: [{
+        ID: "1",
+        Quantity: 1,
+        UnitCode: "H87",
+        LineExtensionAmount: 100,
+        Price: 100,
+        ItemName: "Usluga",
+        VatCategory: "S",
+        VatPercent: 20
+      }]
     };
 
     const mockCtx = {
@@ -90,43 +105,49 @@ await klijentDO.fetch(new Request('http://do/admin/set-status', {
       passThroughOnException: () => {}
     };
 
-    const res1 = await app.request('/api/fakture/send', {
+    const testNow = '2026-05-11T10:00:00Z'; // 11. maj je <= 12 dana od 30. aprila
+
+    // Očekujemo USPEH (202 Accepted)
+    const res1 = await app.fetch(new Request('http://localhost/api/fakture/send', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json', 
         'X-Klijent-ID': klijentId,
-        'X-Test-Now': new Date('2026-05-11T10:00:00Z').toISOString()
+        'X-Test-Now': testNow
       },
-      body: JSON.stringify(invoiceData)
-    }, env, mockCtx as any);
+      body: JSON.stringify(invoiceData1)
+    }), env, mockCtx as any);
 
+    if (res1.status === 400) {
+      console.log("SDK ERROR:", await res1.text());
+    }
     expect(res1.status).toBe(202);
 
-    // --- SCENARIO 2: Rok se menja na 10 ---
+    // --- SCENARIO 2: Zakonski rok se menja na 10 dana (REAL-TIME SHOCK) ---
     await env.PORESKI_KV.put("DRZAVNA_PORESKA_PRAVILA_RS", JSON.stringify({
       ZAKONSKI_ROK_DANA: 10,
       OPSTA_STOPA_PDV: 20.00
     }));
     
-    // OKLOP: Očisti keš i u Durable Object memoriji da bi pokupio nova pravila
+    // Očisti keš u DO da bi pokupio nova pravila
     await klijentDO.fetch(new Request('http://do/internal/clear-cache', { method: 'POST' }));
 
-    // OKLOP: Dajemo Miniflare-u trenutak da propagira KV izmenu
-    await new Promise(r => setTimeout(resolve => r(resolve), 100));
+    const invoiceData2 = { ...invoiceData1, ID: "FAK-APRIL-2" };
 
-    const res2 = await app.request('/api/fakture/send', {
+    // Test Now: 11. Maj (izvan roka od 10 dana)
+    const res2 = await app.fetch(new Request('http://localhost/api/fakture/send', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json', 
         'X-Klijent-ID': klijentId,
-        'X-Test-Now': new Date('2026-05-11T10:00:00Z').toISOString()
+        'X-Test-Now': testNow
       },
-      body: JSON.stringify({ ...invoiceData, ID: "FAK-APRIL-2" })
-    }, env, mockCtx as any);
+      body: JSON.stringify(invoiceData2)
+    }), env, mockCtx as any);
 
-    expect(res2.status).toBe(402);
+    expect(res2.status).toBe(403);
     const body2 = await res2.json() as any;
     expect(body2.error).toBe("Pristup blokiran");
-    expect(body2.poruka).toContain("10. u mesecu");
+    expect(body2.message).toContain("Prošao rok od 10 dana");
   });
 });

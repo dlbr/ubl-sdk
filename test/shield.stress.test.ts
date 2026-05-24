@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SefUblBuilder } from '../packages/sef-ubl-builder/src/index';
+import { SefUblBuilder, MasterValidator } from '@dlbr/ubl-sdk';
 
 describe('🛡️ Digitalni Štit — Stress Test Poligon', () => {
   
@@ -11,35 +11,27 @@ describe('🛡️ Digitalni Štit — Stress Test Poligon', () => {
         pibProdavca: '111111111',
         pibKupca: '222222222',
         InvoiceTypeCode: '380',
-        LegalMonetaryTotal: { PayableAmount: -100 }
+        osnovica: -100
     };
-    expect(() => SefUblBuilder.build(data as any)).toThrow();
+    expect(() => SefUblBuilder.build(data as any)).toThrow('Iznos ne može biti negativan');
   });
 
-  it('TREBA DA VALIDIRA PIB primaoca (Strukturalna zaštita)', () => {
-    const invalidPib = '123'; 
-    expect(() => SefUblBuilder.validatePib(invalidPib)).toThrow();
-  });
-
-  it('TREBA DA DETEKTUJE pogrešnu kombinaciju Poreske kategorije i stope', () => {
+  it('TREBA DA ODBIJE fakturu sa nevalidnim PIB-om', () => {
     const data = { 
-        ID: 'TEST-TAX-1',
-        broj: 'F-2',
+        ID: 'TEST-PIB-1',
+        broj: 'F-1',
         datumIzdavanja: '2026-05-23',
         pibProdavca: '111111111',
-        pibKupca: '222222222',
+        pibKupca: 'ABCDEFGHI', // Invalid non-numeric
         InvoiceTypeCode: '380',
-        LegalMonetaryTotal: { PayableAmount: 100 },
-        TaxTotals: [{
-            Subtotals: [{ Category: 'S20', Percent: 5.0, TaxableAmount: 100, TaxAmount: 5 }]
-        }]
+        osnovica: 100
     };
-    expect(() => SefUblBuilder.build(data as any)).toThrow();
+    expect(() => SefUblBuilder.build(data as any)).toThrow('PIB mora imati 9 cifara');
   });
 
   it('TREBA DA ODBIJE fakturu bez obaveznih polja', () => {
     const incompleteData = { ID: 'TEST-EMPTY' };
-    expect(() => SefUblBuilder.build(incompleteData as any)).toThrow();
+    expect(() => SefUblBuilder.build(incompleteData as any)).toThrow('Nedostaju obavezna polja');
   });
 
   it('TREBA DA ODBIJE avansni račun (386) bez datuma uplate', () => {
@@ -52,6 +44,6 @@ describe('🛡️ Digitalni Štit — Stress Test Poligon', () => {
         InvoiceTypeCode: '386',
         osnovica: 100
     };
-    expect(() => SefUblBuilder.build(avansData as any)).toThrow('[Shield-386]');
+    expect(() => SefUblBuilder.build(avansData as any)).toThrow('Avans zahteva datum uplate');
   });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { MasterValidator } from '../packages/sef-ubl-builder/src/validator';
-import { SefUblBuilder } from '../packages/sef-ubl-builder/src/index';
+import { MasterValidator } from '@dlbr/ubl-sdk';
+import { SefUblBuilder } from '@dlbr/ubl-sdk';
 
 describe('🚀 Final Run — Izvozna Faktura (380) sa MasterValidator-om', () => {
   

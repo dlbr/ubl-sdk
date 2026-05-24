@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SefUblBuilder } from '../src/index';
+import { SefUblBuilder } from '@dlbr/ubl-sdk';
 
 describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () => {
 

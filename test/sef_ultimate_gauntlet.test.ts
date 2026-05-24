@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { SefUblBuilder } from '../packages/sef-ubl-builder/src/index';
+import { SefUblBuilder } from '@dlbr/ubl-sdk';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

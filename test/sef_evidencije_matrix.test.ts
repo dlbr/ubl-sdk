@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SefPoreskiJsonBuilder, SefUblBuilder } from '../packages/sef-ubl-builder/src/index';
+import { SefPoreskiJsonBuilder, SefUblBuilder } from '@dlbr/ubl-sdk';
 
 describe('SEF Bridge v3.4.0 — EEO & EPP (Evidencije) JSON Audit', () => {
 

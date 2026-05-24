@@ -1,4 +1,4 @@
-import { SefUblBuilder } from '../packages/sef-ubl-builder/src/index.js';
+import { SefUblBuilder } from '@dlbr/ubl-sdk';
 
 const API_KEY = process.env.STAGING_SEF_API_KEY;
 const PIB_PRODAVCA = '102345678';
