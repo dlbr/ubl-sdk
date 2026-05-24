@@ -1,4 +1,4 @@
-import { PAYMENT_MEANS } from './constants.js';
+import { PAYMENT_MEANS } from '../constants/sefTaxonomy.js';
 import { Normalizer } from './normalizer.js';
 
 /**
