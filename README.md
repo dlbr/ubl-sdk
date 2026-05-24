@@ -2,6 +2,8 @@
 
 Infrastrukturna komponenta za determinističku sinhronizaciju i validaciju faktura prema UBL 2.1 MFIN profilu.
 
+> **Core Library**: [sef-ubl-builder](https://github.com/dlbr/sef-ubl-builder) - Naš javni XML generator i validator.
+
 ## 🛡️ Steel Fortress Arhitektura
 SEF Bridge nije "samo" generator XML-a. To je sistem projektovan za **poreznu sigurnost i nultu toleranciju na greške**.
 
