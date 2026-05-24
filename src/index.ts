@@ -19,12 +19,10 @@ import type {
 
 import { PAYMENT_MEANS } from './constants.js';
 
-export { SefLiveValidator } from './validator.js';
 export * from './types.js';
+export * from './constants.js';
+export * from './SefUblBuilder.js';
 
-/**
- * Poreski JSON Builder za EEO/EPP.
- */
 export class SefPoreskiJsonBuilder {
   private static num(val: any, fallback: number = 0): number {
     const n = parseFloat(val);
@@ -85,6 +83,28 @@ export class SefPoreskiJsonBuilder {
  * SefUblBuilder v4.12.3 — Steel Master Builder Alignment.
  */
 export class SefUblBuilder {
+
+  static validatePib(pib: string): boolean {
+    if (!/^\d{9}$/.test(pib)) throw new Error('PIB mora imati tačno 9 cifara');
+    return true;
+  }
+
+  static validateBusinessRules(data: any) {
+    if (!data.ID || !data.broj || !data.datumIzdavanja || !data.pibProdavca || !data.pibKupca) {
+      throw new Error('Nedostaju obavezna polja (ID, broj, datum, PIB)');
+    }
+
+    const amount = this.ensure(data.LegalMonetaryTotal?.PayableAmount || data.osnovica);
+    if (amount < 0) throw new Error('Iznos ne može biti negativan');
+
+    if (data.TaxTotals) {
+      for (const tax of data.TaxTotals) {
+        for (const sub of tax.Subtotals) {
+          if (sub.Category === 'S20' && sub.Percent !== 20) throw new Error('Neispravna poreska stopa za S20');
+        }
+      }
+    }
+  }
 
   private static ensure(val: any, fallback: number = 0): number {
     const num = parseFloat(val);
@@ -192,6 +212,19 @@ export class SefUblBuilder {
     return '';
   }
 
+  private static buildPaymentExchangeRate(data: any): string {
+    if (data.valuta && data.valuta !== 'RSD' && data.exchangeRate) {
+        return `
+  <cac:PaymentExchangeRate>
+    <cbc:SourceCurrencyCode>EUR</cbc:SourceCurrencyCode>
+    <cbc:TargetCurrencyCode>RSD</cbc:TargetCurrencyCode>
+    <cbc:CalculationRate>${data.exchangeRate}</cbc:CalculationRate>
+    <cbc:Date>${data.datumIzdavanja}</cbc:Date>
+  </cac:PaymentExchangeRate>`;
+    }
+    return '';
+  }
+
   private static assemble(data: any, type: string, root: 'Invoice' | 'CreditNote', body: { summary: string; lines: string; }): string {
     const isCN = root === 'CreditNote';
     const today = new Date().toISOString().split('T')[0];
@@ -203,8 +236,8 @@ export class SefUblBuilder {
     const date = `<cbc:IssueDate>${data.datumIzdavanja || data.datum || today}</cbc:IssueDate>`;
     const typeCode = `<cbc:${isCN ? 'CreditNoteTypeCode' : 'InvoiceTypeCode'}>${type}</cbc:${isCN ? 'CreditNoteTypeCode' : 'InvoiceTypeCode'}>${data.extra_notes || ''}`;
     const currency = `<cbc:DocumentCurrencyCode>${data.valuta || 'RSD'}</cbc:DocumentCurrencyCode>`;
+    const exchangeRate = this.buildPaymentExchangeRate(data);
     const period = this.buildInvoicePeriod(type, data);
-    const billing = this.buildBillingRef(data);
     const supplier = this.buildParty('Supplier', data.pibProdavca, data.nazivProdavca || 'PRODAVAC', data);
     const customer = this.buildParty('Customer', data.pibKupca, data.nazivKupca || 'KUPAC', data);
     const delivery = this.buildDelivery(data, type);
@@ -218,8 +251,8 @@ export class SefUblBuilder {
   ${date}
   ${typeCode}
   ${currency}
+  ${exchangeRate}
   ${period}
-  ${billing}
   ${supplier}
   ${customer}
   ${delivery}
@@ -374,8 +407,48 @@ export class SefUblBuilder {
     return this.buildStandardna(d);
   }
 
+  static validate386(data: any) {
+    const errors = [];
+    
+    if (!data.datumUplate) errors.push("Nedostaje datum uplate (PaymentDueDate)");
+    if (!data.osnovica || data.osnovica <= 0) errors.push("Iznos avansa mora biti > 0");
+    if (!data.broj || !data.broj.includes('AV')) {
+      errors.push("Broj fakture za avans mora imati prefiks AV (preporuka)");
+    }
+    
+    // Provera ekstenzije (SrbDtExt)
+    if (!data.avansBroj && !data.referentniRacun) {
+      errors.push("Nedostaje SrbDtExt ekstenzija (avansBroj/referentniRacun)");
+    }
+
+    if (errors.length > 0) {
+      throw new Error(`[Shield-386] Faktura neispravna: ${errors.join(', ')}`);
+    }
+  }
+
+  static validate381(data: any) {
+    const errors = [];
+    if (!data.billingReference || !data.billingReference.invoiceId) {
+      errors.push("Tip 381 zahteva BillingReference (ID originalne fakture)");
+    }
+    if (!data.billingReference?.issueDate) {
+      errors.push("Tip 381 zahteva IssueDate originalne fakture");
+    }
+    if (!data.correctionReason) {
+      errors.push("Razlog korekcije (Note) je obavezan");
+    }
+    if (errors.length > 0) {
+      throw new Error(`[Shield-381] Neispravno knjižno odobrenje: ${errors.join(', ')}`);
+    }
+  }
+
   static build(data: any): string {
+    this.validateBusinessRules(data);
     const type = data.InvoiceTypeCode || data.TipZapisa || '380';
+    if (type === '386') this.validate386(data);
+    if (type === '381') this.validate381(data);
+    
+    // ... rest of the build method
     if (type === 'EEO') return JSON.stringify(SefPoreskiJsonBuilder.buildZbirniEeoPayload(data));
     if (type === 'PEEO') return JSON.stringify(SefPoreskiJsonBuilder.buildPojedinacnaEeoPayload(data));
     if (type === 'EPP') return JSON.stringify(SefPoreskiJsonBuilder.buildEppPayload(data));
