@@ -29,6 +29,9 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+        env:
+          # Workaround for pnpm v11 build script blockage in non-interactive CI
+          PNPM_SKIP_CHECK_BUILT_DEPENDENCIES: true
 
       - name: Build
         run: pnpm --filter @dlbr/ubl-sdk run build
