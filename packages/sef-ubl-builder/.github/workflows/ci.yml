@@ -20,6 +20,6 @@ jobs:
         run: |
           apt-get update && apt-get install -y libxml2-utils default-jre git
       - name: Install Dependencies
-        run: npm install
+        run: npm install --include=dev
       - name: Run Tests
         run: npm test
