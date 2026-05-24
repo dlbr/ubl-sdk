@@ -1,5 +1,7 @@
 export * from './models/Invoice.js';
+export * from './models/DespatchAdvice.js';
 export * from './builder/InvoiceBuilder.js';
+export * from './builder/DespatchBuilder.js';
 export * from './services/TaxCalculator.js';
 export * from './services/PoreskiJsonBuilder.js';
 export * from './transformer/XmlTransformer.js';
