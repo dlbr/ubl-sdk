@@ -1,0 +1,28 @@
+name: Builder CI
+on:
+  push:
+    paths:
+      - 'packages/sef-ubl-builder/**'
+      - '.github/workflows/builder-ci.yml'
+  pull_request:
+    paths:
+      - 'packages/sef-ubl-builder/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/sef-ubl-builder
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'packages/sef-ubl-builder/package-lock.json'
+      - name: Install Dependencies
+        run: npm install
+      - name: Run Tests
+        run: npm test
