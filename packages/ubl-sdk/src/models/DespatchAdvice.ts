@@ -12,6 +12,8 @@ export interface DespatchLine {
     id: string;
     lineID?: string;
   };
+  exciseCategory?: string; // AKCIZE.KATEGORIJA
+  itemProperties?: Record<string, string>; // e.g. "GUSTINA"
 }
 
 export interface DespatchAdvice {
@@ -19,6 +21,12 @@ export interface DespatchAdvice {
   issueDate: string;
   issueTime?: string;
   note?: string[];
+  
+  // Serbian Extensions (SrbDtExt)
+  shipmentMethod?: '1' | '2' | '3' | '4' | '5';
+  thirdPartyGoodsId?: string;
+  isReturn?: boolean;
+  offlineZinNumber?: string;
   
   orderReference?: {
     id: string;

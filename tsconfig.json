@@ -8,7 +8,8 @@
     "types": [
       "./worker-configuration.d.ts",
       "node",
-      "@cloudflare/vitest-pool-workers"
+      "@cloudflare/vitest-pool-workers",
+      "@cloudflare/workers-types"
     ],
     "paths": {
       "cloudflare:test": ["./node_modules/@cloudflare/vitest-pool-workers/types/cloudflare-test.d.ts"],

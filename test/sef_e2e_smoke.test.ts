@@ -29,7 +29,8 @@ describe('SEF Bridge v3.6.0 — Krovni E2E Smoke Test i Verifikacija Lanaca (Por
       CREATE TABLE IF NOT EXISTS dokumenti (
         id TEXT PRIMARY KEY, tip TEXT NOT NULL, broj TEXT NOT NULL,
         pib_prodavca TEXT NOT NULL, pib_kupca TEXT NOT NULL, status TEXT NOT NULL,
-        xml_blob TEXT, json_metadata TEXT, parent_doc_id TEXT,
+        iznos_osnovica REAL DEFAULT 0, iznos_poreza REAL DEFAULT 0, datum_prometa DATETIME,
+        xml_blob TEXT, json_metadata TEXT, parent_id TEXT,
         kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `).run();
@@ -38,14 +39,14 @@ describe('SEF Bridge v3.6.0 — Krovni E2E Smoke Test i Verifikacija Lanaca (Por
         id INTEGER PRIMARY KEY AUTOINCREMENT, dokument_id TEXT NOT NULL, line_id TEXT,
         naziv TEXT NOT NULL, poslata_kolicina REAL, primljena_kolicina REAL,
         jedinica_mere TEXT, cena REAL, porez_stopa REAL, porez_kategorija TEXT,
-        osnovica REAL, iznos_poreza REAL, razlika REAL
+        osnovica REAL, iznos_poreza REAL, razlika REAL,
+        UNIQUE(dokument_id, line_id)
       )
-    `).run();
-
     // 2. Čisto stanje pre svakog testa
-    await env.REGISTAR_DB.prepare("DELETE FROM klijenti").run();
-    await env.REGISTAR_DB.prepare("DELETE FROM dokumenti").run();
+    await env.REGISTAR_DB.prepare("DELETE FROM dokumenti_log").run();
     await env.REGISTAR_DB.prepare("DELETE FROM dokument_stavke").run();
+    await env.REGISTAR_DB.prepare("DELETE FROM dokumenti").run();
+    await env.REGISTAR_DB.prepare("DELETE FROM klijenti").run();
     await env.REGISTAR_DB.prepare("INSERT INTO klijenti (klijent_id, naziv) VALUES (?, ?)")      .bind(klijentId, 'E2E Smoke Firma').run();
 
     const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);

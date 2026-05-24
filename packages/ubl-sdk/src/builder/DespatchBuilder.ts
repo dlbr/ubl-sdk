@@ -45,6 +45,26 @@ export class DespatchBuilder {
     return this;
   }
 
+  setShipmentMethod(method: DespatchAdvice['shipmentMethod']): this {
+    this.despatch.shipmentMethod = method;
+    return this;
+  }
+
+  setThirdPartyGoodsId(id: string): this {
+    this.despatch.thirdPartyGoodsId = id;
+    return this;
+  }
+
+  setIsReturn(isReturn: boolean): this {
+    this.despatch.isReturn = isReturn;
+    return this;
+  }
+
+  setOfflineZinNumber(zin: string): this {
+    this.despatch.offlineZinNumber = zin;
+    return this;
+  }
+
   addLine(line: DespatchLine): this {
     this.despatch.lines!.push(line);
     return this;

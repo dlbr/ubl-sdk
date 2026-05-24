@@ -170,6 +170,54 @@ export class SefClient {
   }
 
   /**
+   * Sends DespatchAdvice (eOtpremnica) to the central registry.
+   * v4.20.0: Uses multipart/form-data as required by the public/documents/requests endpoint.
+   */
+  async sendDespatchAdvice(xml: string, requestId: string): Promise<SefSendResponse> {
+    const endpoint = `${this.baseUrl}/api/public/documents/requests`;
+    
+    const formData = new FormData();
+    formData.append('RequestId', requestId);
+    const blob = new Blob([xml], { type: 'application/xml' });
+    formData.append('File', blob, 'despatch_advice.xml');
+
+    try {
+      const response = await this.fetchWithTimeout(endpoint, {
+        method: 'POST',
+        headers: {
+          'ApiKey': this.apiKey,
+          'Accept': 'application/json'
+          // Fetch will automatically set Content-Type with boundary for FormData
+        },
+        body: formData
+      }, 30000);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return {
+          success: false,
+          error: `eOTPREMNICA_API_ERROR (${response.status}): ${errorText}`,
+          statusCode: response.status
+        };
+      }
+
+      const data = await response.json() as { Id: string; DocumentNumber: string };
+
+      return {
+        success: true,
+        salesInvoiceId: parseInt(data.Id) || 0, // eOtpremnica uses string IDs, we map for compat
+        invoiceNumber: data.DocumentNumber
+      };
+
+    } catch (error: any) {
+      return {
+        success: false,
+        error: `eOTPREMNICA_FETCH_FAILURE: ${error.message}`
+      };
+    }
+  }
+
+  /**
    * Official Portal-Style Search for Sales Invoices.
    * v4.15.6: Uses CompanyIds and Unix timestamps for maximum fidelity.
    */

@@ -1,11 +1,41 @@
 import { env } from 'cloudflare:test';
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, vi, afterEach } from 'vitest';
 import type { SefInvoiceData } from '../shared/types/sef';
 
 describe('KlijentBaza: SEF E2E Integration', () => {
   const klijentId = 'klijent_test_pib';
   const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
   const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
+
+  beforeAll(async () => {
+    // Inicijalizacija centralne baze (D1)
+    await env.REGISTAR_DB.prepare(`
+      CREATE TABLE IF NOT EXISTS dokumenti (
+        id TEXT PRIMARY KEY, tip TEXT NOT NULL, broj TEXT NOT NULL,
+        pib_prodavca TEXT NOT NULL, pib_kupca TEXT NOT NULL, status TEXT NOT NULL,
+        iznos_osnovica REAL DEFAULT 0, iznos_poreza REAL DEFAULT 0, datum_prometa DATETIME,
+        xml_blob TEXT, json_metadata TEXT, parent_id TEXT,
+        kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+    await env.REGISTAR_DB.prepare(`
+      CREATE TABLE IF NOT EXISTS dokument_stavke (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, dokument_id TEXT NOT NULL, line_id TEXT,
+        naziv TEXT NOT NULL, poslata_kolicina REAL, primljena_kolicina REAL,
+        jedinica_mere TEXT, cena REAL, porez_stopa REAL, porez_kategorija TEXT,
+        osnovica REAL, iznos_poreza REAL, razlika REAL,
+        UNIQUE(dokument_id, line_id)
+      )
+    `).run();
+    await env.REGISTAR_DB.prepare(`
+      CREATE TABLE IF NOT EXISTS dokumenti_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, dokument_id TEXT NOT NULL,
+        prethodni_status TEXT, novi_status TEXT NOT NULL, poruka TEXT,
+        kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(dokument_id) REFERENCES dokumenti(id)
+      )
+    `).run();
+  });
 
   beforeEach(async () => {
     // Reset configuration for the DO

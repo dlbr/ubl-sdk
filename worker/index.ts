@@ -1,10 +1,13 @@
 import { Router, type RouterContext } from './router';
 import { validateJson } from './validator';
-import { SefInvoiceSchema, SefWebhookSchema, SefDespatchAdviceSchema } from '../shared/types/sef';
+import { SefInvoiceSchema, SefWebhookSchema, SefDespatchAdviceSchema, SefReceiptAdviceSchema } from '../shared/types/sef';
+import { DespatchSchema } from '../shared/schemas/despatch';
+import { ReceiptSchema } from '../shared/schemas/receipt';
 import ComplianceWatcher from "./compliance-watcher";
-import { SefUblBuilder, DespatchBuilder } from '@dlbr/ubl-sdk';
+import { SefUblBuilder, DespatchBuilder, ReceiptBuilder } from '@dlbr/ubl-sdk';
 import { Archiver } from "../shared/services/Archiver";
 import { SefClient } from '../shared/services/sefClient';
+import { D1SyncBridge } from '../shared/services/D1SyncBridge';
 import { KVRegistry } from './services/KVRegistry';
 import { posaljiHotfixTelegramAlarm } from '../shared/services/telegram-notifier';
 
@@ -169,6 +172,14 @@ app.get('/api/dashboard/logs', auth(async (c: RouterContext<Env> & { klijentId?:
   return Response.json(await klijentDO.getLogs());
 }));
 
+app.get('/api/dokumenti/chain/:id', auth(async (c: RouterContext<Env> & { result?: any }) => {
+  const bridge = new D1SyncBridge(c.env.REGISTAR_DB);
+  const id = c.result?.pathname?.groups?.id;
+  if (!id) return new Response('Missing ID', { status: 400 });
+  const chain = await bridge.getDocumentChain(id);
+  return Response.json({ success: true, chain: chain.results });
+}));
+
 app.post('/api/dashboard/webhook', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const telo = await c.req.json();
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
@@ -190,20 +201,38 @@ app.post('/api/fakture/sync', auth(async (c: RouterContext<Env> & { klijentId?: 
   return Response.json(await klijentDO.syncWithSef());
 }));
 
-app.post('/api/otpremnice/send', auth(validateJson(SefDespatchAdviceSchema, async (c: RouterContext<Env> & { klijentId?: string }) => {
+app.post('/api/otpremnice/send', auth(validateJson(DespatchSchema, async (c: RouterContext<Env> & { klijentId?: string, validJson?: any }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
-
+  
+  const input = c.validJson!;
+  
   // 1. FAIL-FAST QUOTA CHECK
   const checkRes = await klijentDO.fetch(new Request('http://do/api/internal/check-quota', {
     headers: { 'X-Test-Now': c.req.headers.get('X-Test-Now') || '' }
   }));
   if (!checkRes.ok) return checkRes;
 
-  // 2. ATOMIC SEND (Otpremnica)
+  // 2. MAPPING FLAT -> UBL (D1 SSoT Architecture)
+  const ublPayload = {
+    ID: input.id,
+    IssueDate: input.issueDate,
+    DespatchDate: input.despatchDate,
+    Supplier: { Pib: input.supplierPib, Name: 'PRODAVAC' }, // Name will be overridden in DO if needed
+    Customer: { Pib: input.customerPib, Name: 'KUPAC' },
+    Lines: input.lines.map((l: any) => ({
+      ID: l.id,
+      ItemName: l.name,
+      DeliveredQuantity: l.quantity,
+      UnitCode: l.unitCode
+    })),
+    BillingReference: input.billingReference
+  };
+
+  // 3. ATOMIC SEND
   const doResponse = await klijentDO.fetch(new Request('http://do/otpremnice/send', { 
     method: 'POST', 
-    body: JSON.stringify(c.validJson),
+    body: JSON.stringify(ublPayload),
     headers: { 
       'Content-Type': 'application/json',
       'X-Test-Now': c.req.headers.get('X-Test-Now') || ''
@@ -216,7 +245,7 @@ app.post('/api/otpremnice/send', auth(validateJson(SefDespatchAdviceSchema, asyn
       c.ctx.waitUntil((async () => {
         try {
           await c.env.SEF_QUEUE.send({ 
-            id: result.internalId || c.validJson!.ID, 
+            id: result.internalId || input.id, 
             xml: result.xml, 
             pib: c.klijentId!.replace('klijent_', ''),
             tip: 'OTPREMNICA'
@@ -231,6 +260,66 @@ app.post('/api/otpremnice/send', auth(validateJson(SefDespatchAdviceSchema, asyn
   return doResponse;
 })));
 
+app.post('/api/prijemnice/receive', auth(validateJson(ReceiptSchema, async (c: RouterContext<Env> & { klijentId?: string, validJson?: any }) => {
+  const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
+  const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+
+  const input = c.validJson!;
+
+  // MAPPING FLAT -> UBL
+  const ublPayload = {
+    ID: input.id,
+    IssueDate: input.issueDate,
+    Supplier: { Pib: input.supplierPib, Name: 'PRODAVAC' },
+    Customer: { Pib: input.customerPib, Name: 'KUPAC' },
+    DespatchDocumentReference: input.despatchReference ? {
+      ID: input.despatchReference.id,
+      IssueDate: input.despatchReference.issueDate
+    } : undefined,
+    Lines: input.lines.map((l: any) => ({
+      ID: l.id,
+      ReceivedQuantity: l.receivedQuantity,
+      UnitCode: l.unitCode,
+      ShortQuantity: l.shortQuantity,
+      RejectedQuantity: l.rejectedQuantity,
+      RejectReason: l.rejectReason,
+      ItemName: l.itemName,
+      ItemIdentification: l.itemIdentification,
+      DespatchLineID: l.despatchLineId
+    })),
+    Note: input.note
+  };
+
+  // ATOMIC RECEIVE (Prijemnica)
+  const doResponse = await klijentDO.fetch(new Request('http://do/prijemnice/receive', { 
+    method: 'POST', 
+    body: JSON.stringify(ublPayload),
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-Test-Now': c.req.headers.get('X-Test-Now') || ''
+    }
+  }));
+
+  if (doResponse.ok && c.env.SEF_QUEUE) {
+    const result = await doResponse.clone().json() as any;
+    if (result.success && result.xml) {
+      c.ctx.waitUntil((async () => {
+        try {
+          await c.env.SEF_QUEUE.send({ 
+            id: result.internalId || input.id, 
+            xml: result.xml, 
+            pib: c.klijentId!.replace('klijent_', ''),
+            tip: 'PRIJEMNICA'
+          });
+        } catch (e) {
+          console.error("Queue Archiving Error (Prijemnica):", e);
+        }
+      })());
+    }
+  }
+
+  return doResponse;
+})));
 app.post('/api/fakture/send', auth(validateJson(SefInvoiceSchema, async (c: RouterContext<Env> & { klijentId?: string }) => {  const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
 
@@ -288,7 +377,13 @@ app.get('/api/analytics/pppdv-summary', auth(async (c: RouterContext<Env> & { kl
   if (!period) return Response.json({ error: "Missing period" }, { status: 400 });
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
-  return Response.json({ success: true, data: await klijentDO.getPppdvSummary(period) });
+  return await klijentDO.fetch(new Request(`http://do/api/analytics/pppdv-summary?period=${period}`));
+}));
+
+app.get('/api/analytics/potrosnja', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
+  const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+  return await klijentDO.fetch('http://do/api/analytics/potrosnja');
 }));
 
 app.get('/api/analytics/export-excel', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
@@ -376,8 +471,33 @@ app.post('/api/webhooks/sef', validateJson(SefWebhookSchema, async (c: RouterCon
   return Response.json({ uspeh: true });
 }));
 
-// TEST & DEBUG ROUTES (Isolated in CI/Local)
-app.post('/test/seed', async ({ req, env }: RouterContext<Env>) => {
+app.post('/api/webhooks/otpremnice', async (c: RouterContext<Env>) => {
+  const { id, status, pib_kompanije } = await c.req.json() as any;
+  const bridge = new D1SyncBridge(c.env.REGISTAR_DB);
+
+  // 1. Ažuriranje statusa u D1 (SSoT)
+  await c.env.REGISTAR_DB.prepare(
+    "UPDATE dokumenti SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE id = ? OR sef_id = ?"
+  ).bind(status, id, id).run();
+
+  await bridge.logEvent(id, status, 'Ažuriranje statusa preko webhook-a');
+
+  // 2. Propagacija ka Durable Objectu za internu logiku (npr. reconciliation)
+  if (pib_kompanije) {
+    const klijentId = `klijent_${pib_kompanije}`;
+    const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
+    const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+    c.ctx.waitUntil(klijentDO.fetch(new Request('http://do/webhooks/despatch-update', {
+      method: 'POST',
+      body: JSON.stringify({ despatch_id: id, novi_status: status })
+    })));
+  }
+
+  return Response.json({ success: true });
+});
+
+  // TEST & DEBUG ROUTES (Isolated in CI/Local)
+  app.post('/test/seed', async ({ req, env }: RouterContext<Env>) => {
   const { klijentId, data } = await req.json() as any;
   const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
   const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);

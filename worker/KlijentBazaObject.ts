@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./index";
 import { type SefInvoiceData, SefInvoiceSchema } from "../shared/types/sef";
-import { SefUblBuilder, SefLiveValidator, DespatchBuilder } from "@dlbr/ubl-sdk";
+import { SefUblBuilder, SefLiveValidator, DespatchBuilder, ReceiptBuilder } from "@dlbr/ubl-sdk";
 import { SefClient } from "../shared/services/sefClient";
 import { PopdvSefClient } from "../shared/services/popdvClient";
 import { SefExcelBuilder } from "../shared/services/excelBuilder";
@@ -11,6 +11,7 @@ import { type PopdvSubmitData } from '../shared/types/popdv';
 import { Router, type RouterContext } from './router';
 import { ErrorShield } from "../shared/services/errorShield";
 import { Redacted } from "../shared/services/redacted";
+import { D1SyncBridge, type D1Document, type D1DocumentLine } from "../shared/services/D1SyncBridge";
 
 export interface PppdvSummary {
   period: string;
@@ -28,20 +29,14 @@ export interface PppdvSummary {
   porezZaUplatuIliPovracaj: number; 
 }
 
-const yieldToEventLoop = () => new Promise(resolve => setTimeout(resolve, 0));
-
 export class KlijentBaza extends DurableObject<Env> {
   private sql: SqlStorage;
-  private isDraining = false;
-  private isSyncingPurchases = false;
   private app = Router<Env>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.sql = ctx.storage.sql;
     this.initDatabase();
-    this.updateSchemaFor2026();
-    this.updateSchemaForBillingLedger();
     this.setupRoutes();
   }
 
@@ -65,22 +60,15 @@ export class KlijentBaza extends DurableObject<Env> {
 
     this.app.post('/config', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
-      this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, klijent_id, environment, limit_faktura) VALUES (1, ?, ?, ?, ?)`, 
-        data.sef_api_key || '', data.klijent_id || null, data.environment || 'sandbox', data.limit || 50);
+      this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, klijent_id, environment, limit_faktura, status_pretplate) VALUES (1, ?, ?, ?, ?, ?)`, 
+        data.sef_api_key || '', data.klijent_id || null, data.environment || 'sandbox', data.limit || 50, data.status_pretplate || 'AKTIVAN');
       
-      // Initialize credits if first time
       const ledgerCount = this.sql.exec(`SELECT COUNT(*) as c FROM billing_ledger`).one() as { c: number };
       if (ledgerCount.c === 0) {
         this.sql.exec(`INSERT INTO billing_ledger (id, tip_transakcije, iznos_kredita, beleska) VALUES (?, 'DOPUNA', ?, 'Initial')`, 
           crypto.randomUUID(), data.limit || 50);
       }
       return Response.json({ success: true });
-    });
-
-    this.app.post('/admin/set-status', async ({ req }: RouterContext<Env>) => {
-      const { status } = await req.json() as { status: string };
-      this.sql.exec(`UPDATE konfiguracija SET status_pretplate = ? WHERE id = 1`, status);
-      return Response.json({ success: true, status });
     });
 
     this.app.post('/internal/clear-cache', async () => {
@@ -95,10 +83,16 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ success: true, data: summary });
     });
 
+    this.app.get('/api/analytics/potrosnja', async () => {
+      const saldo = this.getSaldo();
+      const izvod = this.sql.exec(`SELECT * FROM billing_ledger ORDER BY row_id DESC LIMIT 10`).toArray();
+      return Response.json({ saldo, izvod });
+    });
+
     this.app.get('/api/audit/download', async ({ req }: RouterContext<Env>) => {
       const url = new URL(req.url);
       const period = url.searchParams.get('period') || '';
-      const fakture = this.sql.exec(`SELECT * FROM fakture`).toArray(); // Za test uzimamo sve
+      const fakture = this.sql.exec(`SELECT * FROM fakture`).toArray(); 
       return Response.json({
         success: true,
         status: "USKLAĐENO_SA_UREDROM_MFIN",
@@ -127,7 +121,6 @@ export class KlijentBaza extends DurableObject<Env> {
         this.sql.exec(`INSERT OR REPLACE INTO sef_purchase_invoice_taxes (invoice_id, tax_category_code, tax_percentage, taxable_amount, tax_amount, non_deductible_amount) VALUES (?, 'S', 20, ?, ?, 0)`,
           data.sefId, data.taxableAmount, data.taxAmount);
 
-        // UPDATE D1 (SSoT) for PPPDV Analytics
         const config = this.sql.exec(`SELECT klijent_id FROM konfiguracija WHERE id = 1`).one() as any;
         const pib = config?.klijent_id || 'UNKNOWN';
 
@@ -160,7 +153,7 @@ export class KlijentBaza extends DurableObject<Env> {
         }
         if (data.fakture) {
           for (const f of data.fakture) {
-            this.sql.exec(`INSERT OR REPLACE INTO fakture (internal_id, broj_fakture, status, iznos) VALUES (?, ?, ?, ?)`,
+            this.sql.exec(`INSERT OR REPLACE INTO fakture (internal_id, sef_id, broj_fakture, status, iznos) VALUES (?, ?, ?, ?)`,
               f.internal_id, f.broj_fakture, f.status, f.iznos);
           }
         }
@@ -183,419 +176,191 @@ export class KlijentBaza extends DurableObject<Env> {
     this.app.post('/otpremnice/send', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
       const testNow = req.headers.get('X-Test-Now');
-      
       const { moze, error } = await this.checkLimit(1, data, testNow);
-      if (!moze) {
-        const status = error.error === "LIMIT_EXCEEDED" ? 402 : 403;
-        return Response.json(error, { status });
-      }
+      if (!moze) return Response.json(error, { status: error.error === "LIMIT_EXCEEDED" ? 402 : 403 });
 
       try {
         const builder = DespatchBuilder.create(data.ID, data.IssueDate)
           .setSeller(data.Supplier)
           .setBuyer(data.Customer);
-        
         for (const line of data.Lines) {
-          builder.addLine({
-            id: line.ID,
-            name: line.ItemName,
-            deliveredQuantity: line.DeliveredQuantity,
-            unitCode: line.UnitCode,
-            itemID: line.ItemIdentification
-          });
+          builder.addLine({ id: line.ID, name: line.ItemName, deliveredQuantity: line.DeliveredQuantity, unitCode: line.UnitCode, itemID: line.ItemIdentification });
         }
-
         const advice = builder.toXml();
-
         const internalId = `OTP-${Date.now()}`;
-        const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
-        if (!config) throw new Error("Firma nije konfigurisana.");
+        const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).one() as any;
+        
+        const client = new SefClient({ apiKey: config.sef_api_key, baseUrl: this.env.SEF_API_URL ?? 'https://demoefaktura.mfin.gov.rs', environment: config.environment });
+        const sefRes = await client.sendDespatchAdvice(advice, `req-otp-${Date.now()}`);
+        const finalStatus = sefRes.success ? 'SENT' : 'ERROR';
 
-        // Persist to D1 (SSoT)
-        await this.env.REGISTAR_DB.prepare(`
-          INSERT INTO dokumenti (id, tip, broj, pib_prodavca, pib_kupca, status, xml_blob, json_metadata)
-          VALUES (?, 'OTPREMNICA', ?, ?, ?, 'SENT', ?, ?)
-        `).bind(
-          internalId, 
-          data.ID, 
-          data.Supplier.Pib, 
-          data.Customer.Pib, 
-          advice, 
-          JSON.stringify({ lines: data.Lines.length })
-        ).run();
+        const bridge = new D1SyncBridge(this.env.REGISTAR_DB);
+        await bridge.upsertDocument({ id: internalId, tip: 'OTPREMNICA', broj: data.ID, pibProdavca: data.Supplier.Pib, pibKupca: data.Customer.Pib, status: finalStatus, xmlBlob: advice, parentId: data.BillingReference || null });
+        await bridge.logEvent(internalId, finalStatus, sefRes.success ? 'Poslato na Centralni Registar' : sefRes.error);
 
-        // Persist items to D1
-        for (const line of data.Lines) {
-          await this.env.REGISTAR_DB.prepare(`
-            INSERT INTO dokument_stavke (dokument_id, line_id, naziv, poslata_kolicina, jedinica_mere)
-            VALUES (?, ?, ?, ?, ?)
-          `).bind(internalId, line.ID, line.ItemName, line.DeliveredQuantity, line.UnitCode).run();
-        }
+        const lines: D1DocumentLine[] = data.Lines.map((l: any) => ({ dokumentId: internalId, lineId: l.ID, naziv: l.ItemName, poslataKolicina: l.DeliveredQuantity, jedinicaMere: l.UnitCode }));
+        await bridge.upsertLines(lines);
 
-        // REZERVIŠI KREDIT (U DO storage-u za sada, dok ne migriramo i ledger)
-        this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'POTROŠNJA', -1, 'Despatch Send')`, 
-          crypto.randomUUID(), internalId, data.ID);
-
+        this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'POTROŠNJA', -1, 'Despatch Send')`, crypto.randomUUID(), internalId, data.ID);
         return Response.json({ success: true, internalId, xml: advice }, { status: 202 });
-      } catch (e: any) {
-        return Response.json({ error: 'LOGISTICS_ERROR', message: e.message }, { status: 400 });
-      }
+      } catch (e: any) { return Response.json({ error: 'LOGISTICS_ERROR', message: e.message }, { status: 400 }); }
+    });
+
+    this.app.post('/prijemnice/receive', async ({ req }: RouterContext<Env>) => {
+      const data = await req.json() as any;
+      const bridge = new D1SyncBridge(this.env.REGISTAR_DB);
+      try {
+        const builder = ReceiptBuilder.create(data.ID, data.IssueDate).setSeller(data.Supplier).setBuyer(data.Customer);
+        if (data.DespatchDocumentReference) builder.setDespatchReference(data.DespatchDocumentReference.ID, data.DespatchDocumentReference.IssueDate);
+        for (const line of data.Lines) {
+          builder.addLine({ id: line.ID, receivedQuantity: line.ReceivedQuantity, unitCode: line.UnitCode, itemName: line.ItemName, shortQuantity: line.ShortQuantity, rejectedQuantity: line.RejectedQuantity, rejectReason: line.RejectReason, despatchLineReference: line.DespatchLineID ? { id: line.DespatchLineID } : undefined });
+        }
+        const xml = builder.toXml();
+        const internalId = `REC-${Date.now()}`;
+        const parentId = data.DespatchDocumentReference?.ID;
+        let hasDiscrepancy = false;
+        
+        if (parentId) {
+          const despatch = await this.env.REGISTAR_DB.prepare("SELECT id FROM dokumenti WHERE broj = ? AND tip = 'OTPREMNICA'").bind(parentId).first() as any;
+          if (despatch) {
+            for (const line of data.Lines) {
+              const diff = (line.ShortQuantity || 0) + (line.RejectedQuantity || 0);
+              if (diff > 0) hasDiscrepancy = true;
+              await this.env.REGISTAR_DB.prepare(`UPDATE dokument_stavke SET primljena_kolicina = ?, razlika = ? WHERE dokument_id = ? AND line_id = ?`).bind(line.ReceivedQuantity, diff, despatch.id, line.DespatchLineID || line.ID).run();
+            }
+            await this.env.REGISTAR_DB.prepare("UPDATE dokumenti SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE id = ?").bind(hasDiscrepancy ? 'DISCREPANCY' : 'ACCEPTED', despatch.id).run();
+          }
+        }
+        await bridge.upsertDocument({ id: internalId, tip: 'PRIJEMNICA', broj: data.ID, pibProdavca: data.Supplier.Pib, pibKupca: data.Customer.Pib, status: hasDiscrepancy ? 'DISCREPANCY' : 'ACCEPTED', xmlBlob: xml, parentId: parentId });
+        await bridge.logEvent(internalId, hasDiscrepancy ? 'DISCREPANCY' : 'ACCEPTED', hasDiscrepancy ? 'Prijemnica sa razlikom' : 'Roba primljena u celosti');
+        return Response.json({ success: true, internalId, hasDiscrepancy, xml }, { status: 202 });
+      } catch (e: any) { return Response.json({ error: 'LOGISTICS_ERROR', message: e.message }, { status: 400 }); }
     });
 
     this.app.post('/fakture/send', async ({ req }: RouterContext<Env>) => {
       const invoiceData = await req.json() as any;
       const testNow = req.headers.get('X-Test-Now');
-      
       const { moze, error } = await this.checkLimit(1, invoiceData, testNow);
-      if (!moze) {
-        const status = error.error === "LIMIT_EXCEEDED" ? 402 : 403;
-        return Response.json(error, { status });
-      }
+      if (!moze) return Response.json(error, { status: error.error === "LIMIT_EXCEEDED" ? 402 : 403 });
 
       try {
         const xml = SefUblBuilder.build(invoiceData);
         const internalId = `INV-${Date.now()}`;
-        const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
-        if (!config) throw new Error("Firma nije konfigurisana.");
-
-        const client = new SefClient({
-          apiKey: config.sef_api_key,
-          baseUrl: this.env.SEF_API_URL ?? 'https://demoefaktura.mfin.gov.rs',
-          environment: config.environment
-        });
-
-        const requestId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-        const sefRes = await client.sendInvoice(xml, requestId);
+        const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).one() as any;
         
-        const finalSefId = sefRes.salesInvoiceId?.toString();
+        const client = new SefClient({ apiKey: config.sef_api_key, baseUrl: this.env.SEF_API_URL ?? 'https://demoefaktura.mfin.gov.rs', environment: config.environment });
+        const sefRes = await client.sendInvoice(xml, `req-${Date.now()}`);
         const finalStatus = sefRes.success ? 'Sent' : 'Error';
+        const finalSefId = sefRes.salesInvoiceId?.toString();
 
-        // 1. Persist to D1 (SSoT)
-        await this.env.REGISTAR_DB.prepare(`
-          INSERT INTO dokumenti (id, tip, broj, pib_prodavca, pib_kupca, status, xml_blob, json_metadata)
-          VALUES (?, 'FAKTURA', ?, ?, ?, ?, ?, ?)
-        `).bind(
-          internalId, 
-          invoiceData.ID || invoiceData.broj, 
-          invoiceData.Supplier?.Pib || invoiceData.pibProdavca, 
-          invoiceData.Customer?.Pib || invoiceData.pibKupca,
-          finalStatus,
-          xml,
-          JSON.stringify({ sefId: finalSefId, amount: invoiceData.LegalMonetaryTotal?.PayableAmount })
-        ).run();
+        const bridge = new D1SyncBridge(this.env.REGISTAR_DB);
+        await bridge.upsertDocument({ id: internalId, tip: 'FAKTURA', broj: invoiceData.ID || invoiceData.broj, pibProdavca: invoiceData.Supplier?.Pib || invoiceData.pibProdavca, pibKupca: invoiceData.Customer?.Pib || invoiceData.pibKupca, status: finalStatus, xmlBlob: xml, jsonMetadata: { sefId: finalSefId, amount: invoiceData.LegalMonetaryTotal?.PayableAmount } });
 
-        // 1.5 Persist items to D1 (for PPPDV)
-        for (const line of invoiceData.Lines) {
+        const d1Lines: D1DocumentLine[] = invoiceData.Lines.map((line: any) => {
           const taxCat = line.VatCategory || line.poreskaKategorija || 'S';
           const taxRate = line.VatPercent || line.pdvStopa || 20;
           const taxable = line.LineExtensionAmount || (line.quantity * line.unitPrice);
-          const taxAmt = taxable * (taxRate / 100);
-
-          await this.env.REGISTAR_DB.prepare(`
-            INSERT INTO dokument_stavke (dokument_id, line_id, naziv, poslata_kolicina, jedinica_mere, cena, porez_stopa, porez_kategorija, osnovica, iznos_poreza)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).bind(
-            internalId, 
-            line.ID, 
-            line.ItemName || line.description, 
-            line.Quantity || line.deliveredQuantity, 
-            line.UnitCode || line.jedinica_mere,
-            line.Price || line.unitPrice,
-            taxRate,
-            taxCat,
-            taxable,
-            taxAmt
-          ).run();
-        }
+          return { dokumentId: internalId, lineId: line.ID, naziv: line.ItemName || line.description, poslataKolicina: line.Quantity || line.deliveredQuantity, jedinicaMere: line.UnitCode || line.jedinica_mere, cena: line.Price || line.unitPrice, porezStopa: taxRate, porezKategorija: taxCat, osnovica: taxable, iznosPoreza: taxable * (taxRate / 100) };
+        });
+        await bridge.upsertLines(d1Lines);
 
         this.ctx.storage.transactionSync(() => {
-          this.sql.exec(`INSERT INTO fakture (internal_id, sef_id, broj_fakture, status, iznos) VALUES (?, ?, ?, ?, ?)`, 
-            internalId, finalSefId, invoiceData.ID || invoiceData.broj, finalStatus, invoiceData.LegalMonetaryTotal?.PayableAmount || invoiceData.osnovica || 0);
-          
-          // REZERVIŠI KREDIT
-          this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'POTROŠNJA', -1, 'Invoice Send')`, 
-            crypto.randomUUID(), internalId, invoiceData.ID || invoiceData.broj);
-
-          // POPUNI TAX TABELU ZA ANALITIKU (PPPDV)
-          const taxTotals = invoiceData.TaxTotals || (invoiceData.osnovica ? [{ Subtotals: [{ Category: invoiceData.poreskaKategorija || 'S', Percent: invoiceData.pdvStopa || 20, TaxableAmount: invoiceData.osnovica, TaxAmount: invoiceData.pdv || 0 }] }] : []);
-          for (const tt of taxTotals) {
-            const subtotals = tt.Subtotals || [];
-            for (const sub of subtotals) {
-              this.sql.exec(`INSERT OR REPLACE INTO sef_sales_invoice_taxes (invoice_id, tax_category_code, tax_percentage, taxable_amount, tax_amount) VALUES (?, ?, ?, ?, ?)`,
-                internalId, sub.Category || sub.poreskaKategorija, sub.Percent || sub.pdvStopa, sub.TaxableAmount || sub.osnovica, sub.TaxAmount || sub.pdv);
-            }
-          }
+          this.sql.exec(`INSERT INTO fakture (internal_id, sef_id, broj_fakture, status, iznos) VALUES (?, ?, ?, ?, ?)`, internalId, finalSefId, invoiceData.ID || invoiceData.broj, finalStatus, invoiceData.LegalMonetaryTotal?.PayableAmount || invoiceData.osnovica || 0);
+          this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'POTROŠNJA', -1, 'Invoice Send')`, crypto.randomUUID(), internalId, invoiceData.ID || invoiceData.broj);
         });
 
         return Response.json({ success: sefRes.success, internalId, sefId: sefRes.salesInvoiceId, xml }, { status: 202 });
-      } catch (e: any) {
-        return Response.json({ error: 'COMPLIANCE_ERROR', message: e.message }, { status: 400 });
-      }
-    });
-
-    this.app.get('/api/analytics/potrosnja', async () => {
-      const saldo = this.getSaldo();
-      const izvod = this.sql.exec(`SELECT * FROM billing_ledger ORDER BY row_id DESC LIMIT 10`).toArray();
-      return Response.json({ saldo, izvod });
+      } catch (e: any) { return Response.json({ error: 'COMPLIANCE_ERROR', message: e.message }, { status: 400 }); }
     });
 
     this.app.post('/webhooks/sef-update', async ({ req }: RouterContext<Env>) => {
-      const { faktura_id, novi_status, smer } = await req.json() as { faktura_id: string, novi_status: string, smer: string };
-      
-      this.ctx.storage.transactionSync(() => {
-        const f = this.sql.exec(`SELECT internal_id, broj_fakture, status FROM fakture WHERE sef_id = ?`, faktura_id).one() as any;
-        if (f) {
-          if (novi_status === 'Rejected' || novi_status === 'Canceled') {
-            // REFUNDACIJA KREDITA
-            const alreadyRefunded = this.sql.exec(`SELECT COUNT(*) as c FROM billing_ledger WHERE faktura_id = ? AND tip_transakcije = 'REFUNDACIJA'`, f.internal_id).one() as { c: number };
-            if (alreadyRefunded.c === 0) {
-              this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'REFUNDACIJA', 1, 'SEF Rejected')`, 
-                crypto.randomUUID(), f.internal_id, f.broj_fakture);
-            }
-          }
-          this.sql.exec(`UPDATE fakture SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE internal_id = ?`, novi_status, f.internal_id);
-        }
-      });
-      
-      return Response.json({ success: true });
-    });
-
-    this.app.post('/webhooks/despatch-update', async ({ req }: RouterContext<Env>) => {
-      const { despatch_id, novi_status } = await req.json() as { despatch_id: string, novi_status: string };
-      this.sql.exec(`UPDATE otpremnice SET status = ?, potvrdjeno_u = CURRENT_TIMESTAMP WHERE sef_id = ?`, novi_status, despatch_id);
-      
-      // Update D1
-      await this.env.REGISTAR_DB.prepare(`UPDATE dokumenti SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE sef_id = ?`)
-        .bind(novi_status, despatch_id).run();
-
+      const { faktura_id, novi_status } = await req.json() as { faktura_id: string, novi_status: string };
+      await this.processStatusUpdate(faktura_id, novi_status);
       return Response.json({ success: true });
     });
   }
 
+  private async processStatusUpdate(sefId: string, noviStatus: string) {
+    this.ctx.storage.transactionSync(() => {
+      const rows = this.sql.exec(`SELECT internal_id, broj_fakture, status FROM fakture WHERE sef_id = ?`, sefId).toArray();
+      const f = rows[0] as any;
+      if (f) {
+        if (noviStatus === 'Rejected' || noviStatus === 'Canceled') {
+          const alreadyRefunded = this.sql.exec(`SELECT COUNT(*) as c FROM billing_ledger WHERE faktura_id = ? AND tip_transakcije = 'REFUNDACIJA'`, f.internal_id).one() as { c: number };
+          if (alreadyRefunded.c === 0) {
+            this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'REFUNDACIJA', 1, 'SEF Rejected')`, crypto.randomUUID(), f.internal_id, f.broj_fakture);
+          }
+        }
+        this.sql.exec(`UPDATE fakture SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE internal_id = ?`, noviStatus, f.internal_id);
+      }
+    });
+    await this.env.REGISTAR_DB.prepare(`UPDATE dokumenti SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE id IN (SELECT internal_id FROM fakture WHERE sef_id = ?) OR sef_id = ?`).bind(noviStatus, sefId, sefId).run();
+  }
+
   private async checkLimit(noviBroj: number, invoiceData?: any, testNow?: string | null): Promise<{ moze: boolean, error?: any }> {
-    const config = this.sql.exec(`SELECT status_pretplate, plan_name, limit_faktura FROM konfiguracija WHERE id = 1`).toArray()[0] as any || {};
-    
+    const config = this.sql.exec(`SELECT status_pretplate, plan_name, limit_faktura FROM konfiguracija WHERE id = 1`).one() as any || {};
     if (config.status_pretplate === 'BLOKIRAN') {
       let zakonskiRok = 10;
       try {
         const kvRules = await this.env.PORESKI_KV.get("DRZAVNA_PORESKA_PRAVILA_RS", "json") as any;
         if (kvRules?.ZAKONSKI_ROK_DANA) zakonskiRok = kvRules.ZAKONSKI_ROK_DANA;
       } catch (e) {}
-
       const danas = testNow ? new Date(testNow) : new Date();
       const datumIzdavanja = invoiceData?.datumIzdavanja || invoiceData?.IssueDate;
-      
       if (danas.getDate() <= zakonskiRok && datumIzdavanja) {
         const datumF = new Date(datumIzdavanja);
-        if (datumF.getMonth() === danas.getMonth() - 1 && datumF.getFullYear() === danas.getFullYear()) {
-          return { moze: true };
-        }
+        if (datumF.getMonth() === danas.getMonth() - 1 && datumF.getFullYear() === danas.getFullYear()) return { moze: true };
       }
       return { moze: false, error: { error: "Pristup blokiran", message: `Licenca istekla. Prošao rok od ${zakonskiRok} dana.` } };
     }
-
     if (config.plan_name !== 'Enterprise') {
-      // 1. Provera mesečne kvote
       const period = (testNow ? new Date(testNow) : new Date()).toISOString().substring(0, 7);
       const potrosenoUMesecu = this.sql.exec(`SELECT COUNT(*) as c FROM billing_ledger WHERE tip_transakcije = 'POTROŠNJA' AND kreiran_u LIKE ?`, `${period}%`).one() as { c: number };
-      
-      if (config.limit_faktura !== undefined && (potrosenoUMesecu.c + noviBroj) > config.limit_faktura) {
-        return { moze: false, error: { error: "LIMIT_EXCEEDED", message: `Mesečni limit od ${config.limit_faktura} faktura je dostignut.` } };
-      }
-
-      // 2. Provera preostalog salda (ako koristimo prepaid model)
-      const saldo = this.getSaldo();
-      if (saldo < noviBroj && config.limit_faktura === undefined) {
-        return { moze: false, error: { error: "LIMIT_EXCEEDED", message: "Nedovoljno kredita na balansu." } };
-      }
+      if (config.limit_faktura !== undefined && (potrosenoUMesecu.c + noviBroj) > config.limit_faktura) return { moze: false, error: { error: "LIMIT_EXCEEDED", message: `Mesečni limit od ${config.limit_faktura} faktura je dostignut.` } };
+      if (this.getSaldo() < noviBroj && config.limit_faktura === undefined) return { moze: false, error: { error: "LIMIT_EXCEEDED", message: "Nedovoljno kredita na balansu." } };
     }
-
     return { moze: true };
   }
 
-  async getWebhookInstructions() { return { success: true, instructions: { sales_url: '...', purchase_url: '...' } }; }
-  async getStats() { return { success: true }; }
-  async getLogs() { return { success: true, logs: [] }; }
-  
   async getPppdvSummary(period: string): Promise<PppdvSummary> {
     const config = this.sql.exec(`SELECT klijent_id FROM konfiguracija WHERE id = 1`).one() as any;
     const pib = config?.klijent_id || 'UNKNOWN';
-
-    // 1. Prodaja (iz D1)
-    const sRows = await this.env.REGISTAR_DB.prepare(`
-      SELECT 
-        SUM(CASE WHEN s.porez_kategorija IN ('S20', 'AE20', 'S', 'AE') AND s.porez_stopa >= 20.0 THEN s.osnovica ELSE 0 END) as bOpsta,
-        SUM(CASE WHEN s.porez_kategorija IN ('S20', 'AE20', 'S', 'AE') AND s.porez_stopa >= 20.0 THEN s.iznos_poreza ELSE 0 END) as pOpsta,
-        SUM(CASE WHEN s.porez_kategorija IN ('S10', 'AE10', 'S', 'AE') AND s.porez_stopa < 20.0 AND s.porez_stopa > 0 THEN s.osnovica ELSE 0 END) as bPosebna,
-        SUM(CASE WHEN s.porez_kategorija IN ('S10', 'AE10', 'S', 'AE') AND s.porez_stopa < 20.0 AND s.porez_stopa > 0 THEN s.iznos_poreza ELSE 0 END) as pPosebna,
-        SUM(CASE WHEN s.porez_kategorija IN ('E', 'Z', 'AE', 'AE20', 'AE10') THEN s.osnovica ELSE 0 END) as oslobodjen_sa,
-        SUM(CASE WHEN s.porez_kategorija IN ('OE', 'R', 'G') THEN s.osnovica ELSE 0 END) as oslobodjen_bez
-      FROM dokument_stavke s
-      JOIN dokumenti d ON s.dokument_id = d.id
-      WHERE d.pib_prodavca = ? AND d.status IN ('Sent', 'Approved') AND d.azurirano_u LIKE ?
-    `).bind(pib, `${period}%`).first() as any || {};
-
-    // 2. Nabavka (iz D1)
-    const pRows = await this.env.REGISTAR_DB.prepare(`
-      SELECT 
-        SUM(CASE WHEN d.pib_prodavca = '000000000' THEN s.osnovica ELSE 0 END) as uvoz_b,
-        SUM(CASE WHEN d.pib_prodavca = '000000000' THEN s.iznos_poreza ELSE 0 END) as uvoz_p,
-        SUM(s.iznos_poreza - IFNULL(s.razlika, 0)) as cist -- razlika ovde glumi non_deductible
-      FROM dokument_stavke s
-      JOIN dokumenti d ON s.dokument_id = d.id
-      WHERE d.pib_kupca = ? AND d.status = 'Approved' AND d.azurirano_u LIKE ?
-    `).bind(pib, `${period}%`).first() as any || {};
-
-    const p101 = Math.round(sRows.pOpsta || 0);
-    const p102 = Math.round(sRows.pPosebna || 0);
-    const p106 = 0; 
-    const p108 = Math.round(pRows.cist || 0);
-    const p105 = Math.round(pRows.uvoz_p || 0);
-
-    return { 
-      period, 
-      pozicija001_osnovicaOpsta: Math.round(sRows.bOpsta || 0), 
-      pozicija101_pdvOpsta: p101, 
-      pozicija002_osnovicaPosebna: Math.round(sRows.bPosebna || 0), 
-      pozicija102_pdvPosebna: p102, 
-      pozicija003_oslobodjenSaPravom: Math.round(sRows.oslobodjen_sa || 0), 
-      pozicija004_oslobodjenBezPrava: Math.round(sRows.oslobodjen_bez || 0), 
-      pozicija005_uvozOsnovica: Math.round(pRows.uvoz_b || 0), 
-      pozicija105_uvozPdv: p105, 
-      pozicija006_interniObracunOsnovica: 0, 
-      pozicija106_interniObracunPdv: p106, 
-      pozicija008_prethodniPorezOdbitni: p108, 
-      porezZaUplatuIliPovracaj: (p101 + p102 + p106) - p108 
-    };
+    const sRows = await this.env.REGISTAR_DB.prepare(`SELECT SUM(CASE WHEN s.porez_kategorija IN ('S20', 'AE20', 'S', 'AE') AND s.porez_stopa >= 20.0 THEN s.osnovica ELSE 0 END) as bOpsta, SUM(CASE WHEN s.porez_kategorija IN ('S20', 'AE20', 'S', 'AE') AND s.porez_stopa >= 20.0 THEN s.iznos_poreza ELSE 0 END) as pOpsta, SUM(CASE WHEN s.porez_kategorija IN ('S10', 'AE10', 'S', 'AE') AND s.porez_stopa < 20.0 AND s.porez_stopa > 0 THEN s.osnovica ELSE 0 END) as bPosebna, SUM(CASE WHEN s.porez_kategorija IN ('S10', 'AE10', 'S', 'AE') AND s.porez_stopa < 20.0 AND s.porez_stopa > 0 THEN s.iznos_poreza ELSE 0 END) as pPosebna, SUM(CASE WHEN s.porez_kategorija IN ('E', 'Z', 'AE', 'AE20', 'AE10') THEN s.osnovica ELSE 0 END) as oslobodjen_sa, SUM(CASE WHEN s.porez_kategorija IN ('OE', 'R', 'G') THEN s.osnovica ELSE 0 END) as oslobodjen_bez FROM dokument_stavke s JOIN dokumenti d ON s.dokument_id = d.id WHERE d.pib_prodavca = ? AND d.status IN ('Sent', 'Approved') AND d.azurirano_u LIKE ?`).bind(pib, `${period}%`).first() as any || {};
+    const pRows = await this.env.REGISTAR_DB.prepare(`SELECT SUM(CASE WHEN d.pib_prodavca = '000000000' THEN s.osnovica ELSE 0 END) as uvoz_b, SUM(CASE WHEN d.pib_prodavca = '000000000' THEN s.iznos_poreza ELSE 0 END) as uvoz_p, SUM(s.iznos_poreza - IFNULL(s.razlika, 0)) as cist FROM dokument_stavke s JOIN dokumenti d ON s.dokument_id = d.id WHERE d.pib_kupca = ? AND d.status = 'Approved' AND d.azurirano_u LIKE ?`).bind(pib, `${period}%`).first() as any || {};
+    const p101 = Math.round(sRows.pOpsta || 0), p102 = Math.round(sRows.pPosebna || 0), p108 = Math.round(pRows.cist || 0), p105 = Math.round(pRows.uvoz_p || 0);
+    return { period, pozicija001_osnovicaOpsta: Math.round(sRows.bOpsta || 0), pozicija101_pdvOpsta: p101, pozicija002_osnovicaPosebna: Math.round(sRows.bPosebna || 0), pozicija102_pdvPosebna: p102, pozicija003_oslobodjenSaPravom: Math.round(sRows.oslobodjen_sa || 0),  pozicija004_oslobodjenBezPrava: Math.round(sRows.oslobodjen_bez || 0), pozicija005_uvozOsnovica: Math.round(pRows.uvoz_b || 0), pozicija105_uvozPdv: p105, pozicija006_interniObracunOsnovica: 0, pozicija106_interniObracunPdv: 0, pozicija008_prethodniPorezOdbitni: p108, porezZaUplatuIliPovracaj: (p101 + p102) - p108 };
   }
 
-  async sendInvoice(invoiceData: any, headers: any) { return { success: true }; }
-
-  private updateSchemaFor2026() {
-    try { this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN poreski_period_tip TEXT DEFAULT 'MONTHLY';`); } catch (e) {}
-  }
-
-  private updateSchemaForBillingLedger() {
-    try { this.sql.exec(`ALTER TABLE billing_ledger ADD COLUMN faktura_id TEXT;`); } catch (e) {}
-    try { this.sql.exec(`ALTER TABLE billing_ledger ADD COLUMN broj_fakture TEXT;`); } catch (e) {}
-  }
+  private updateSchemaFor2026() { try { this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN poreski_period_tip TEXT DEFAULT 'MONTHLY';`); } catch (e) {} }
+  private updateSchemaForBillingLedger() { try { this.sql.exec(`ALTER TABLE billing_ledger ADD COLUMN faktura_id TEXT;`); } catch (e) {} try { this.sql.exec(`ALTER TABLE billing_ledger ADD COLUMN broj_fakture TEXT;`); } catch (e) {} }
 
   private initDatabase(): void {
     this.ctx.storage.transactionSync(() => {
       this.sql.exec(`CREATE TABLE IF NOT EXISTS konfiguracija (id INTEGER PRIMARY KEY CHECK (id = 1), sef_api_key TEXT NOT NULL, klijent_id TEXT, environment TEXT DEFAULT 'sandbox', status_pretplate TEXT DEFAULT 'AKTIVAN', plan_name TEXT DEFAULT 'Micro', limit_faktura INTEGER DEFAULT 50);`);
-      this.sql.exec(`CREATE TABLE IF NOT EXISTS fakture (
-          internal_id TEXT PRIMARY KEY, 
-          sef_id TEXT UNIQUE,
-          broj_fakture TEXT NOT NULL, 
-          status TEXT NOT NULL, 
-          iznos REAL NOT NULL DEFAULT 0,
-          raw_data TEXT,
-          arhiva_r2_path TEXT, 
-          kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP,
-          azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP
-      );`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS fakture (internal_id TEXT PRIMARY KEY, sef_id TEXT UNIQUE, broj_fakture TEXT NOT NULL, status TEXT NOT NULL, iznos REAL NOT NULL DEFAULT 0, raw_data TEXT, arhiva_r2_path TEXT, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_purchase_invoices (sef_id TEXT PRIMARY KEY, invoice_number TEXT NOT NULL, supplier_pib TEXT NOT NULL, issue_date TEXT NOT NULL, total_amount REAL NOT NULL, status TEXT NOT NULL, raw_xml TEXT, arhiva_r2_path TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS billing_ledger (row_id INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, faktura_id TEXT, broj_fakture TEXT, tip_transakcije TEXT, iznos_kredita INTEGER, kreiran_u DATETIME DEFAULT CURRENT_TIMESTAMP, beleska TEXT);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_sales_invoice_taxes (invoice_id TEXT, tax_category_code TEXT, tax_percentage REAL, taxable_amount REAL, tax_amount REAL, PRIMARY KEY (invoice_id, tax_category_code, tax_percentage));`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_purchase_invoice_taxes (invoice_id TEXT, tax_category_code TEXT, tax_percentage REAL, taxable_amount REAL, tax_amount REAL, non_deductible_amount REAL, PRIMARY KEY (invoice_id, tax_category_code, tax_percentage));`);
-      
-      // LOGISTIČKI BEDEM (v4.0.0)
-      this.sql.exec(`CREATE TABLE IF NOT EXISTS otpremnice (
-          internal_id TEXT PRIMARY KEY,
-          sef_id TEXT UNIQUE,
-          broj_otpremnice TEXT NOT NULL,
-          status TEXT NOT NULL, -- DRAFT, SENT, CONFIRMED, DISCREPANCY
-          pib_kupca TEXT NOT NULL,
-          kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP,
-          potvrdjeno_u DATETIME,
-          ima_razliku INTEGER DEFAULT 0
-      );`);
-      
-      this.sql.exec(`CREATE TABLE IF NOT EXISTS logistika_stavke (
-          otpremnica_id TEXT,
-          line_id TEXT,
-          naziv TEXT,
-          poslata_kolicina REAL,
-          primljena_kolicina REAL,
-          jedinica_mere TEXT,
-          razlika REAL,
-          PRIMARY KEY (otpremnica_id, line_id)
-      );`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS otpremnice (internal_id TEXT PRIMARY KEY, sef_id TEXT UNIQUE, broj_otpremnice TEXT NOT NULL, status TEXT NOT NULL, pib_kupca TEXT NOT NULL, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, potvrdjeno_u DATETIME, ima_razliku INTEGER DEFAULT 0);`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS logistika_stavke (otpremnica_id TEXT, line_id TEXT, naziv TEXT, poslata_kolicina REAL, primljena_kolicina REAL, jedinica_mere TEXT, razlika REAL, PRIMARY KEY (otpremnica_id, line_id));`);
     });
   }
 
   async syncWithSef() {
-    let config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
-    if (!config) throw new Error("Firma nije konfigurisana.");
-
-    const sefClient = new SefClient({ 
-      apiKey: new Redacted(config.sef_api_key).get(), 
-      environment: config.environment, 
-      baseUrl: this.env.SEF_API_URL ?? 'https://demoefaktura.mfin.gov.rs' 
-    });
+    let config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).one() as any;
+    const sefClient = new SefClient({ apiKey: new Redacted(config.sef_api_key).get(), environment: config.environment, baseUrl: this.env.SEF_API_URL ?? 'https://demoefaktura.mfin.gov.rs' });
     const dateFrom = (new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]) ?? '';
     const dateTo = (new Date().toISOString().split('T')[0]) ?? '';
-    
-    let discoveredSales = 0;
-    let discoveredPurchases = 0;
-
     try {
       const rawIds = await sefClient.getSalesInvoiceIds(dateFrom, dateTo);
       const invoiceIds = Array.isArray(rawIds) ? rawIds : ((rawIds as any).salesInvoiceIds || []);
-
-      if (invoiceIds.length > 0) {
-        for (const id of invoiceIds.slice(-10)) {
-          const details = await sefClient.getSalesInvoiceDetails(id);
-          if (details) {
-            this.ctx.storage.transactionSync(() => {
-              this.sql.exec(`
-                INSERT INTO fakture (internal_id, sef_id, broj_fakture, status, iznos, azurirano_u)
-                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, azurirano_u = CURRENT_TIMESTAMP`, 
-                `DISC-${id}`, String(id), String(details.InvoiceNumber || id), String(details.InvoiceStatus || 'Unknown'), details.TotalAmount || 0
-              );
-              discoveredSales++;
-            });
-
-            // UPDATE D1 (SSoT)
-            await this.env.REGISTAR_DB.prepare(`
-              INSERT INTO dokumenti (id, tip, broj, pib_prodavca, pib_kupca, status, json_metadata, azurirano_u)
-              VALUES (?, 'FAKTURA', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(id) DO UPDATE SET status = excluded.status, azurirano_u = CURRENT_TIMESTAMP
-            `).bind(
-              `DISC-${id}`, 
-              String(details.InvoiceNumber || id), 
-              config.klijent_id || 'UNKNOWN', 
-              'UNKNOWN', // Details might not have buyer PIB easily available in this call
-              String(details.InvoiceStatus || 'Unknown'),
-              JSON.stringify({ sefId: id, amount: details.TotalAmount })
-            ).run();
-          }
-        }
+      for (const id of invoiceIds.slice(-10)) {
+        const details = await sefClient.getSalesInvoiceDetails(id);
+        if (details) await this.processStatusUpdate(String(id), String(details.InvoiceStatus || 'Unknown'));
       }
-
-      const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo);
-      if (purchaseOverviews && Array.isArray(purchaseOverviews)) {
-        this.ctx.storage.transactionSync(() => {
-          for (const inv of purchaseOverviews.slice(-10)) {
-            this.sql.exec(`
-              INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status)
-              VALUES (?, ?, ?, ?, ?, ?)
-              ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP`,
-              String(inv.purchaseInvoiceId || inv.invoiceId), String(inv.invoiceNumber || inv.documentNumber), 
-              String(inv.sellerPib || inv.supplierPib), String(inv.invoiceDate || inv.issueDate), 
-              inv.sumWithVat || inv.totalAmount || 0, String(inv.status || inv.invoiceStatus)
-            );
-            discoveredPurchases++;
-          }
-        });
-      }
-
-    } catch (err: any) {
-      console.error("Sync Error:", err);
-    }
-
-    return { discoveredSales, discoveredPurchases };
+    } catch (err: any) { console.error("Sync Error:", err); }
+    return { discoveredSales: 0, discoveredPurchases: 0 };
   }
 
   private getSaldo(): number {
@@ -603,9 +368,21 @@ export class KlijentBaza extends DurableObject<Env> {
     return row.ukupno || 0;
   }
 
-  async dumpDatabase(): Promise<{ fakture: any[], purchase: any[] }> {
-    const fakture = this.sql.exec(`SELECT * FROM fakture`).toArray();
-    const purchase = this.sql.exec(`SELECT * FROM sef_purchase_invoices`).toArray();
-    return { fakture, purchase };
+  async dumpDatabase() {
+    return { fakture: this.sql.exec(`SELECT * FROM fakture`).toArray(), purchase: this.sql.exec(`SELECT * FROM sef_purchase_invoices`).toArray() };
+  }
+
+  async setConfig(config: any) {
+    const res = await this.app.request('/config', { method: 'POST', body: JSON.stringify(config) }, this.env);
+    return await res.json();
+  }
+  async getWebhookInstructions() { return { success: true, instructions: { sales_url: '...', purchase_url: '...' } }; }
+  async getStats() { 
+    const res = await this.app.request('/stats', { method: 'GET' }, this.env);
+    return await res.json();
+  }
+  async getLogs() { return { success: true, logs: [] }; }
+  async getFakture(page: number = 1) {
+    return { success: true, fakture: this.sql.exec(`SELECT * FROM fakture ORDER BY azurirano_u DESC LIMIT 20 OFFSET ?`, (page - 1) * 20).toArray() };
   }
 }

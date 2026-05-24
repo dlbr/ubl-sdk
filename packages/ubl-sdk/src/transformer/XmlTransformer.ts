@@ -4,12 +4,97 @@ import { TaxCalculator } from '../services/TaxCalculator.js';
 import type { TaxGroup } from '../services/TaxCalculator.js';
 import { PAYMENT_MEANS } from '../constants.js';
 
+import type { ReceiptAdvice, ReceiptLine } from '../models/ReceiptAdvice.js';
+
 /**
  * XmlTransformer - Sklapa "Iron Wall" UBL 2.1 XML za srpski SEF i eOtpremnice.
  */
 export class XmlTransformer {
+  static transformReceipt(receipt: ReceiptAdvice): string {
+    const root = 'ReceiptAdvice';
+    const id = `<cbc:ID>${receipt.id}</cbc:ID>`;
+    const issueDate = `<cbc:IssueDate>${receipt.issueDate}</cbc:IssueDate>`;
+    const issueTime = receipt.issueTime ? `\n  <cbc:IssueTime>${receipt.issueTime}</cbc:IssueTime>` : '';
+    
+    const notes = (receipt.note || []).map(n => `\n  <cbc:Note>${n}</cbc:Note>`).join('');
+    const customization = `<cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>`;
+
+    const despatchRef = receipt.despatchDocumentReference ? `
+  <cac:DespatchDocumentReference>
+    <cbc:ID>${receipt.despatchDocumentReference.id}</cbc:ID>
+    ${receipt.despatchDocumentReference.issueDate ? `<cbc:IssueDate>${receipt.despatchDocumentReference.issueDate}</cbc:IssueDate>` : ''}
+  </cac:DespatchDocumentReference>` : '';
+
+    const orderRef = receipt.orderReference ? `
+  <cac:OrderReference>
+    <cbc:ID>${receipt.orderReference.id}</cbc:ID>
+    ${receipt.orderReference.issueDate ? `<cbc:IssueDate>${receipt.orderReference.issueDate}</cbc:IssueDate>` : ''}
+  </cac:OrderReference>` : '';
+
+    const seller = this.generateParty('DespatchSupplierParty', receipt.seller);
+    const buyer = this.generateParty('DeliveryCustomerParty', receipt.buyer);
+
+    const lines = receipt.lines.map((l, i) => {
+      const shortQty = l.shortQuantity ? `\n    <cbc:ShortQuantity unitCode="${l.unitCode}">${l.shortQuantity}</cbc:ShortQuantity>` : '';
+      const rejectedQty = l.rejectedQuantity ? `\n    <cbc:RejectedQuantity unitCode="${l.unitCode}">${l.rejectedQuantity}</cbc:RejectedQuantity>` : '';
+      const rejectReason = l.rejectReason ? `\n    <cbc:RejectReason>${l.rejectReason}</cbc:RejectReason>` : '';
+      const despatchLineRef = l.despatchLineReference ? `\n    <cac:DespatchLineReference><cbc:LineID>${l.despatchLineReference.id}</cbc:LineID></cac:DespatchLineReference>` : '';
+
+      return `
+  <cac:ReceiptLine>
+    <cbc:ID>${l.id || (i + 1)}</cbc:ID>
+    <cbc:ReceivedQuantity unitCode="${l.unitCode}">${l.receivedQuantity}</cbc:ReceivedQuantity>${shortQty}${rejectedQty}${rejectReason}${despatchLineRef}
+    <cac:Item>
+      <cbc:Name>${l.itemName}</cbc:Name>
+      ${l.itemIdentification ? `<cac:ManufacturersItemIdentification><cbc:ID>${l.itemIdentification}</cbc:ID></cac:ManufacturersItemIdentification>` : ''}
+    </cac:Item>
+  </cac:ReceiptLine>`;
+    }).join('');
+
+    return `<?xml version="1.0" encoding="utf-8"?>
+<${root} xmlns="urn:oasis:names:specification:ubl:schema:xsd:${root}-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+  ${customization}
+  ${id}
+  ${issueDate}${issueTime}
+  ${notes}
+  ${despatchRef}
+  ${orderRef}
+  ${seller}
+  ${buyer}
+  ${lines}
+</${root}>`.trim();
+  }
+
   static transformDespatch(advice: DespatchAdvice): string {
     const root = 'DespatchAdvice';
+    
+    // 1. Extensions (SrbDtExt)
+    const sbtNs = "http://mfin.gov.rs/srbdt/srbdtext";
+    let extensionContent = '';
+    
+    if (advice.shipmentMethod) {
+      extensionContent += `\n          <sbt:ShipmentMethod><cbc:ShipmentMethodType>${advice.shipmentMethod}</cbc:ShipmentMethodType></sbt:ShipmentMethod>`;
+    }
+    if (advice.thirdPartyGoodsId) {
+      extensionContent += `\n          <sbt:ThirdPartyGoods><cbc:ID>${advice.thirdPartyGoodsId}</cbc:ID></sbt:ThirdPartyGoods>`;
+    }
+    if (advice.isReturn) {
+      extensionContent += `\n          <sbt:GoodsReturn><cbc:Return>1</cbc:Return></sbt:GoodsReturn>`;
+    }
+    if (advice.offlineZinNumber) {
+      extensionContent += `\n          <sbt:OfflineZinNumber>${advice.offlineZinNumber}</sbt:OfflineZinNumber>`;
+    }
+
+    const extensions = extensionContent ? `
+  <cec:UBLExtensions>
+    <cec:UBLExtension>
+      <cec:ExtensionContent>
+        <sbt:SrbDtExt xmlns:sbt="${sbtNs}">${extensionContent}
+        </sbt:SrbDtExt>
+      </cec:ExtensionContent>
+    </cec:UBLExtension>
+  </cec:UBLExtensions>` : '';
+
     const id = `<cbc:ID>${advice.id}</cbc:ID>`;
     const issueDate = `<cbc:IssueDate>${advice.issueDate}</cbc:IssueDate>`;
     const issueTime = advice.issueTime ? `\n  <cbc:IssueTime>${advice.issueTime}</cbc:IssueTime>` : '';
@@ -36,24 +121,44 @@ export class XmlTransformer {
         <cbc:PostalZone>${advice.deliveryAddress?.zip || advice.buyer.zip || '11000'}</cbc:PostalZone>
         <cac:Country><cbc:IdentificationCode>${advice.deliveryAddress?.countryCode || 'RS'}</cbc:IdentificationCode></cac:Country>
       </cac:DeliveryAddress>
+      ${advice.despatchAddress ? `
+      <cac:DespatchAddress>
+        <cbc:StreetName>${advice.despatchAddress.street || 'Ulica'}</cbc:StreetName>
+        <cbc:CityName>${advice.despatchAddress.city || 'Grad'}</cbc:CityName>
+        <cbc:PostalZone>${advice.despatchAddress.zip || '11000'}</cbc:PostalZone>
+        <cac:Country><cbc:IdentificationCode>${advice.despatchAddress.countryCode || 'RS'}</cbc:IdentificationCode></cac:Country>
+      </cac:DespatchAddress>` : ''}
     </cac:Delivery>
   </cac:Shipment>`;
 
-    const lines = advice.lines.map((l, i) => `
+    const lines = advice.lines.map((l, i) => {
+      let props = '';
+      if (l.exciseCategory) {
+        props += `\n      <cac:AdditionalItemProperty><cbc:Name>AKCIZE.KATEGORIJA</cbc:Name><cbc:Value>${l.exciseCategory}</cbc:Value></cac:AdditionalItemProperty>`;
+      }
+      if (l.itemProperties) {
+        for (const [name, val] of Object.entries(l.itemProperties)) {
+          props += `\n      <cac:AdditionalItemProperty><cbc:Name>${name}</cbc:Name><cbc:Value>${val}</cbc:Value></cac:AdditionalItemProperty>`;
+        }
+      }
+
+      return `
   <cac:DespatchLine>
     <cbc:ID>${l.id || (i + 1)}</cbc:ID>
     <cbc:DeliveredQuantity unitCode="${l.unitCode || 'H87'}">${l.deliveredQuantity}</cbc:DeliveredQuantity>
     <cac:Item>
       <cbc:Name>${l.name}</cbc:Name>
-      ${l.itemID ? `<cac:ManufacturersItemIdentification><cbc:ID>${l.itemID}</cbc:ID></cac:ManufacturersItemIdentification>` : ''}
+      ${l.itemID ? `<cac:ManufacturersItemIdentification><cbc:ID>${l.itemID}</cbc:ID></cac:ManufacturersItemIdentification>` : ''}${props}
     </cac:Item>
-  </cac:DespatchLine>`).join('');
+  </cac:DespatchLine>`;
+    }).join('');
 
     return `<?xml version="1.0" encoding="utf-8"?>
-<${root} xmlns="urn:oasis:names:specification:ubl:schema:xsd:${root}-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
-  ${customization}
-  ${id}
-  ${issueDate}${issueTime}
+<${root} xmlns="urn:oasis:names:specification:ubl:schema:xsd:${root}-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
+  ${extensions}
+  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
+  <cbc:ID>${advice.id}</cbc:ID>
+  <cbc:IssueDate>${advice.issueDate}</cbc:IssueDate>${issueTime}
   ${notes}
   ${orderRef}
   ${seller}
