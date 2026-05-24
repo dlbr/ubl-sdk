@@ -1,6 +1,6 @@
-import { defineEventHandler, createError, getQuery } from 'h3';
+import { defineEventHandler, createError, getQuery, type H3Event } from 'h3';
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event: H3Event) => {
   const session = event.context.session;
   if (!session) throw createError({ statusCode: 401, statusMessage: 'Niste autorizovani.' });
 

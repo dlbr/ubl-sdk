@@ -1,4 +1,4 @@
-import { defineEventHandler, readBody, createError, setCookie } from 'h3';
+import { defineEventHandler, readBody, createError, setCookie, type H3Event } from 'h3';
 import { SefClient } from '../../../shared/services/sefClient';
 import { SessionEngine } from '../../../shared/services/session';
 import { AuthEngine } from '../../../shared/services/auth';
@@ -8,7 +8,7 @@ import { AuthEngine } from '../../../shared/services/auth';
  * Edge-Native Login & Activation Handler sa ugrađenom proverom rotacije API ključeva.
  * Podržava i klasičan login (lozinka) i aktivaciju/oporavak (SEF API ključ).
  */
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event: H3Event) => {
   const body = await readBody(event) as { 
     pib: string; 
     api_key?: string; 

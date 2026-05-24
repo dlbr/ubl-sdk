@@ -11,12 +11,21 @@
       "@cloudflare/vitest-pool-workers"
     ],
     "paths": {
-      "cloudflare:test": ["./node_modules/@cloudflare/vitest-pool-workers/dist/index.d.ts"]
+      "cloudflare:test": ["./node_modules/@cloudflare/vitest-pool-workers/dist/index.d.ts"],
+      "@dlbr/ubl-sdk": ["./packages/ubl-sdk/src/index.ts"]
     },
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,
     "esModuleInterop": true,
     "skipLibCheck": true
-  }
+  },
+  "include": [
+    "app/**/*",
+    "server/**/*",
+    "worker/**/*",
+    "shared/**/*",
+    "packages/ubl-sdk/src/**/*",
+    "worker-configuration.d.ts"
+  ]
 }

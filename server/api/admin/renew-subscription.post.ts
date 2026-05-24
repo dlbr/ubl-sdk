@@ -1,6 +1,6 @@
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, readBody, createError, type H3Event } from 'h3';
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event: H3Event) => {
   // Provera administratorskog Bearer ključa (Sistemska bezbednost)
   const authHeader = event.node.req.headers['authorization'];
   const env = event.context.cloudflare.env;

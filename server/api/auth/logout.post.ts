@@ -1,7 +1,7 @@
 // /server/api/auth/logout.post.ts
-import { defineEventHandler, deleteCookie, setHeaders } from 'h3';
+import { defineEventHandler, deleteCookie, setHeaders, type H3Event } from 'h3';
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event: H3Event) => {
   // 1. Uništavamo kolačić na nivou browsera (Strogo poštovanje __Host- specifikacije)
   deleteCookie(event, '__Host-sef_bridge_session', {
     httpOnly: true,

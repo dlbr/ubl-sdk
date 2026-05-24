@@ -35,7 +35,7 @@ export const useSefSearch = () => {
     }
   }
 
-  watch(query, (newQuery) => {
+  watch(query, (newQuery: string) => {
     if (debounceTimeout) clearTimeout(debounceTimeout)
     debounceTimeout = setTimeout(() => {
       executeSearch(newQuery)

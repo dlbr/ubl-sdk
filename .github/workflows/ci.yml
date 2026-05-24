@@ -27,6 +27,9 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts=false
 
+      - name: Generate Nuxt Types
+        run: npx nuxt prepare
+
       - name: Type Check
         run: pnpm run test:types
 
