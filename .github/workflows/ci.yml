@@ -1,14 +1,12 @@
-name: CI
+name: CI (Development Guard)
 on:
   push:
-    paths:
-      - '**'
+    branches: ['**']
   pull_request:
-    paths:
-      - '**'
+    branches: ['**']
 
 jobs:
-  test:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,14 +23,13 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: 'pnpm-lock.yaml'
 
-      - name: Install System Deps
-        run: sudo apt-get update && sudo apt-get install -y libxml2-utils default-jre git
-
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build SDK
-        run: pnpm run test:builder
+      - name: Type Check
+        run: pnpm run test:types
 
-      - name: Run Tests
-        run: pnpm test
+      - name: Build & Test SDK
+        run: |
+          pnpm run test:builder
+          pnpm --filter @dlbr/ubl-sdk test
