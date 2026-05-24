@@ -12,7 +12,7 @@ const gauntletVariants = [
 ];
 
 describe('🛡️ Ultimate Gauntlet — Matrix Coverage', () => {
-  it.each(gauntletVariants)('Variant $id should match expected validity', ({ valid, type, pib, dateOffset, amount, valuta }) => {
+  it.each(gauntletVariants)('Variant $id should match expected validity', ({ valid, type, pib, dueDateBeforeIssue, amount, valuta }) => {
     let builder = SefUblBuilder.create().withTypeCode(type);
     
     if (pib) builder.withPib('111111111', pib);
@@ -22,7 +22,11 @@ describe('🛡️ Ultimate Gauntlet — Matrix Coverage', () => {
     
     // Default valid dates
     builder.withIssueDate('2026-05-23');
-    builder.withDueDate('2026-05-30');
+    if (dueDateBeforeIssue) {
+        builder.withDueDate('2026-05-20');
+    } else {
+        builder.withDueDate('2026-05-30');
+    }
 
     const invoice = builder.build();
     
