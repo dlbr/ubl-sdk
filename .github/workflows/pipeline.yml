@@ -1,0 +1,83 @@
+name: Pipeline (Verify & Deploy)
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  validate:
+    name: 🛡️ Verify & Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: 'pnpm-lock.yaml'
+
+      - name: Install pnpm
+        run: corepack prepare pnpm@latest --activate
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts=false
+
+      - name: Generate Nuxt Types
+        run: npx nuxt prepare
+
+      - name: Type Check
+        run: pnpm run test:types
+
+      - name: Build & Test SDK
+        run: |
+          pnpm run test:builder
+          pnpm --filter @dlbr/ubl-sdk test
+
+      - name: Integration Tests
+        env:
+          ADMIN_API_KEY: "admin_secret"
+          STAGING_SEF_API_KEY: ${{ secrets.STAGING_SEF_API_KEY }}
+          SESSION_SECRET: "test_secret_32_chars_long_ver_2026"
+        run: pnpm run test:integration
+
+  deploy:
+    name: 🚀 Production Launch
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        run: corepack prepare pnpm@latest --activate
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts=false
+
+      - name: Build App
+        run: |
+          npx nuxt prepare
+          pnpm run build
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --compatibility-flag nodejs_compat
