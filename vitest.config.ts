@@ -36,7 +36,8 @@ export default defineConfig({
           singleWorker: true,
           miniflare: {
             compatibilityDate: '2026-05-21',
-            compatibilityFlags: ['nodejs_compat']
+            compatibilityFlags: ['nodejs_compat'],
+            remote: false
           },
         },
       },

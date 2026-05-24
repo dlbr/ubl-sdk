@@ -45,7 +45,7 @@ jobs:
           ADMIN_API_KEY: "admin_secret"
           STAGING_SEF_API_KEY: ${{ secrets.STAGING_SEF_API_KEY }}
           SESSION_SECRET: "test_secret_32_chars_long_ver_2026"
-        run: pnpm run test:integration
+        run: pnpm vitest run --file-parallelism=false --pool=threads --pool-options.threads.maxThreads=1 --pool-options.threads.minThreads=1
 
   deploy:
     name: 🚀 Production Launch
