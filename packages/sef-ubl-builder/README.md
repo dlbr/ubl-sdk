@@ -1,5 +1,6 @@
 # UBL SDK
 ![Builder CI](https://github.com/dlbr/sef-ubl-builder/actions/workflows/ci.yml/badge.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 
 Biblioteka za programsko generisanje UBL 2.1 XML dokumenata za srpski Sistem za elektronske fakture (SEF). Kao `@dlbr/ubl-sdk`, ovaj paket nudi ultra-brzi, Edge-native JSON-to-UBL 2.1 XML generator.
 
