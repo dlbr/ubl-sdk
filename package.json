@@ -37,15 +37,5 @@
     "fast-xml-parser": "^5.8.0",
     "pdf-parse": "^2.4.5",
     "valibot": "^1.4.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@parcel/watcher",
-      "@swc/core",
-      "esbuild",
-      "protobufjs",
-      "sharp",
-      "workerd"
-    ]
   }
 }
