@@ -1,4 +1,4 @@
-import { InvoiceLine, SefPoreskaKategorija } from '../models/Invoice.js';
+import type { InvoiceLine, SefPoreskaKategorija } from '../models/Invoice.js';
 
 export interface TaxGroup {
   taxRate: number;
@@ -13,12 +13,15 @@ export interface TaxGroup {
 export class TaxCalculator {
   static calculate(lines: InvoiceLine[], direction: 'POZITIVAN' | 'NEGATIVAN' = 'POZITIVAN'): TaxGroup[] {
     const groups: Map<string, TaxGroup> = new Map();
-    const sign = direction === 'NEGATIVAN' ? -1 : 1;
 
     for (const line of lines) {
-      // Rule: In CreditNote (NEGATIVAN), we might want to force positive quantity/price but implicitly negative.
-      // However, SEF Konacni (POZITIVAN) uses negative lines for reduction.
-      const taxable = (line.quantity * line.unitPrice) * (direction === 'NEGATIVAN' ? -1 : 1);
+      const rawValue = line.quantity * line.unitPrice;
+      
+      // FIX: Izbegavamo 'duplu negaciju'. 
+      // Za NEGATIVAN smer (CreditNote), uvek forsiramo negativnu osnovicu.
+      // Za POZITIVAN smer, poštujemo predznak linije (dozvoljava umanjenja u 380).
+      const taxable = direction === 'NEGATIVAN' ? -Math.abs(rawValue) : rawValue;
+      
       // Force 0 tax for specific categories (N, E, etc.)
       const isZeroTax = ['N', 'E', 'Z', 'R', 'OE'].includes(line.taxCategory);
       const tax = isZeroTax ? 0 : taxable * (line.taxRate / 100);

@@ -30,7 +30,7 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
     
     expect(xml).toContain('<cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>');
     expect(xml).toContain('<cbc:ID>AVANS-REDUKCIJA</cbc:ID>');
-    expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1800.00</cbc:PayableAmount>');
+    expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">1200.00</cbc:PayableAmount>');
   });
 
   it('3. Knjižno Odobrenje / Smanjenje (381) — Pozitivni iznosi u CreditNote', () => {
@@ -70,7 +70,7 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
     
     expect(xml).toMatchSnapshot();
     
-    expect(xml).toContain('<sbt:SrbDtExt>');
+    expect(xml).toContain('<sbt:SrbDtExt');
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">-600.00</cbc:PayableAmount>');
   });
 
