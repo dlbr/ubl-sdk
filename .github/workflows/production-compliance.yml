@@ -44,7 +44,7 @@ jobs:
         if [ -d "./test/output" ]; then
           for xml in ./test/output/*.xml; do
             if [ -f "$xml" ]; then
-              xmllint --schema ./xsd/UBL-Invoice-2.1.xsd "$xml" --noout
+              xmllint --schema ./packages/sef-ubl-builder/schemas/UBL-Invoice-2.1.xsd "$xml" --noout
             fi
           done
         fi
