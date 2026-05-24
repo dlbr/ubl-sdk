@@ -20,9 +20,8 @@ import type {
 import { PAYMENT_MEANS } from './constants.js';
 
 export * from './types.js';
-export * from './validator.js';
-export * from './normalizer.js';
 export * from './constants.js';
+export * from './SefUblBuilder.js';
 
 export class SefPoreskiJsonBuilder {
   private static num(val: any, fallback: number = 0): number {
