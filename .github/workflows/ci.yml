@@ -1,4 +1,4 @@
-name: Builder CI
+name: CI
 on:
   push:
     paths:
@@ -10,22 +10,29 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container:
-      image: node:24-slim
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
-      - name: Cache npm dependencies
-        uses: actions/cache@v4
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
         with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: 'pnpm-lock.yaml'
+
       - name: Install System Deps
-        run: apt-get update && apt-get install -y libxml2-utils default-jre git
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils default-jre git
+
       - name: Install Dependencies
-        run: npm install --include=dev
+        run: pnpm install
+
+      - name: Build SDK
+        run: pnpm run test:builder
+
       - name: Run Tests
-        run: npm test
+        run: pnpm test

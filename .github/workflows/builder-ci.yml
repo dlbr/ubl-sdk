@@ -2,27 +2,35 @@ name: Builder CI
 on:
   push:
     paths:
-      - 'packages/sef-ubl-builder/**'
+      - 'packages/ubl-sdk/**'
       - '.github/workflows/builder-ci.yml'
   pull_request:
     paths:
-      - 'packages/sef-ubl-builder/**'
+      - 'packages/ubl-sdk/**'
 
 jobs:
   test:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: packages/sef-ubl-builder
+        working-directory: packages/ubl-sdk
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: 'packages/sef-ubl-builder/package-lock.json'
+          cache: 'pnpm'
+          cache-dependency-path: 'packages/ubl-sdk/pnpm-lock.yaml'
+
       - name: Install Dependencies
-        run: npm install
+        run: pnpm install
+
       - name: Run Tests
-        run: npm test
+        run: pnpm test
