@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SefUblBuilder } from '../src/SefUblBuilder';
-import { MasterValidator } from '../src/validator';
+import { MasterValidator } from '../../../shared/compliance/validator';
 
 const gauntletVariants = [
   { id: '01_b2b_std', type: '380', valid: true },
