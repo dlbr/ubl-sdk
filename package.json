@@ -36,15 +36,5 @@
     "fast-xml-parser": "^5.8.0",
     "pdf-parse": "^2.4.5",
     "valibot": "^1.4.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@google/genai",
-      "@parcel/watcher",
-      "esbuild",
-      "protobufjs",
-      "sharp",
-      "workerd"
-    ]
   }
 }
