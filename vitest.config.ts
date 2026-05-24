@@ -7,8 +7,9 @@ export default defineConfig({
   test: {
     // Top-level konfiguracija umesto poolOptions
     isolate: true,
-    threads: true,
-    singleThread: true, // Direktno ovde, sada je top-level
+    threads: !isCI,
+    fileParallelism: !isCI,
+    maxWorkers: isCI ? 1 : undefined,
     
     include: [
       'worker/**/*.{test,spec}.ts', 
@@ -26,6 +27,8 @@ export default defineConfig({
     plugins: [
     cloudflareTest({
       wrangler: { configPath: './wrangler.toml' },
+      // Forsiramo lokalni mod za sve, posebno u CI
+      remote: false,
       // Cloudflare plugin i dalje koristi specifičnu strukturu za svoje pool-ove
       poolOptions: {
         workers: {
