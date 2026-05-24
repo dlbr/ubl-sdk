@@ -86,6 +86,43 @@ export const SefInvoiceSchema = v.object({
   }))),
 });
 
+export const SefDespatchAdviceSchema = v.object({
+  ID: v.pipe(v.string(), v.minLength(1, 'ID je obavezan')),
+  IssueDate: v.pipe(v.string(), v.regex(DateRegex, 'Datum mora biti u formatu YYYY-MM-DD')),
+  IssueTime: v.optional(v.string()),
+  Note: v.optional(v.array(v.string())),
+  
+  OrderReference: v.optional(v.object({
+    ID: v.string(),
+    IssueDate: v.optional(v.pipe(v.string(), v.regex(DateRegex))),
+  })),
+
+  Supplier: SefPartySchema,
+  Customer: SefPartySchema,
+
+  DespatchAddress: v.optional(v.object({
+    Street: v.optional(v.string()),
+    City: v.string(),
+    Zip: v.optional(v.string()),
+    CountryCode: v.literal('RS'),
+  })),
+
+  DeliveryAddress: v.optional(v.object({
+    Street: v.optional(v.string()),
+    City: v.string(),
+    Zip: v.optional(v.string()),
+    CountryCode: v.literal('RS'),
+  })),
+
+  Lines: v.array(v.object({
+    ID: v.string(),
+    DeliveredQuantity: v.number(),
+    UnitCode: v.string(),
+    ItemName: v.string(),
+    ItemIdentification: v.optional(v.string()),
+  })),
+});
+
 export const SefWebhookSchema = v.object({
   kompanija_pib: v.pipe(v.string(), v.regex(PibRegex, 'PIB mora imati tačno 9 cifara')),
   faktura_id: v.pipe(v.string(), v.minLength(1, 'Faktura ID je obavezan')),

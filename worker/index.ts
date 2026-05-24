@@ -1,8 +1,8 @@
 import { Router, type RouterContext } from './router';
 import { validateJson } from './validator';
-import { SefInvoiceSchema, SefWebhookSchema } from '../shared/types/sef';
+import { SefInvoiceSchema, SefWebhookSchema, SefDespatchAdviceSchema } from '../shared/types/sef';
 import ComplianceWatcher from "./compliance-watcher";
-import { SefUblBuilder } from '@dlbr/ubl-sdk';
+import { SefUblBuilder, DespatchBuilder } from '@dlbr/ubl-sdk';
 import { Archiver } from "../shared/services/Archiver";
 import { SefClient } from '../shared/services/sefClient';
 import { KVRegistry } from './services/KVRegistry';
@@ -190,8 +190,48 @@ app.post('/api/fakture/sync', auth(async (c: RouterContext<Env> & { klijentId?: 
   return Response.json(await klijentDO.syncWithSef());
 }));
 
-app.post('/api/fakture/send', auth(validateJson(SefInvoiceSchema, async (c: RouterContext<Env> & { klijentId?: string }) => {
+app.post('/api/otpremnice/send', auth(validateJson(SefDespatchAdviceSchema, async (c: RouterContext<Env> & { klijentId?: string }) => {
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
+  const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
+
+  // 1. FAIL-FAST QUOTA CHECK
+  const checkRes = await klijentDO.fetch(new Request('http://do/api/internal/check-quota', {
+    headers: { 'X-Test-Now': c.req.headers.get('X-Test-Now') || '' }
+  }));
+  if (!checkRes.ok) return checkRes;
+
+  // 2. ATOMIC SEND (Otpremnica)
+  const doResponse = await klijentDO.fetch(new Request('http://do/otpremnice/send', { 
+    method: 'POST', 
+    body: JSON.stringify(c.validJson),
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-Test-Now': c.req.headers.get('X-Test-Now') || ''
+    }
+  }));
+
+  if (doResponse.ok && c.env.SEF_QUEUE) {
+    const result = await doResponse.clone().json() as any;
+    if (result.success && result.xml) {
+      c.ctx.waitUntil((async () => {
+        try {
+          await c.env.SEF_QUEUE.send({ 
+            id: result.internalId || c.validJson!.ID, 
+            xml: result.xml, 
+            pib: c.klijentId!.replace('klijent_', ''),
+            tip: 'OTPREMNICA'
+          });
+        } catch (e) {
+          console.error("Queue Archiving Error (Otpremnica):", e);
+        }
+      })());
+    }
+  }
+
+  return doResponse;
+})));
+
+app.post('/api/fakture/send', auth(validateJson(SefInvoiceSchema, async (c: RouterContext<Env> & { klijentId?: string }) => {  const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
 
   // 1. FAIL-FAST QUOTA CHECK (Rešenje za 402/202 problem)

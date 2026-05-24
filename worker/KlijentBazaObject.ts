@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./index";
 import { type SefInvoiceData, SefInvoiceSchema } from "../shared/types/sef";
-import { SefUblBuilder, SefLiveValidator } from "@dlbr/ubl-sdk";
+import { SefUblBuilder, SefLiveValidator, DespatchBuilder } from "@dlbr/ubl-sdk";
 import { SefClient } from "../shared/services/sefClient";
 import { PopdvSefClient } from "../shared/services/popdvClient";
 import { SefExcelBuilder } from "../shared/services/excelBuilder";
@@ -121,6 +121,29 @@ export class KlijentBaza extends DurableObject<Env> {
 
     this.app.post('/test/seed', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
+      if (data.action === 'SEED_IMPORT') {
+        this.sql.exec(`INSERT OR REPLACE INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status) VALUES (?, ?, '000000000', ?, ?, 'Approved')`,
+          data.sefId, data.invoiceNumber, data.issueDate, data.totalAmount);
+        this.sql.exec(`INSERT OR REPLACE INTO sef_purchase_invoice_taxes (invoice_id, tax_category_code, tax_percentage, taxable_amount, tax_amount, non_deductible_amount) VALUES (?, 'S', 20, ?, ?, 0)`,
+          data.sefId, data.taxableAmount, data.taxAmount);
+
+        // UPDATE D1 (SSoT) for PPPDV Analytics
+        const config = this.sql.exec(`SELECT klijent_id FROM konfiguracija WHERE id = 1`).one() as any;
+        const pib = config?.klijent_id || 'UNKNOWN';
+
+        await this.env.REGISTAR_DB.prepare(`
+          INSERT INTO dokumenti (id, tip, broj, pib_prodavca, pib_kupca, status, azurirano_u)
+          VALUES (?, 'NABAVKA', ?, '000000000', ?, 'Approved', ?)
+          ON CONFLICT(id) DO UPDATE SET status = excluded.status, azurirano_u = excluded.azurirano_u
+        `).bind(data.sefId, data.invoiceNumber, pib, data.issueDate).run();
+
+        await this.env.REGISTAR_DB.prepare(`
+          INSERT INTO dokument_stavke (dokument_id, line_id, naziv, poslata_kolicina, jedinica_mere, porez_stopa, porez_kategorija, osnovica, iznos_poreza)
+          VALUES (?, '1', 'UVOZ', 1, 'H87', 20, 'S', ?, ?)
+          ON CONFLICT(dokument_id, line_id) DO UPDATE SET osnovica = excluded.osnovica, iznos_poreza = excluded.iznos_poreza
+        `).bind(data.sefId, data.taxableAmount, data.taxAmount).run();
+      }
+
       this.ctx.storage.transactionSync(() => {
         if (data.action === 'RESET_LEDGER') {
           this.sql.exec(`DELETE FROM billing_ledger`);
@@ -128,12 +151,6 @@ export class KlijentBaza extends DurableObject<Env> {
             this.sql.exec(`INSERT INTO billing_ledger (id, tip_transakcije, iznos_kredita, beleska) VALUES (?, 'DOPUNA', ?, 'Seed')`, 
               crypto.randomUUID(), data.saldo);
           }
-        }
-        if (data.action === 'SEED_IMPORT') {
-          this.sql.exec(`INSERT OR REPLACE INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status) VALUES (?, ?, '000000000', ?, ?, 'Approved')`,
-            data.sefId, data.invoiceNumber, data.issueDate, data.totalAmount);
-          this.sql.exec(`INSERT OR REPLACE INTO sef_purchase_invoice_taxes (invoice_id, tax_category_code, tax_percentage, taxable_amount, tax_amount, non_deductible_amount) VALUES (?, 'S', 20, ?, ?, 0)`,
-            data.sefId, data.taxableAmount, data.taxAmount);
         }
         if (data.config) {
           this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, klijent_id, environment, status_pretplate, plan_name, limit_faktura) VALUES (1, ?, ?, ?, ?, ?, ?)`,
@@ -163,6 +180,68 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ success: true });
     });
 
+    this.app.post('/otpremnice/send', async ({ req }: RouterContext<Env>) => {
+      const data = await req.json() as any;
+      const testNow = req.headers.get('X-Test-Now');
+      
+      const { moze, error } = await this.checkLimit(1, data, testNow);
+      if (!moze) {
+        const status = error.error === "LIMIT_EXCEEDED" ? 402 : 403;
+        return Response.json(error, { status });
+      }
+
+      try {
+        const builder = DespatchBuilder.create(data.ID, data.IssueDate)
+          .setSeller(data.Supplier)
+          .setBuyer(data.Customer);
+        
+        for (const line of data.Lines) {
+          builder.addLine({
+            id: line.ID,
+            name: line.ItemName,
+            deliveredQuantity: line.DeliveredQuantity,
+            unitCode: line.UnitCode,
+            itemID: line.ItemIdentification
+          });
+        }
+
+        const advice = builder.toXml();
+
+        const internalId = `OTP-${Date.now()}`;
+        const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
+        if (!config) throw new Error("Firma nije konfigurisana.");
+
+        // Persist to D1 (SSoT)
+        await this.env.REGISTAR_DB.prepare(`
+          INSERT INTO dokumenti (id, tip, broj, pib_prodavca, pib_kupca, status, xml_blob, json_metadata)
+          VALUES (?, 'OTPREMNICA', ?, ?, ?, 'SENT', ?, ?)
+        `).bind(
+          internalId, 
+          data.ID, 
+          data.Supplier.Pib, 
+          data.Customer.Pib, 
+          advice, 
+          JSON.stringify({ lines: data.Lines.length })
+        ).run();
+
+        // Persist items to D1
+        for (const line of data.Lines) {
+          await this.env.REGISTAR_DB.prepare(`
+            INSERT INTO dokument_stavke (dokument_id, line_id, naziv, poslata_kolicina, jedinica_mere)
+            VALUES (?, ?, ?, ?, ?)
+          `).bind(internalId, line.ID, line.ItemName, line.DeliveredQuantity, line.UnitCode).run();
+        }
+
+        // REZERVIŠI KREDIT (U DO storage-u za sada, dok ne migriramo i ledger)
+        this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'POTROŠNJA', -1, 'Despatch Send')`, 
+          crypto.randomUUID(), internalId, data.ID);
+
+        return Response.json({ success: true, internalId, xml: advice }, { status: 202 });
+      } catch (e: any) {
+        return Response.json({ error: 'LOGISTICS_ERROR', message: e.message }, { status: 400 });
+      }
+    });
+
     this.app.post('/fakture/send', async ({ req }: RouterContext<Env>) => {
       const invoiceData = await req.json() as any;
       const testNow = req.headers.get('X-Test-Now');
@@ -188,10 +267,48 @@ export class KlijentBaza extends DurableObject<Env> {
         const requestId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
         const sefRes = await client.sendInvoice(xml, requestId);
         
-        this.ctx.storage.transactionSync(() => {
-          const finalSefId = sefRes.salesInvoiceId?.toString();
-          const finalStatus = sefRes.success ? 'Sent' : 'Error';
+        const finalSefId = sefRes.salesInvoiceId?.toString();
+        const finalStatus = sefRes.success ? 'Sent' : 'Error';
 
+        // 1. Persist to D1 (SSoT)
+        await this.env.REGISTAR_DB.prepare(`
+          INSERT INTO dokumenti (id, tip, broj, pib_prodavca, pib_kupca, status, xml_blob, json_metadata)
+          VALUES (?, 'FAKTURA', ?, ?, ?, ?, ?, ?)
+        `).bind(
+          internalId, 
+          invoiceData.ID || invoiceData.broj, 
+          invoiceData.Supplier?.Pib || invoiceData.pibProdavca, 
+          invoiceData.Customer?.Pib || invoiceData.pibKupca,
+          finalStatus,
+          xml,
+          JSON.stringify({ sefId: finalSefId, amount: invoiceData.LegalMonetaryTotal?.PayableAmount })
+        ).run();
+
+        // 1.5 Persist items to D1 (for PPPDV)
+        for (const line of invoiceData.Lines) {
+          const taxCat = line.VatCategory || line.poreskaKategorija || 'S';
+          const taxRate = line.VatPercent || line.pdvStopa || 20;
+          const taxable = line.LineExtensionAmount || (line.quantity * line.unitPrice);
+          const taxAmt = taxable * (taxRate / 100);
+
+          await this.env.REGISTAR_DB.prepare(`
+            INSERT INTO dokument_stavke (dokument_id, line_id, naziv, poslata_kolicina, jedinica_mere, cena, porez_stopa, porez_kategorija, osnovica, iznos_poreza)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            internalId, 
+            line.ID, 
+            line.ItemName || line.description, 
+            line.Quantity || line.deliveredQuantity, 
+            line.UnitCode || line.jedinica_mere,
+            line.Price || line.unitPrice,
+            taxRate,
+            taxCat,
+            taxable,
+            taxAmt
+          ).run();
+        }
+
+        this.ctx.storage.transactionSync(() => {
           this.sql.exec(`INSERT INTO fakture (internal_id, sef_id, broj_fakture, status, iznos) VALUES (?, ?, ?, ?, ?)`, 
             internalId, finalSefId, invoiceData.ID || invoiceData.broj, finalStatus, invoiceData.LegalMonetaryTotal?.PayableAmount || invoiceData.osnovica || 0);
           
@@ -223,16 +340,13 @@ export class KlijentBaza extends DurableObject<Env> {
     });
 
     this.app.post('/webhooks/sef-update', async ({ req }: RouterContext<Env>) => {
-      const { faktura_id, novi_status } = await req.json() as { faktura_id: string, novi_status: string };
+      const { faktura_id, novi_status, smer } = await req.json() as { faktura_id: string, novi_status: string, smer: string };
       
       this.ctx.storage.transactionSync(() => {
-        // Find internal invoice
-        const f = this.sql.exec(`SELECT internal_id, broj_fakture, status FROM fakture WHERE sef_id = ? OR internal_id = ? OR broj_fakture = ?`, 
-          faktura_id, faktura_id, faktura_id).toArray()[0] as any;
-        
+        const f = this.sql.exec(`SELECT internal_id, broj_fakture, status FROM fakture WHERE sef_id = ?`, faktura_id).one() as any;
         if (f) {
-          if (novi_status === 'Rejected' && f.status !== 'Rejected') {
-            // Check if already refunded
+          if (novi_status === 'Rejected' || novi_status === 'Canceled') {
+            // REFUNDACIJA KREDITA
             const alreadyRefunded = this.sql.exec(`SELECT COUNT(*) as c FROM billing_ledger WHERE faktura_id = ? AND tip_transakcije = 'REFUNDACIJA'`, f.internal_id).one() as { c: number };
             if (alreadyRefunded.c === 0) {
               this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'REFUNDACIJA', 1, 'SEF Rejected')`, 
@@ -243,6 +357,17 @@ export class KlijentBaza extends DurableObject<Env> {
         }
       });
       
+      return Response.json({ success: true });
+    });
+
+    this.app.post('/webhooks/despatch-update', async ({ req }: RouterContext<Env>) => {
+      const { despatch_id, novi_status } = await req.json() as { despatch_id: string, novi_status: string };
+      this.sql.exec(`UPDATE otpremnice SET status = ?, potvrdjeno_u = CURRENT_TIMESTAMP WHERE sef_id = ?`, novi_status, despatch_id);
+      
+      // Update D1
+      await this.env.REGISTAR_DB.prepare(`UPDATE dokumenti SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE sef_id = ?`)
+        .bind(novi_status, despatch_id).run();
+
       return Response.json({ success: true });
     });
   }
@@ -288,6 +413,73 @@ export class KlijentBaza extends DurableObject<Env> {
     return { moze: true };
   }
 
+  async getWebhookInstructions() { return { success: true, instructions: { sales_url: '...', purchase_url: '...' } }; }
+  async getStats() { return { success: true }; }
+  async getLogs() { return { success: true, logs: [] }; }
+  
+  async getPppdvSummary(period: string): Promise<PppdvSummary> {
+    const config = this.sql.exec(`SELECT klijent_id FROM konfiguracija WHERE id = 1`).one() as any;
+    const pib = config?.klijent_id || 'UNKNOWN';
+
+    // 1. Prodaja (iz D1)
+    const sRows = await this.env.REGISTAR_DB.prepare(`
+      SELECT 
+        SUM(CASE WHEN s.porez_kategorija IN ('S20', 'AE20', 'S', 'AE') AND s.porez_stopa >= 20.0 THEN s.osnovica ELSE 0 END) as bOpsta,
+        SUM(CASE WHEN s.porez_kategorija IN ('S20', 'AE20', 'S', 'AE') AND s.porez_stopa >= 20.0 THEN s.iznos_poreza ELSE 0 END) as pOpsta,
+        SUM(CASE WHEN s.porez_kategorija IN ('S10', 'AE10', 'S', 'AE') AND s.porez_stopa < 20.0 AND s.porez_stopa > 0 THEN s.osnovica ELSE 0 END) as bPosebna,
+        SUM(CASE WHEN s.porez_kategorija IN ('S10', 'AE10', 'S', 'AE') AND s.porez_stopa < 20.0 AND s.porez_stopa > 0 THEN s.iznos_poreza ELSE 0 END) as pPosebna,
+        SUM(CASE WHEN s.porez_kategorija IN ('E', 'Z', 'AE', 'AE20', 'AE10') THEN s.osnovica ELSE 0 END) as oslobodjen_sa,
+        SUM(CASE WHEN s.porez_kategorija IN ('OE', 'R', 'G') THEN s.osnovica ELSE 0 END) as oslobodjen_bez
+      FROM dokument_stavke s
+      JOIN dokumenti d ON s.dokument_id = d.id
+      WHERE d.pib_prodavca = ? AND d.status IN ('Sent', 'Approved') AND d.azurirano_u LIKE ?
+    `).bind(pib, `${period}%`).first() as any || {};
+
+    // 2. Nabavka (iz D1)
+    const pRows = await this.env.REGISTAR_DB.prepare(`
+      SELECT 
+        SUM(CASE WHEN d.pib_prodavca = '000000000' THEN s.osnovica ELSE 0 END) as uvoz_b,
+        SUM(CASE WHEN d.pib_prodavca = '000000000' THEN s.iznos_poreza ELSE 0 END) as uvoz_p,
+        SUM(s.iznos_poreza - IFNULL(s.razlika, 0)) as cist -- razlika ovde glumi non_deductible
+      FROM dokument_stavke s
+      JOIN dokumenti d ON s.dokument_id = d.id
+      WHERE d.pib_kupca = ? AND d.status = 'Approved' AND d.azurirano_u LIKE ?
+    `).bind(pib, `${period}%`).first() as any || {};
+
+    const p101 = Math.round(sRows.pOpsta || 0);
+    const p102 = Math.round(sRows.pPosebna || 0);
+    const p106 = 0; 
+    const p108 = Math.round(pRows.cist || 0);
+    const p105 = Math.round(pRows.uvoz_p || 0);
+
+    return { 
+      period, 
+      pozicija001_osnovicaOpsta: Math.round(sRows.bOpsta || 0), 
+      pozicija101_pdvOpsta: p101, 
+      pozicija002_osnovicaPosebna: Math.round(sRows.bPosebna || 0), 
+      pozicija102_pdvPosebna: p102, 
+      pozicija003_oslobodjenSaPravom: Math.round(sRows.oslobodjen_sa || 0), 
+      pozicija004_oslobodjenBezPrava: Math.round(sRows.oslobodjen_bez || 0), 
+      pozicija005_uvozOsnovica: Math.round(pRows.uvoz_b || 0), 
+      pozicija105_uvozPdv: p105, 
+      pozicija006_interniObracunOsnovica: 0, 
+      pozicija106_interniObracunPdv: p106, 
+      pozicija008_prethodniPorezOdbitni: p108, 
+      porezZaUplatuIliPovracaj: (p101 + p102 + p106) - p108 
+    };
+  }
+
+  async sendInvoice(invoiceData: any, headers: any) { return { success: true }; }
+
+  private updateSchemaFor2026() {
+    try { this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN poreski_period_tip TEXT DEFAULT 'MONTHLY';`); } catch (e) {}
+  }
+
+  private updateSchemaForBillingLedger() {
+    try { this.sql.exec(`ALTER TABLE billing_ledger ADD COLUMN faktura_id TEXT;`); } catch (e) {}
+    try { this.sql.exec(`ALTER TABLE billing_ledger ADD COLUMN broj_fakture TEXT;`); } catch (e) {}
+  }
+
   private initDatabase(): void {
     this.ctx.storage.transactionSync(() => {
       this.sql.exec(`CREATE TABLE IF NOT EXISTS konfiguracija (id INTEGER PRIMARY KEY CHECK (id = 1), sef_api_key TEXT NOT NULL, klijent_id TEXT, environment TEXT DEFAULT 'sandbox', status_pretplate TEXT DEFAULT 'AKTIVAN', plan_name TEXT DEFAULT 'Micro', limit_faktura INTEGER DEFAULT 50);`);
@@ -306,6 +498,29 @@ export class KlijentBaza extends DurableObject<Env> {
       this.sql.exec(`CREATE TABLE IF NOT EXISTS billing_ledger (row_id INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, faktura_id TEXT, broj_fakture TEXT, tip_transakcije TEXT, iznos_kredita INTEGER, kreiran_u DATETIME DEFAULT CURRENT_TIMESTAMP, beleska TEXT);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_sales_invoice_taxes (invoice_id TEXT, tax_category_code TEXT, tax_percentage REAL, taxable_amount REAL, tax_amount REAL, PRIMARY KEY (invoice_id, tax_category_code, tax_percentage));`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_purchase_invoice_taxes (invoice_id TEXT, tax_category_code TEXT, tax_percentage REAL, taxable_amount REAL, tax_amount REAL, non_deductible_amount REAL, PRIMARY KEY (invoice_id, tax_category_code, tax_percentage));`);
+      
+      // LOGISTIČKI BEDEM (v4.0.0)
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS otpremnice (
+          internal_id TEXT PRIMARY KEY,
+          sef_id TEXT UNIQUE,
+          broj_otpremnice TEXT NOT NULL,
+          status TEXT NOT NULL, -- DRAFT, SENT, CONFIRMED, DISCREPANCY
+          pib_kupca TEXT NOT NULL,
+          kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP,
+          potvrdjeno_u DATETIME,
+          ima_razliku INTEGER DEFAULT 0
+      );`);
+      
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS logistika_stavke (
+          otpremnica_id TEXT,
+          line_id TEXT,
+          naziv TEXT,
+          poslata_kolicina REAL,
+          primljena_kolicina REAL,
+          jedinica_mere TEXT,
+          razlika REAL,
+          PRIMARY KEY (otpremnica_id, line_id)
+      );`);
     });
   }
 
@@ -341,6 +556,20 @@ export class KlijentBaza extends DurableObject<Env> {
               );
               discoveredSales++;
             });
+
+            // UPDATE D1 (SSoT)
+            await this.env.REGISTAR_DB.prepare(`
+              INSERT INTO dokumenti (id, tip, broj, pib_prodavca, pib_kupca, status, json_metadata, azurirano_u)
+              VALUES (?, 'FAKTURA', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+              ON CONFLICT(id) DO UPDATE SET status = excluded.status, azurirano_u = CURRENT_TIMESTAMP
+            `).bind(
+              `DISC-${id}`, 
+              String(details.InvoiceNumber || id), 
+              config.klijent_id || 'UNKNOWN', 
+              'UNKNOWN', // Details might not have buyer PIB easily available in this call
+              String(details.InvoiceStatus || 'Unknown'),
+              JSON.stringify({ sefId: id, amount: details.TotalAmount })
+            ).run();
           }
         }
       }
@@ -348,90 +577,25 @@ export class KlijentBaza extends DurableObject<Env> {
       const purchaseOverviews = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo);
       if (purchaseOverviews && Array.isArray(purchaseOverviews)) {
         this.ctx.storage.transactionSync(() => {
-          for (const inv of purchaseOverviews) {
+          for (const inv of purchaseOverviews.slice(-10)) {
             this.sql.exec(`
-              INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+              INSERT INTO sef_purchase_invoices (sef_id, invoice_number, supplier_pib, issue_date, total_amount, status)
+              VALUES (?, ?, ?, ?, ?, ?)
               ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP`,
-              String(inv.invoiceId || 0), String(inv.documentNumber || 'N/A'), String(inv.supplierPib || '000000000'), String(inv.creationDate || new Date().toISOString()), inv.sumWithVat || inv.totalAmount || 0, String(inv.status || inv.invoiceStatus || 'Unknown')
+              String(inv.purchaseInvoiceId || inv.invoiceId), String(inv.invoiceNumber || inv.documentNumber), 
+              String(inv.sellerPib || inv.supplierPib), String(inv.invoiceDate || inv.issueDate), 
+              inv.sumWithVat || inv.totalAmount || 0, String(inv.status || inv.invoiceStatus)
             );
             discoveredPurchases++;
           }
         });
       }
-    } catch (e: any) {
-      console.error(`[DO] Discovery Error: ${e.message}`);
+
+    } catch (err: any) {
+      console.error("Sync Error:", err);
     }
 
-    return { success: true, message: `Otkriveno: ${discoveredSales} izlaznih i ${discoveredPurchases} ulaznih.` };
-  }
-
-  async getFakture(page: number = 1) {
-    const limit = 20;
-    const offset = (page - 1) * limit;
-    const fakture = this.sql.exec(`SELECT * FROM fakture ORDER BY azurirano_u DESC LIMIT ? OFFSET ?`, limit, offset).toArray();
-    const total = this.sql.exec(`SELECT COUNT(*) as count FROM fakture`).one() as { count: number };
-    return { success: true, fakture, total: total.count, page, totalPages: Math.ceil(total.count / limit) };
-  }
-
-  async setConfig(data: any) {
-    this.ctx.storage.transactionSync(() => {
-      this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, klijent_id, environment, limit_faktura) VALUES (1, ?, ?, ?, ?)`, 
-        data.sef_api_key || '', data.klijent_id || null, data.environment || 'sandbox', data.limit || 50);
-    });
-    return { success: true };
-  }
-
-  async getWebhookInstructions() { return { success: true, instructions: { sales_url: '...', purchase_url: '...' } }; }
-  async getStats() { return { success: true }; }
-  async getLogs() { return { success: true, logs: [] }; }
-  
-  async getPppdvSummary(period: string): Promise<PppdvSummary> {
-    const sRows = this.sql.exec(`SELECT SUM(CASE WHEN t.tax_category_code IN ('S20', 'AE20', 'S', 'AE') AND t.tax_percentage >= 20.0 THEN t.taxable_amount ELSE 0 END) as bOpsta, SUM(CASE WHEN t.tax_category_code IN ('S20', 'AE20', 'S', 'AE') AND t.tax_percentage >= 20.0 THEN t.tax_amount ELSE 0 END) as pOpsta, SUM(CASE WHEN t.tax_category_code IN ('S10', 'AE10', 'S', 'AE') AND t.tax_percentage < 20.0 AND t.tax_percentage > 0 THEN t.taxable_amount ELSE 0 END) as bPosebna, SUM(CASE WHEN t.tax_category_code IN ('S10', 'AE10', 'S', 'AE') AND t.tax_percentage < 20.0 AND t.tax_percentage > 0 THEN t.tax_amount ELSE 0 END) as pPosebna, SUM(CASE WHEN t.tax_category_code IN ('E', 'Z', 'AE', 'AE20', 'AE10') THEN t.taxable_amount ELSE 0 END) as oslobodjen_sa, SUM(CASE WHEN t.tax_category_code IN ('OE', 'R', 'G') THEN t.taxable_amount ELSE 0 END) as oslobodjen_bez FROM sef_sales_invoice_taxes t JOIN fakture f ON t.invoice_id = f.internal_id WHERE f.status IN ('Sent', 'Approved') AND f.azurirano_u LIKE ?`, `${period}%`).toArray();
-    const s = sRows[0] as any || {};
-
-    const pRows = this.sql.exec(`SELECT t.*, i.supplier_pib, i.issue_date, i.status FROM sef_purchase_invoice_taxes t JOIN sef_purchase_invoices i ON t.invoice_id = i.sef_id WHERE i.status = 'Approved' AND i.issue_date LIKE ?`, `${period}%`).toArray();
-    
-    let uvoz_b = 0, uvoz_p = 0, cist = 0;
-    for (const row of pRows as any[]) {
-      uvoz_b += row.taxable_amount || 0;
-      uvoz_p += row.tax_amount || 0;
-      cist += (row.tax_amount || 0) - (row.non_deductible_amount || 0);
-    }
-
-    const p101 = Math.round(s?.pOpsta || 0);
-    const p102 = Math.round(s?.pPosebna || 0);
-    const p106 = 0; 
-    const p108 = Math.round(cist);
-    const p105 = Math.round(uvoz_p);
-
-    return { 
-      period, 
-      pozicija001_osnovicaOpsta: Math.round(s?.bOpsta || 0), 
-      pozicija101_pdvOpsta: p101, 
-      pozicija002_osnovicaPosebna: Math.round(s?.bPosebna || 0), 
-      pozicija102_pdvPosebna: p102, 
-      pozicija003_oslobodjenSaPravom: Math.round(s?.oslobodjen_sa || 0), 
-      pozicija004_oslobodjenBezPrava: Math.round(s?.oslobodjen_bez || 0), 
-      pozicija005_uvozOsnovica: Math.round(uvoz_b), 
-      pozicija105_uvozPdv: p105, 
-      pozicija006_interniObracunOsnovica: 0, 
-      pozicija106_interniObracunPdv: p106, 
-      pozicija008_prethodniPorezOdbitni: p108, 
-      porezZaUplatuIliPovracaj: (p101 + p102 + p106) - p108 
-    };
-  }
-
-  async sendInvoice(invoiceData: any, headers: any) { return { success: true }; }
-
-  private updateSchemaFor2026() {
-    try { this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN poreski_period_tip TEXT DEFAULT 'MONTHLY';`); } catch (e) {}
-  }
-
-  private updateSchemaForBillingLedger() {
-    try {
-      this.sql.exec(`CREATE TABLE IF NOT EXISTS billing_ledger (row_id INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, faktura_id TEXT, broj_fakture TEXT, tip_transakcije TEXT, iznos_kredita INTEGER, kreiran_u DATETIME DEFAULT CURRENT_TIMESTAMP, beleska TEXT);`);
-    } catch (e) {}
+    return { discoveredSales, discoveredPurchases };
   }
 
   private getSaldo(): number {

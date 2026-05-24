@@ -24,10 +24,29 @@ describe('SEF Bridge v3.6.0 — Krovni E2E Smoke Test i Verifikacija Lanaca (Por
   });
 
   beforeEach(async () => {
+    // 1. Inicijalizacija D1 centralne baze (SSoT)
+    await env.REGISTAR_DB.prepare(`
+      CREATE TABLE IF NOT EXISTS dokumenti (
+        id TEXT PRIMARY KEY, tip TEXT NOT NULL, broj TEXT NOT NULL,
+        pib_prodavca TEXT NOT NULL, pib_kupca TEXT NOT NULL, status TEXT NOT NULL,
+        xml_blob TEXT, json_metadata TEXT, parent_doc_id TEXT,
+        kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+    await env.REGISTAR_DB.prepare(`
+      CREATE TABLE IF NOT EXISTS dokument_stavke (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, dokument_id TEXT NOT NULL, line_id TEXT,
+        naziv TEXT NOT NULL, poslata_kolicina REAL, primljena_kolicina REAL,
+        jedinica_mere TEXT, cena REAL, porez_stopa REAL, porez_kategorija TEXT,
+        osnovica REAL, iznos_poreza REAL, razlika REAL
+      )
+    `).run();
+
     // 2. Čisto stanje pre svakog testa
     await env.REGISTAR_DB.prepare("DELETE FROM klijenti").run();
-    await env.REGISTAR_DB.prepare("INSERT INTO klijenti (klijent_id, naziv) VALUES (?, ?)")
-      .bind(klijentId, 'E2E Smoke Firma').run();
+    await env.REGISTAR_DB.prepare("DELETE FROM dokumenti").run();
+    await env.REGISTAR_DB.prepare("DELETE FROM dokument_stavke").run();
+    await env.REGISTAR_DB.prepare("INSERT INTO klijenti (klijent_id, naziv) VALUES (?, ?)")      .bind(klijentId, 'E2E Smoke Firma').run();
 
     const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
     const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
@@ -36,7 +55,7 @@ describe('SEF Bridge v3.6.0 — Krovni E2E Smoke Test i Verifikacija Lanaca (Por
     await klijentDO.fetch(new Request('http://do/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sef_api_key: 'test_key', limit: 500, environment: 'sandbox' })
+      body: JSON.stringify({ sef_api_key: 'test_key', klijent_id: pib, limit: 500, environment: 'sandbox' })
     }));
   });
 

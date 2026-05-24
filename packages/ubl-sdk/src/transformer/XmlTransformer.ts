@@ -1,12 +1,68 @@
 import type { Invoice, Party, InvoiceLine } from '../models/Invoice.js';
+import type { DespatchAdvice, DespatchLine } from '../models/DespatchAdvice.js';
 import { TaxCalculator } from '../services/TaxCalculator.js';
 import type { TaxGroup } from '../services/TaxCalculator.js';
 import { PAYMENT_MEANS } from '../constants.js';
 
 /**
- * XmlTransformer - Sklapa "Iron Wall" UBL 2.1 XML za srpski SEF.
+ * XmlTransformer - Sklapa "Iron Wall" UBL 2.1 XML za srpski SEF i eOtpremnice.
  */
 export class XmlTransformer {
+  static transformDespatch(advice: DespatchAdvice): string {
+    const root = 'DespatchAdvice';
+    const id = `<cbc:ID>${advice.id}</cbc:ID>`;
+    const issueDate = `<cbc:IssueDate>${advice.issueDate}</cbc:IssueDate>`;
+    const issueTime = advice.issueTime ? `\n  <cbc:IssueTime>${advice.issueTime}</cbc:IssueTime>` : '';
+    
+    const notes = (advice.note || []).map(n => `\n  <cbc:Note>${n}</cbc:Note>`).join('');
+    const customization = `<cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>`;
+
+    const orderRef = advice.orderReference ? `
+  <cac:OrderReference>
+    <cbc:ID>${advice.orderReference.id}</cbc:ID>
+    ${advice.orderReference.issueDate ? `<cbc:IssueDate>${advice.orderReference.issueDate}</cbc:IssueDate>` : ''}
+  </cac:OrderReference>` : '';
+
+    const seller = this.generateParty('DespatchSupplierParty', advice.seller);
+    const buyer = this.generateParty('DeliveryCustomerParty', advice.buyer);
+    
+    const delivery = `
+  <cac:Shipment>
+    <cbc:ID>${advice.id}-SHIP</cbc:ID>
+    <cac:Delivery>
+      <cac:DeliveryAddress>
+        <cbc:StreetName>${advice.deliveryAddress?.street || advice.buyer.address || 'Ulica'}</cbc:StreetName>
+        <cbc:CityName>${advice.deliveryAddress?.city || advice.buyer.city || 'Grad'}</cbc:CityName>
+        <cbc:PostalZone>${advice.deliveryAddress?.zip || advice.buyer.zip || '11000'}</cbc:PostalZone>
+        <cac:Country><cbc:IdentificationCode>${advice.deliveryAddress?.countryCode || 'RS'}</cbc:IdentificationCode></cac:Country>
+      </cac:DeliveryAddress>
+    </cac:Delivery>
+  </cac:Shipment>`;
+
+    const lines = advice.lines.map((l, i) => `
+  <cac:DespatchLine>
+    <cbc:ID>${l.id || (i + 1)}</cbc:ID>
+    <cbc:DeliveredQuantity unitCode="${l.unitCode || 'H87'}">${l.deliveredQuantity}</cbc:DeliveredQuantity>
+    <cac:Item>
+      <cbc:Name>${l.name}</cbc:Name>
+      ${l.itemID ? `<cac:ManufacturersItemIdentification><cbc:ID>${l.itemID}</cbc:ID></cac:ManufacturersItemIdentification>` : ''}
+    </cac:Item>
+  </cac:DespatchLine>`).join('');
+
+    return `<?xml version="1.0" encoding="utf-8"?>
+<${root} xmlns="urn:oasis:names:specification:ubl:schema:xsd:${root}-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+  ${customization}
+  ${id}
+  ${issueDate}${issueTime}
+  ${notes}
+  ${orderRef}
+  ${seller}
+  ${buyer}
+  ${delivery}
+  ${lines}
+</${root}>`.trim();
+  }
+
   static toUblXml(invoice: Invoice): string {
     const direction = invoice.documentDirection || 'POZITIVAN';
     const taxGroups = TaxCalculator.calculate(invoice.lines, direction);
