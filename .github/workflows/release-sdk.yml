@@ -28,7 +28,7 @@ jobs:
           cache-dependency-path: 'pnpm-lock.yaml'
 
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts=false
 
       - name: Build
         run: pnpm --filter @dlbr/ubl-sdk run build

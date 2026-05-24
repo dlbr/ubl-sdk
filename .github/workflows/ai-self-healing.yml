@@ -33,7 +33,7 @@ jobs:
           cache-dependency-path: 'pnpm-lock.yaml'
 
       - name: 📦 Instalacija zavisnosti
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts=false
 
       - name: 📄 Ekstrakcija teksta iz PDF-a i AI analiza
         id: ai_patcher
