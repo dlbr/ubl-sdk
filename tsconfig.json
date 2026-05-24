@@ -18,7 +18,8 @@
     "noEmit": true,
     "isolatedModules": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": false
   },
   "include": [
     "app/**/*",
@@ -26,6 +27,8 @@
     "worker/**/*",
     "shared/**/*",
     "packages/ubl-sdk/src/**/*",
-    "worker-configuration.d.ts"
+    "worker-configuration.d.ts",
+    ".nuxt/types/imports.d.ts",
+    ".nuxt/nuxt.d.ts"
   ]
 }
