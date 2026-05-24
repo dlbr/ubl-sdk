@@ -25,9 +25,6 @@ jobs:
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
-        env:
-          # Workaround for pnpm v11 build script blockage in non-interactive CI
-          PNPM_SKIP_CHECK_BUILT_DEPENDENCIES: true
 
       - name: Type Check
         run: pnpm run test:types
