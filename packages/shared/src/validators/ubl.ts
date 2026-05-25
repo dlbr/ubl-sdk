@@ -43,9 +43,9 @@ export const SefInvoiceSchema = v.pipe(
     taxCurrencyCode: v.string([v.length(3)]),
     payableAmount: v.number([v.minValue(0, '[FATAL] Krajnji iznos (PayableAmount) ne sme biti negativan.')]),
     billingReference: v.optional(v.string()), 
-    supplierPib: PibSchema,
-    customerPib: PibSchema,
-    customerJbkjs: v.optional(JbkjsSchema),
+    supplierPib: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] PIB mora sadržati tačno 9 numeričkih karaktera.')),
+    customerPib: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] PIB mora sadržati tačno 9 numeričkih karaktera.')),
+    customerJbkjs: v.optional(v.pipe(v.string(), v.regex(/^\d{5}$/, '[FATAL] JBKJS mora sadržati tačno 5 numeričkih karaktera za budžetske korisnike.'))),
     taxTotals: v.array(TaxTotalSchema, [v.minLength(1, '[FATAL] Faktura mora imati bar jedan TaxTotal blok.')])
   }),
 
