@@ -1,4 +1,4 @@
-name: SEF Bridge v4.0.0 — AI Self-Healing Compliance
+name: AI Self-Healing
 
 on:
   repository_dispatch:

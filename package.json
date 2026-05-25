@@ -9,9 +9,10 @@
     "dev:backend": "pnpm --filter @sef/backend dev",
     "dev:frontend": "pnpm --filter @sef/frontend dev",
     "build": "pnpm -r build",
+    "deploy": "pnpm -r deploy",
     "build:frontend": "pnpm --filter @sef/frontend build",
     "deploy:backend": "pnpm --filter @sef/backend deploy",
-    "deploy:frontend": "pnpm --filter @sef/frontend deploy",
+    "deploy:frontend": "pnpm --filter @sef/frontend",
     "test": "pnpm -r test",
     "verify": "pnpm -r verify"
   },

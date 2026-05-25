@@ -6,7 +6,7 @@
     "dev": "nuxt dev",
     "build": "nuxt build",
     "postinstall": "nuxt prepare",
-    "deploy": "wrangler deploy --"
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "@sef/shared": "workspace:*",
