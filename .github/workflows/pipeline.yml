@@ -19,7 +19,7 @@ jobs:
       - name: 🟢 Podešavanje Node.js okruženja
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: 📦 Podešavanje pnpm-a
         run: |
@@ -50,7 +50,7 @@ jobs:
       - name: 🟢 Podešavanje Node.js okruženja
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: 📦 Podešavanje pnpm-a
         run: |
@@ -101,7 +101,7 @@ jobs:
       - name: 🟢 Podešavanje Node.js okruženja
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: 📦 Podešavanje pnpm-a
         run: |
