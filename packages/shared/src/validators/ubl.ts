@@ -67,7 +67,7 @@ export const SefPartyIdentificationSchema = v.object({
 export const SefPartyTaxSchemeSchema = v.object({
   companySchemeId: v.literal('RS', '[FATAL] schemeID za CompanyID unutar PartyTaxScheme mora biti "RS".'),
   companyId: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] CompanyID unutar poreskog sistema prodavca mora imati tačno 9 cifara.')),
-  taxSchemeId: v.literal('VAT', '[FATAL] Poreska šema (TaxScheme ID) za prodavca u Srbiji mora biti postavljena na "VAT".')
+  taxSchemeId: v.picklist(['VAT', 'TAX'], '[FATAL] Poreska šema (TaxScheme ID) za prodavca u Srbiji mora biti postavljena na "VAT" ili "TAX".')
 });
 
 // 9. Šema za pravni entitet kompanije (PartyLegalEntity) prema [VRBL-RS-1p0p0-9]
