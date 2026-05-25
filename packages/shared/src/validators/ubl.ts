@@ -49,6 +49,8 @@ export const SefInvoiceSchema = v.pipe(
     taxCurrencyCode: v.string([v.length(3)]),
     payableAmount: v.number([v.minValue(0, '[FATAL] Krajnji iznos (PayableAmount) ne sme biti negativan.')]),
     billingReference: v.optional(v.string()), 
+    // 🟢 Novi element prema Vertexu: Buyer Reference (Referenca kupca)
+    buyerReference: v.optional(v.pipe(v.string(), v.maxLength(50, '[FATAL] BuyerReference ne sme biti duži od 50 karaktera.'))),
     supplierPib: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] PIB mora sadržati tačno 9 numeričkih karaktera.')),
     customerPib: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] PIB mora sadržati tačno 9 numeričkih karaktera.')),
     customerJbkjs: v.optional(v.pipe(v.string(), v.regex(/^\d{5}$/, '[FATAL] JBKJS mora sadržati tačno 5 numeričkih karaktera za budžetske korisnike.'))),
@@ -69,6 +71,16 @@ export const SefInvoiceSchema = v.pipe(
     }
     return true;
   }, '[FATAL] Avansni račun (386) mora sadržati BillingReference ka prethodnom avansnom zahtevu.'),
+
+  // 🎯 VERTEX / B2G ZAVISNA VALIDACIJA ZA BUYER REFERENCE:
+  v.check((input) => {
+    if (!!input.customerJbkjs && input.customerJbkjs.trim() !== '') {
+      const imaBuyerRef = !!input.buyerReference && input.buyerReference.trim() !== '';
+      const imaBillingRef = !!input.billingReference && input.billingReference.trim() !== '';
+      return imaBuyerRef || imaBillingRef;
+    }
+    return true;
+  }, '[FATAL] Za budžetske korisnike (kupce sa JBKJS brojem), obavezno je uneti BuyerReference (broj ugovora/narudžbenice) ili BillingReference.'),
 
   // 🎯 VERTEX / SCHEMATRON PRAVILO: Valutna konzistentnost za domaći promet
   v.check((input) => {
@@ -100,6 +112,7 @@ export const SefInvoiceSchema = v.pipe(
     return true;
   }, '[FATAL] Neslaganje poreskog osnova: Avansni računi (386) moraju koristiti kod 432, dok standardne fakture (380) koriste 35, 3 ili 0.')
 );
+
 
 
 export type SefInvoiceInput = v.InferOutput<typeof SefInvoiceSchema>;
