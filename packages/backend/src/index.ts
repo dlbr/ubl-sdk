@@ -42,9 +42,11 @@ const extractParamIdFromUrl = (urlStr: string): string | null => {
 // 🛡️ TITANIJUMSKI SECURITY MIDDLEWARE
 const internalOnly = (c: RouterContext<Env> & { klijentId?: string, operater?: string }) => {
   const klijentId = c.req.headers.get('X-Klijent-ID');
+  console.log('[Auth] Incoming X-Klijent-ID:', klijentId);
   const operater = c.req.headers.get('X-Operater') || 'Sistemski Operater';
   
   if (!klijentId || klijentId.trim() === '') {
+    console.error('[Auth] Forbidden access: missing X-Klijent-ID');
     return new Response(JSON.stringify({ 
       error: 'FORBIDDEN_BACKEND_ACCESS', 
       message: 'Zabranjen direktan pristup. Komunikacija dozvoljena isključivo kroz unutrašnji Service Binding.' 
