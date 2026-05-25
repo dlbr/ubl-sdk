@@ -57,6 +57,12 @@ export const SefEndpointIdSchema = v.object({
   value: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] Elektronska adresa prodavca (vrednost) mora biti tačno devetocifreni PIB.'))
 });
 
+// 1. Šema za poresku identifikaciju stranke (PartyIdentification/ID) prema [VRBL-RS-1p0p0-7]
+export const SefPartyIdentificationSchema = v.object({
+  schemeId: v.literal('SRB:PIB', '[FATAL] schemeID za poresku identifikaciju prodavca (Supplier ID) mora biti "SRB:PIB".'),
+  value: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] Poreski identifikacioni broj unutar Supplier ID mora imati tačno 9 cifara.'))
+});
+
 // 🛡️ KROVNI TITANIJUMSKI VALIDATOR (Srbija Profile)
 export const SefInvoiceSchema = v.pipe(
   v.object({
@@ -75,8 +81,9 @@ export const SefInvoiceSchema = v.pipe(
     despatchDocumentReferences: v.optional(v.array(DespatchDocumentReferenceSchema)),
     billingReference: v.optional(SefInvoiceDocumentReferenceSchema),
     taxTotals: v.array(TaxTotalSchema),
-    // 🟢 Novi obavezni element prema Vertex pravilu [VRBL-RS-1p0p0-6]
-    supplierElectronicAddress: SefEndpointIdSchema
+    // 🟢 Novi obavezni elementi prema Vertex pravilu
+    supplierElectronicAddress: SefEndpointIdSchema,
+    supplierPartyIdentification: SefPartyIdentificationSchema
   }),
 
   // Hronologija datuma
@@ -119,6 +126,11 @@ export const SefInvoiceSchema = v.pipe(
     return input.supplierElectronicAddress.value === input.supplierPib;
   }, '[FATAL] Poreski nesklad: Vrednost u supplierElectronicAddress mora biti identična PIB-u prodavca.'),
 
+  // 🎯 VERTEX / SCHEMATRON PRAVILO: ZAVISNA VALIDACIJA ZA SUPPLIER PARTY IDENTIFICATION
+  v.check((input) => {
+    return input.supplierPartyIdentification.value === input.supplierPib;
+  }, '[FATAL] Poreski nesklad: Vrednost u supplierPartyIdentification (Supplier ID) mora biti identična glavnom PIB-u prodavca.'),
+
   // 🎯 VERTEX / SCHEMATRON PRAVILO: Valutna konzistentnost za domaći promet
   v.check((input) => {
     if (input.documentCurrencyCode === 'RSD') {
@@ -149,5 +161,6 @@ export const SefInvoiceSchema = v.pipe(
     return true;
   }, '[FATAL] Neslaganje poreskog osnova: Avansni računi (386) moraju koristiti kod 432, dok standardne fakture (380) koriste 35, 3 ili 0.')
 );
+
 
 export type SefInvoiceInput = v.InferOutput<typeof SefInvoiceSchema>;
