@@ -157,14 +157,25 @@ export const SefWebhookSchema = v.object({
   timestamp: v.optional(v.string()),
 });
 
-export const OnboardingSchema = v.object({
-  pib: v.pipe(v.string(), v.minLength(8), v.maxLength(9)),
-  naziv: v.pipe(v.string(), v.minLength(3)),
-  sef_api_key: v.pipe(v.string(), v.minLength(10, "SEF API ključ je obavezan")),
-  otpremnice_api_key: v.pipe(v.string(), v.minLength(10, "Ključ za eOtpremnice je obavezan"))
-});
+export type PretplatnickiPlan = 'Micro' | 'Standard' | 'Logistics_Pro';
 
-export type OnboardingInput = v.InferOutput<typeof OnboardingSchema>;
+export const DOZVOLE_PLAN_OVA = {
+  Micro: {
+    efakture: true,
+    eotpremnice: false,
+    mesecni_limit: 50
+  },
+  Standard: {
+    efakture: true,
+    eotpremnice: true,
+    mesecni_limit: 500
+  },
+  Logistics_Pro: {
+    efakture: true,
+    eotpremnice: true,
+    mesecni_limit: 5000
+  }
+};
 
 
 export interface SefInvoiceData extends v.InferOutput<typeof SefInvoiceSchema> {
@@ -265,4 +276,11 @@ export interface SefInvoiceLine {
   };
 }
 
-// SefXmlBuilder uklonjen u korist @dlbr/sef-ubl-builder paketa
+export const OnboardingSchema = v.object({
+  pib: v.pipe(v.string(), v.minLength(8), v.maxLength(9)),
+  naziv: v.pipe(v.string(), v.minLength(3)),
+  sef_api_key: v.pipe(v.string(), v.minLength(10, "SEF API ključ je obavezan")),
+  otpremnice_api_key: v.optional(v.pipe(v.string(), v.union([v.minLength(10), v.literal('')])))
+});
+
+export type OnboardingInput = v.InferOutput<typeof OnboardingSchema>;
