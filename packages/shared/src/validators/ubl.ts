@@ -195,6 +195,10 @@ export const SefInvoiceSchema = v.pipe(
     profileId: v.literal('urn:vertexinc:vrbl:billing:1', '[FATAL] VRBL-CORE-5: ProfileID mora biti "urn:vertexinc:vrbl:billing:1".'),
     routingDetails: SefVrblRoutingDetailsSchema,
 
+    // 🟢 Korenski identifikatori
+    invoiceId: v.pipe(v.string(), v.minLength(1, '[FATAL] VRBL-CORE: Broj fakture (invoiceId) ne sme biti prazan.'), v.maxLength(50, '[FATAL] VRBL-CORE: Broj fakture ne sme biti duži od 50 karaktera.')),
+    issueTime: v.pipe(v.string(), v.regex(/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/, '[FATAL] VRBL-CORE: Vreme izdavanja (issueTime) mora biti u ispravnom formatu hh:mm:ss.')),
+
     invoiceTypeCode: v.picklist(['380', '381', '383', '386'], '[FATAL] Nevalidan InvoiceTypeCode (Dozvoljeni: 380, 381, 383, 386).'),
     issueDate: v.string([v.isoDate('[FATAL] Nevalidan format datuma izdavanja.')]),
     paymentDueDate: v.string([v.isoDate('[FATAL] Nevalidan format roka plaćanja.')]),
