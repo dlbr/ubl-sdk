@@ -45,6 +45,12 @@ export const DespatchDocumentReferenceSchema = v.object({
   issueDate: v.optional(v.string([v.isoDate('[FATAL] Datum otpremnice mora biti u ispravnom ISO formatu.')]))
 });
 
+// 5. Referenca na prethodnu fakturu/avans (BillingReference)
+export const SefInvoiceDocumentReferenceSchema = v.object({
+  id: v.pipe(v.string(), v.minLength(1, '[FATAL] ID prethodnog dokumenta unutar BillingReference ne sme biti prazan.'), v.maxLength(50, '[FATAL] ID prethodnog dokumenta ne sme biti duži od 50 karaktera.')),
+  issueDate: v.pipe(v.string(), v.isoDate('[FATAL] Datum izdavanja prethodnog dokumenta (IssueDate) mora biti u ispravnom ISO formatu YYYY-MM-DD.'))
+});
+
 // 🛡️ KROVNI TITANIJUMSKI VALIDATOR (Srbija Profile)
 export const SefInvoiceSchema = v.pipe(
   v.object({
@@ -57,10 +63,11 @@ export const SefInvoiceSchema = v.pipe(
     payableAmount: v.number([v.minValue(0)]),
     supplierPib: PibSchema,
     customerPib: PibSchema,
-    customerJbkjs: v.optional(JbkjsSchema),
+    customerJbkjs: v.optional(v.pipe(v.string(), JbkjsSchema)),
     invoicingPeriodCode: v.picklist(['35', '432', '3', '0'], '[FATAL] Nevalidan Invoicing Period Code.'),
     buyerReference: SefBuyerReferenceSchema,
     despatchDocumentReferences: v.optional(v.array(DespatchDocumentReferenceSchema)),
+    billingReference: v.optional(SefInvoiceDocumentReferenceSchema),
     taxTotals: v.array(TaxTotalSchema)
   }),
 
@@ -75,6 +82,14 @@ export const SefInvoiceSchema = v.pipe(
     return true;
   }, '[FATAL] Avansni računi (386) moraju imati rok plaćanja jednak datumu izdavanja i koristiti invoicingPeriodCode 432.'),
 
+  // 🎯 VERTEX [VRBL-RS-1p0p0-5] USLOVNA VALIDACIJA ZA KNJIŽNA ODOBRENJA (381):
+  v.check((input) => {
+    if (input.invoiceTypeCode === '381') {
+      return !!input.billingReference && !!input.billingReference.id && !!input.billingReference.issueDate;
+    }
+    return true;
+  }, '[FATAL] Knjižno odobrenje (381) mora sadržati BillingReference sa ispravnim ID-jem i datumom (IssueDate) originalne fakture koju korigujete.'),
+
   // Komercijalna faktura (380) na osnovu prometa (35) zahteva otpremnice
   v.check((input) => {
     if (input.invoiceTypeCode === '380' && input.invoicingPeriodCode === '35') {
@@ -83,13 +98,32 @@ export const SefInvoiceSchema = v.pipe(
     return true;
   }, '[FATAL] Komercijalna faktura (380) zasnovana na prometu (kod 35) mora sadržati bar jednu referencu na eOtpremnicu.'),
 
-  // 🎯 STRUKTURNA VERTEX B2G PROVERA ZA BUYER REFERENCE:
+  // 🎯 VERTEX / B2G ZAVISNA VALIDACIJA ZA BUYER REFERENCE:
   v.check((input) => {
     if (!!input.customerJbkjs && input.customerJbkjs.trim() !== '') {
       return input.buyerReference.tip !== 'NEMA';
     }
     return true;
-  }, '[FATAL] Za budžetske korisnike (kupce sa JBKJS brojem), obavezno je uneti ispravan tip reference (Ugovor, Narudžbenica ili Javna Nabavka).')
+  }, '[FATAL] Za budžetske korisnike (kupce sa JBKJS brojem), obavezno je uneti ispravan tip reference (Ugovor, Narudžbenica ili Javna Nabavka).'),
+
+  // 🎯 VERTEX / SCHEMATRON PRAVILO: Valutna konzistentnost za domaći promet
+  v.check((input) => {
+    if (input.documentCurrencyCode === 'RSD') {
+      return input.taxCurrencyCode === 'RSD' && input.taxTotals.every(t => t.currencyCode === 'RSD');
+    }
+    return true;
+  }, '[FATAL] Ukoliko je faktura u RSD, poreska valuta i svi porezi moraju biti iskazani isključivo u RSD.'),
+
+  // 🎯 VERTEX PRAVILO: Dupli TaxTotal za devizne fakture
+  v.check((input) => {
+    if (input.documentCurrencyCode !== 'RSD') {
+      if (input.taxTotals.length !== 2) return false;
+      const imaRsdPorez = input.taxTotals.some(t => t.currencyCode === 'RSD');
+      const imaDevizniPorez = input.taxTotals.some(t => t.currencyCode === input.documentCurrencyCode);
+      return imaRsdPorez && imaDevizniPorez;
+    }
+    return true;
+  }, '[FATAL] Devizne fakture moraju sadržati tačno dva TaxTotal bloka (jedan u devizama, jedan preračunat u RSD po kursu NBS).')
 );
 
 export type SefInvoiceInput = v.InferOutput<typeof SefInvoiceSchema>;
