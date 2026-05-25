@@ -20,7 +20,7 @@ jobs:
 
       - name: ⛰️ Instalacija alata
         run: |
-          apk add --no-cache nodejs npm git
+          apk add --no-cache nodejs-current npm git
           npm install -g pnpm
 
       - name: 🗄️ Keširanje pnpm store
@@ -55,7 +55,7 @@ jobs:
 
       - name: ⛰️ Instalacija alata
         run: |
-          apk add --no-cache nodejs npm git
+          apk add --no-cache nodejs-current npm git
           npm install -g pnpm
 
       - name: 🗄️ Keširanje pnpm store
@@ -100,7 +100,7 @@ jobs:
 
       - name: ⛰️ Instalacija alata
         run: |
-          apk add --no-cache nodejs npm git
+          apk add --no-cache nodejs-current npm git
           npm install -g pnpm
 
       - name: 🗄️ Keširanje pnpm store
