@@ -9,8 +9,28 @@ on:
       - main
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'packages/backend/**'
+              - 'packages/shared/**'
+            frontend:
+              - 'packages/frontend/**'
+              - 'packages/shared/**'
+
   validate:
     name: 🛡️ Verify & Compliance
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     container:
       image: alpine:3.21
@@ -46,11 +66,11 @@ jobs:
 
   deploy-backend:
     name: ⚡ Deploy Backend Worker
-    needs: validate
+    needs: [validate, changes]
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     container:
       image: alpine:3.21
-    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
@@ -93,11 +113,11 @@ jobs:
 
   deploy-frontend:
     name: 🎨 Deploy Nuxt Frontend
-    needs: deploy-backend
+    needs: [validate, changes]
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     container:
       image: alpine:3.21
-    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
