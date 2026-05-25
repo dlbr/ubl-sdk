@@ -313,7 +313,11 @@ const copyId = async () => {
             </div>
             <div v-if="statsData?.licenca_istice_timestamp" class="flex justify-between items-center">
               <span class="text-sm font-medium text-gray-600">Ističe:</span>
-              <span class="text-xs font-mono font-bold">{{ new Date(parseInt(statsData.licenca_istice_timestamp)).toLocaleDateString('sr-RS') }}</span>
+              <span class="text-xs font-mono font-bold">
+                <ClientOnly>
+                  {{ new Date(parseInt(statsData.licenca_istice_timestamp)).toLocaleDateString('sr-RS') }}
+                </ClientOnly>
+              </span>
             </div>
             <button 
               v-if="statsData?.status_pretplate === 'AKTIVAN'"
