@@ -1,7 +1,7 @@
 // test/sef_live_sandbox_shock.test.ts
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SefUblBuilder } from '@dlbr/ubl-sdk';
-import { handleSefErrorWithEdgeAi } from '../worker/edge-ai-interceptor';
+import { handleSefErrorWithEdgeAi } from '../packages/backend/src/edge-ai-interceptor';
 
 describe('🚀 SEF Live Sandbox Integration — Live Hotfix Testing', () => {
   const LIVE_DEMO_API_KEY = process.env.STAGING_SEF_API_KEY;

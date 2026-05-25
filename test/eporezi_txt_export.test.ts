@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
-import { SefPppdvExporter } from '../shared/services/pppdvExporter';
-import type { PppdvSummary } from '../worker/KlijentBazaObject';
+import { SefPppdvExporter } from '@sef/shared/services/pppdvExporter';
+import type { PppdvSummary } from '../packages/backend/src/KlijentBazaObject';
 
 describe('e-Porezi TXT Export v3.5.0 — Forensic Audit', () => {
 

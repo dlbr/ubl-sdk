@@ -1,6 +1,6 @@
 // test/sef_unit_measures.test.ts
 import { describe, it, expect } from 'vitest';
-import { SefClient } from '../shared/services/sefClient';
+import { SefClient } from '@sef/shared/services/sefClient';
 
 describe('📏 SEF Metadata — Live Unit Measures Testing', () => {
   const API_KEY = process.env.STAGING_SEF_API_KEY;

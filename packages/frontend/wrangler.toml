@@ -1,0 +1,16 @@
+name = "sef-bridge-frontend"
+main = ".output/server/index.mjs"
+compatibility_date = "2026-05-25"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".output/public"
+binding = "ASSETS"
+
+[[routes]]
+pattern = "sef.dlbr.cloud"
+custom_domain = true
+
+[[services]]
+binding = "SEF_API"
+service = "sef-bridge-backend"

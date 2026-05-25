@@ -1,0 +1,13 @@
+{
+  "name": "@sef/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "dependencies": {
+    "valibot": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.8.0"
+  }
+}

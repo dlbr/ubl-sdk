@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { DespatchBuilder } from '../packages/ubl-sdk/src/builder/DespatchBuilder';
-import { D1SyncBridge } from '../shared/services/D1SyncBridge';
+import { D1SyncBridge } from '@sef/shared/services/D1SyncBridge';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

@@ -1,4 +1,4 @@
-import { SefClient } from '../shared/services/sefClient';
+import { SefClient } from '../packages/shared/services/sefClient';
 
 /**
  * Forenzički dokaz o uspešnoj registraciji fakture na državni Demo SEF.

@@ -1,0 +1,36 @@
+{
+  "extends": "./.nuxt/tsconfig.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": [
+      "./worker-configuration.d.ts",
+      "node",
+      "@cloudflare/vitest-pool-workers",
+      "@cloudflare/workers-types"
+    ],
+    "paths": {
+      "cloudflare:test": ["./node_modules/@cloudflare/vitest-pool-workers/types/cloudflare-test.d.ts"],
+      "@dlbr/ubl-sdk": ["../ubl-sdk/src/index.ts"],
+      "@sef/shared/*": ["../shared/*"]
+    },
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": false
+  },
+  "include": [
+    "app/**/*",
+    "server/**/*",
+    "../shared/**/*",
+    "../ubl-sdk/src/**/*",
+    "worker-configuration.d.ts",
+    "../shared/types/h3.d.ts",
+    ".nuxt/nuxt.d.ts",
+    ".nuxt/types/imports.d.ts"
+  ]
+}

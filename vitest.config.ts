@@ -1,9 +1,20 @@
 import { defineConfig } from 'vitest/config';
 import { cloudflareTest } from '@cloudflare/vitest-pool-workers';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const isCI = !!process.env.CI;
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@sef/shared': path.resolve(__dirname, './packages/shared'),
+      '@dlbr/ubl-sdk': path.resolve(__dirname, './packages/ubl-sdk/src')
+    }
+  },
   test: {
     // Top-level konfiguracija umesto poolOptions
     isolate: true,
@@ -26,7 +37,7 @@ export default defineConfig({
     },
     plugins: [
     cloudflareTest({
-      wrangler: { configPath: './wrangler.toml' },
+      wrangler: { configPath: 'packages/backend/wrangler.toml' },
       // Forsiramo lokalni mod za sve, posebno u CI
       remote: false,
       // Cloudflare plugin i dalje koristi specifičnu strukturu za svoje pool-ove

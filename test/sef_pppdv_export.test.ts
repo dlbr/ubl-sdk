@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SefPppdvExporter } from '../shared/services/pppdvExporter';
+import { SefPppdvExporter } from '@sef/shared/services/pppdvExporter';
 
 describe('SEF Bridge v2 — PPPDV Export Engine Audit', () => {
 

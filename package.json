@@ -1,44 +1,25 @@
 {
-  "name": "sef",
-  "version": "1.0.0",
-  "scripts": {
-    "test:types": "pnpm tsc --noEmit",
-    "test:builder": "pnpm --filter @dlbr/ubl-sdk run build",
-    "test": "pnpm run test:types && pnpm run test:builder && pnpm --filter @dlbr/ubl-sdk test",
-    "test:integration": "vitest run --file-parallelism=false",
-    "verify": "pnpm run test:types && pnpm run test:builder && pnpm run test:integration",
-    "dev": "nuxt dev",
-    "build": "nuxt build",
-    "generate": "nuxt generate",
-    "preview": "nuxt preview",
-    "postinstall": "nuxt prepare",
-    "deploy:safe": "pnpm run verify && wrangler deploy",
-    "deploy": "wrangler deploy",
-    "primeri": "ts-node scripts/json_pdv.ts"
-  },
+  "name": "sef-bridge-monorepo",
   "type": "module",
-  "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.16.4",
-    "@cloudflare/workers-types": "^4.20260523.1",
-    "@nuxtjs/tailwindcss": "^6.14.0",
-    "@swc/core": "1.15.40",
-    "@types/node": "^25.8.0",
-    "h3": "2.0.1-rc.22",
-    "lucide-vue-next": "^1.0.0",
-    "nuxt": "^4.4.5",
-    "tailwindcss": "^3.4.19",
-    "ts-node": "^10.9.2",
-    "tsx": "^4.22.0",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.6",
-    "vue": "^3.5.34",
-    "wrangler": "^4.92.0"
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
   },
-  "dependencies": {
-    "@dlbr/ubl-sdk": "workspace:*",
-    "fast-xml-builder": "^1.2.0",
-    "fast-xml-parser": "^5.8.0",
-    "pdf-parse": "^2.4.5",
-    "valibot": "^1.4.0"
+  "scripts": {
+    "dev:backend": "pnpm --filter @sef/backend dev",
+    "dev:frontend": "pnpm --filter @sef/frontend dev",
+    "build": "pnpm -r build",
+    "build:shared": "pnpm --filter @sef/shared build",
+    "build:frontend": "pnpm --filter @sef/frontend build",
+    "deploy:backend": "pnpm --filter @sef/backend deploy",
+    "deploy:frontend": "pnpm --filter @sef/frontend deploy",
+    "test": "pnpm -r test",
+    "verify": "pnpm -r verify"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.16.9",
+    "@cloudflare/workers-types": "^4.20260523.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   }
 }

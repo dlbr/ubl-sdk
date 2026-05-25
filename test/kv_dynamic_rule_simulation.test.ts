@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect, beforeEach, beforeAll, vi, afterAll } from 'vitest';
-import { app } from '../worker/index';
-import { SefLiveValidator } from '../shared/compliance/validator';
+import { app } from '../packages/backend/src/index';
+import { SefLiveValidator } from '@sef/shared/compliance/validator';
 
 describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
 

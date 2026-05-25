@@ -1,4 +1,4 @@
-import { SefClient } from './shared/services/sefClient';
+import { SefClient } from './packages/shared/services/sefClient';
 
 async function verify() {
   const client = new SefClient({

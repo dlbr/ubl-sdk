@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
-import { app } from '../worker/index';
+import { app } from '../packages/backend/src/index';
 
 describe('Agency Dashboard & Multi-Tenant Security Suite', () => {
 

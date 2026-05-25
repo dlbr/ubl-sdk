@@ -1,6 +1,6 @@
 // test/sef_hotfix_shock.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { handleSefErrorWithEdgeAi } from '../worker/edge-ai-interceptor';
+import { handleSefErrorWithEdgeAi } from '../packages/backend/src/edge-ai-interceptor';
 
 // Fail-safe za globalni crypto objekat u Node/Vitest testnom okruženju
 if (!global.crypto) {

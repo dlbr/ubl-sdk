@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ESNext"],
+    "strict": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": ["@cloudflare/workers-types"],
+    "paths": {
+      "@sef/shared/*": ["../shared/*"],
+      "@dlbr/ubl-sdk": ["../ubl-sdk/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

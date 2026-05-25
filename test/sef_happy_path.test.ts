@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { SefUblBuilder } from '@dlbr/ubl-sdk';
-import { SefClient } from '../shared/services/sefClient';
+import { SefClient } from '@sef/shared/services/sefClient';
 
 describe('🎯 SEF Happy Path — Živo slanje ispravne fakture na Demo', () => {
   const API_KEY = process.env.STAGING_SEF_API_KEY;

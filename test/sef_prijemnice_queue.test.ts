@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { D1SyncBridge } from '../shared/services/D1SyncBridge';
-import worker from '../worker/index';
+import { D1SyncBridge } from '@sef/shared/services/D1SyncBridge';
+import worker from '../packages/backend/src/index';
 
 describe('🚀 Asinhroni Štit — Izlazne Prijemnice Queue Consumer Audit', () => {
   const klijentId = '113398540'; // PIB sa tvog screenshot-a

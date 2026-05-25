@@ -1,83 +1,127 @@
-name: Pipeline (Verify & Deploy)
+name: 🚀 Titanijumski Štit - Monorepo Deploy
 
 on:
   push:
-    branches: ['**']
+    branches:
+      - main
   pull_request:
-    branches: ['**']
+    branches:
+      - main
 
 jobs:
   validate:
     name: 🛡️ Verify & Compliance
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Enable Corepack
-        run: corepack enable
+      - name: 📥 Checkout repozitorijuma
+        uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: 🟢 Podešavanje Node.js okruženja
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: 20
           cache: 'pnpm'
-          cache-dependency-path: 'pnpm-lock.yaml'
 
-      - name: Install pnpm
-        run: corepack prepare pnpm@latest --activate
+      - name: 📦 Podešavanje pnpm-a
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
 
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts=false
+      - name: 📥 Instalacija zavisnosti
+        run: pnpm install --frozen-lockfile
 
-      - name: Generate Nuxt Types
-        run: npx nuxt prepare
+      - name: 🏗️ Nuxt Prepare
+        run: pnpm --filter @sef/frontend exec nuxt prepare
 
-      - name: Type Check
-        run: pnpm run test:types
-
-      - name: Build & Test SDK
-        run: |
-          pnpm run test:builder
-          pnpm --filter @dlbr/ubl-sdk test
-
-      - name: Integration Tests
+      - name: 🧪 Pokretanje Testova
         env:
           ADMIN_API_KEY: "admin_secret"
-          STAGING_SEF_API_KEY: ${{ secrets.STAGING_SEF_API_KEY }}
           SESSION_SECRET: "test_secret_32_chars_long_ver_2026"
-        run: pnpm vitest run --file-parallelism=false --pool=threads --pool-options.threads.maxThreads=1 --pool-options.threads.minThreads=1
+        run: pnpm test
 
-  deploy:
-    name: 🚀 Production Launch
+  deploy-backend:
+    name: ⚡ Deploy Backend Worker
     needs: validate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Enable Corepack
-        run: corepack enable
+      - name: 📥 Checkout repozitorijuma
+        uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: 🟢 Podešavanje Node.js okruženja
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'pnpm'
+          node-version: 20
 
-      - name: Install pnpm
-        run: corepack prepare pnpm@latest --activate
+      - name: 📦 Podešavanje pnpm-a
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
 
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts=false
+      - name: 🗄️ Keširanje node_modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
 
-      - name: Build App
-        run: |
-          npx nuxt prepare
-          pnpm run build
+      - name: 📥 Instalacija zavisnosti
+        run: pnpm install --frozen-lockfile
 
-      - name: Deploy to Cloudflare
+      - name: 🏗️ Build Shared Paketa
+        run: pnpm build:shared
+
+      # KORAK A: Ako je kôd na PR-u, šaljemo ga na Preview URL (*-sef-bridge...)
+      - name: 🌤️ Deploy Backend (Preview)
+        if: github.event_name == 'pull_request'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: 'packages/backend'
+          command: deploy --preproduction
+
+      # KORAK B: Ako je kôd spojen u main, šaljemo ga direktno na Production URL
+      - name: 🛑 Deploy Backend (Production)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: 'packages/backend'
+          command: deploy
+
+  deploy-frontend:
+    name: 🎨 Deploy Nuxt Frontend
+    needs: deploy-backend # Čekamo backend da završi da bi binding bio dostupan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+    steps:
+      - name: 📥 Checkout repozitorijuma
+        uses: actions/checkout@v4
+
+      - name: 🟢 Podešavanje Node.js okruženja
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 📦 Podešavanje pnpm-a
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: 📥 Instalacija zavisnosti
+        run: pnpm install --frozen-lockfile
+
+      - name: 🏗️ Nuxt Production Build
+        run: pnpm build:frontend
+        env:
+          NITRO_PRESET: cloudflare-pages
+
+      # Ovde ispaljuješ Nuxt na Cloudflare Pages
+      - name: 🚀 Deploy Frontend (Cloudflare Pages)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --compatibility-flag nodejs_compat
+          workingDirectory: 'packages/frontend'
+          command: pages deploy .output/public --project-name=sef-bridge-frontend

@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect, beforeEach, beforeAll, vi, afterAll } from 'vitest';
-import { app } from '../worker/index';
-import { SefPppdvExporter } from '../shared/services/pppdvExporter';
+import { app } from '../packages/backend/src/index';
+import { SefPppdvExporter } from '@sef/shared/services/pppdvExporter';
 
 describe('SEF Bridge v3.6.0 — Krovni E2E Smoke Test i Verifikacija Lanaca (Poreski Kvantni Skok)', () => {
 

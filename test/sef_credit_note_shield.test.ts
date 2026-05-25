@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
-import { D1SyncBridge } from '../shared/services/D1SyncBridge';
-import { app } from '../worker/index';
-import worker from '../worker/index';
+import { D1SyncBridge } from '@sef/shared/services/D1SyncBridge';
+import { app } from '../packages/backend/src/index';
+import worker from '../packages/backend/src/index';
 
 describe('🛡️ Finansijski Štit — Knjižno Odobrenje Automatizacija Audit', () => {
   const klijentId = 'klijent_113398540'; 

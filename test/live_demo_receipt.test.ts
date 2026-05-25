@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { ReceiptBuilder } from '../packages/ubl-sdk/src/builder/ReceiptBuilder';
-import { SefClient } from '../shared/services/sefClient';
-import { D1SyncBridge } from '../shared/services/D1SyncBridge';
+import { SefClient } from '@sef/shared/services/sefClient';
+import { D1SyncBridge } from '@sef/shared/services/D1SyncBridge';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

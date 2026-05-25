@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect, beforeEach, beforeAll, vi, afterEach } from 'vitest';
-import { app } from '../worker/index';
-import { D1SyncBridge } from '../shared/services/D1SyncBridge';
+import { app } from '../packages/backend/src/index';
+import { D1SyncBridge } from '@sef/shared/services/D1SyncBridge';
 
 // Pomoćna funkcija koja trenutno prazni mikro-zadatke (Microtasks) iz V8 event loop-a
 const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));

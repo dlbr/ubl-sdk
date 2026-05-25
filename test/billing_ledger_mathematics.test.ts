@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect, beforeEach, beforeAll, vi, afterAll } from 'vitest';
-import { app } from '../worker/index';
+import { app } from '../packages/backend/src/index';
 
 describe('Billing Ledger v3.5.0 — Transactional Mathematics Audit', () => {
 
