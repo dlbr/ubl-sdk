@@ -432,37 +432,61 @@ app.post('/api/dashboard/config', internalOnly, async (c: RouterContext<Env> & {
 });
 
 // --- WEBHOOKS & BACKGROUND WORKERS ---
-app.post('/api/webhooks/otpremnice', async (c: RouterContext<Env>) => {
-  const { id, status, pib_kompanije, xml, tip, broj, pib_prodavca, pib_kupca, iznos } = await c.req.json() as any;
-  const bridge = new D1SyncBridge(c.env.REGISTAR_DB);
+app.post('/api/webhooks/sef/:webhookToken', async (c: RouterContext<Env>) => {
+  const webhookToken = c.req.param('webhookToken');
+  const klijent = await c.env.REGISTAR_DB.prepare(
+    "SELECT pib, naziv, plan FROM sef_kompanije WHERE webhook_token = ?"
+  ).bind(webhookToken).first<{ pib: string; naziv: string; plan: string }>();
 
-  // 1. UPSERT dokumenata u lokalnu bazu
-  await c.env.REGISTAR_DB.prepare(`
-    INSERT INTO dokumenti (id, sef_id, tip, broj, pib_prodavca, pib_kupca, status, iznos_osnovica, xml_blob, azurirano_u)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, azurirano_u = CURRENT_TIMESTAMP
-  `).bind(id || crypto.randomUUID(), id, tip || 'OTPREMNICA', broj || 'N/A', pib_prodavca || 'N/A', pib_kupca || 'N/A', status, iznos || 0, xml || null).run();
-  
-  if (pib_kompanije) {
-    const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(`klijent_${pib_kompanije}`));
-    c.ctx.waitUntil((async () => {
-      await kDO.fetch(new Request('http://do/webhooks/despatch-update', { method: 'POST', body: JSON.stringify({ despatch_id: id, novi_status: status }) }));
+  if (!klijent) {
+    console.error(`🚨 Webhook pokušaj sa nevalidnim tokenom: ${webhookToken}`);
+    return Response.json({ error: 'UNAUTHORIZED_WEBHOOK_TOKEN' }, { status: 401 });
+  }
 
-      if (status === 'ACCEPTED' || status === 'CONFIRMED' || status === 'DISCREPANCY') {
-        const analysis = await bridge.analyzeReconciliation(id);
-        for (const row of (analysis.results as any[])) {
-          if (row.devijacija_gustine !== 0 || row.kvantitativni_manjak !== 0) {
-            await posaljiHotfixTelegramAlarm(
-              `🚨 **LOGISTIČKA ANOMALIJA** 🚨\nArtikal: ${row.artikal_naziv}\nManjak: ${row.kvantitativni_manjak}\nDevijacija Gustine: ${row.devijacija_gustine}\nStatus: ${status}`,
-              id, c.env as any
-            );
-          }
+  try {
+    const body = await c.req.json() as { payload?: Array<{ invoice?: any }> };
+    if (!body.payload || body.payload.length === 0) {
+      return Response.json({ success: true, message: 'Prazan payload ignorisan.' });
+    }
+
+    for (const stavka of body.payload) {
+      const invoice = stavka.invoice;
+      if (!invoice || !invoice.header) continue;
+
+      const header = invoice.header;
+      const statusObj = invoice.status;
+      const idFakture = header.internalInvoiceId;
+      const brojFakture = header.clientInvoiceNumber;
+      const status = statusObj?.newInvoiceStatus || 'Unknown';
+      const trenutniDatum = new Date().toISOString();
+
+      await c.env.REGISTAR_DB.prepare(`
+        INSERT INTO sef_fakture (id, klijent_pib, broj_fakture, kupac_naziv, kupac_pib, iznos_sa_pdv, status, datum_slanja)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET status = excluded.status, datum_slanja = excluded.datum_slanja
+      `).bind(
+        idFakture, klijent.pib, brojFakture || 'Nepoznat broj', invoice.receiverName || 'Učitavanje...',
+        invoice.receiverPib || '000000000', invoice.sumWithVat || 0, status, trenutniDatum
+      ).run();
+
+      if ((status === 'CONFIRMED' || status === 'Approved') && klijent.plan !== 'Micro') {
+        if (c.env.OTPREMNICA_QUEUE) {
+          await c.env.OTPREMNICA_QUEUE.send({
+            tip: 'RECONCILIATION_CHECK',
+            klijentPib: klijent.pib,
+            invoiceId: idFakture,
+            brojFakture: brojFakture
+          });
         }
       }
-    })());
+    }
+    return Response.json({ success: true, message: `D1 sinhronizovan za PIB ${klijent.pib}.` });
+  } catch (error: any) {
+    console.error(`💥 Greška Webhook-a za PIB ${klijent.pib}:`, error.message);
+    return Response.json({ success: false, error: error.message }, { status: 202 });
   }
-  return Response.json({ success: true });
 });
+
 
 // --- ENGINE HANDLERS (FETCH, QUEUE, SCHEDULED) ---
 export default {
