@@ -46,4 +46,37 @@ describe('SEF Bridge - Integration Tests', () => {
       .bind(data.klijent_id).first();
     expect(klijent).toBeDefined();
   });
+
+  it('treba da dohvati logove sa /api/dashboard/logs', async () => {
+    const res = await app.request('/api/dashboard/logs', {
+      method: 'GET',
+      headers: { 'X-Klijent-ID': 'klijent_123456789' }
+    }, env as any);
+    expect(res.status).toBe(200);
+    const data = await res.json() as any;
+    expect(data.success).toBe(true);
+    expect(Array.isArray(data.logs)).toBe(true);
+  });
+
+  it('treba da dohvati fakture sa /api/fakture', async () => {
+    const res = await app.request('/api/fakture?page=1', {
+      method: 'GET',
+      headers: { 'X-Klijent-ID': 'klijent_123456789' }
+    }, env as any);
+    expect(res.status).toBe(200);
+    const data = await res.json() as any;
+    expect(data.success).toBe(true);
+    expect(Array.isArray(data.fakture)).toBe(true);
+  });
+
+  it('treba da dohvati uputstva za webhook sa /api/webhook-setup', async () => {
+    const res = await app.request('/api/webhook-setup', {
+      method: 'GET',
+      headers: { 'X-Klijent-ID': 'klijent_123456789' }
+    }, env as any);
+    expect(res.status).toBe(200);
+    const data = await res.json() as any;
+    expect(data.success).toBe(true);
+    expect(data.instructions).toBeDefined();
+  });
 });
