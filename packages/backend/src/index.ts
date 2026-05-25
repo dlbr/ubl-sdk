@@ -248,10 +248,25 @@ app.get('/api/otpremnice/reconciliation/:id', internalOnly, async (c: RouterCont
   });
 });
 
+import { DOZVOLE_PLAN_OVA } from '@sef/shared/types/sef';
+
+// ... (Rest of imports)
+
 app.post('/api/otpremnice/send', internalOnly, validateJson(DespatchSchema, async (c: any) => {
   const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId));
   const input = c.validJson!;
   
+  const config = await kDO.fetch('http://do/config').then(r => r.json()) as any;
+  const plan = config.plan_name || 'Micro';
+
+  if (!DOZVOLE_PLAN_OVA[plan as keyof typeof DOZVOLE_PLAN_OVA]?.eotpremnice) {
+    return Response.json({ error: 'PLAN_LIMITATION', message: 'Vaš trenutni paket ne podržava modul za eOtpremnice.' }, { status: 403 });
+  }
+
+  if (!config.otpremnice_api_key || config.otpremnice_api_key.trim() === '') {
+    return Response.json({ error: 'MISSING_OTPREMNICE_KEY', message: 'API ključ nije unet.' }, { status: 422 });
+  }
+
   const checkRes = await kDO.fetch(new Request('http://do/api/internal/check-quota'));
   if (!checkRes.ok) return checkRes;
 
@@ -266,8 +281,10 @@ app.post('/api/otpremnice/send', internalOnly, validateJson(DespatchSchema, asyn
   };
 
   const doResponse = await kDO.fetch(new Request('http://do/otpremnice/send', { 
-    method: 'POST', body: JSON.stringify(ublPayload), headers: { 'Content-Type': 'application/json' }
+    method: 'POST', body: JSON.stringify(ublPayload), headers: { 'Content-Type': 'application/json', 'X-Otpremnice-Key': config.otpremnice_api_key }
   }));
+
+  // ... (Remainder of route)
 
   if (doResponse.ok) {
     const result = await doResponse.clone().json() as any;
