@@ -14,3 +14,4 @@ export * from './services/redacted';
 export * from './services/telegram-notifier';
 export * from './services/queueConsumer';
 export * from './constants/sefTaxonomy';
+export { SefUblBuilder } from '@dlbr/ubl-sdk';
