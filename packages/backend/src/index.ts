@@ -257,10 +257,16 @@ app.post('/api/otpremnice/send', internalOnly, validateJson(DespatchSchema, asyn
   const input = c.validJson!;
   
   const config = await kDO.fetch('http://do/config').then(r => r.json()) as any;
+  const potrosnja = await kDO.fetch('http://do/api/internal/get-potrosnja').then(r => r.json()) as any;
   const plan = config.plan_name || 'Micro';
+  const pravila = DOZVOLE_PLAN_OVA[plan as keyof typeof DOZVOLE_PLAN_OVA];
 
-  if (!DOZVOLE_PLAN_OVA[plan as keyof typeof DOZVOLE_PLAN_OVA]?.eotpremnice) {
+  if (!pravila.eotpremnice) {
     return Response.json({ error: 'PLAN_LIMITATION', message: 'Vaš trenutni paket ne podržava modul za eOtpremnice.' }, { status: 403 });
+  }
+
+  if (potrosnja.eotpremnice_count >= pravila.limit_eotpremnice) {
+    return Response.json({ error: 'LOGISTICS_LIMIT_EXCEEDED', message: `Iskoristili ste maksimalni mesečni limit od ${pravila.limit_eotpremnice} eOtpremnica za ovaj mesec.` }, { status: 429 });
   }
 
   if (!config.otpremnice_api_key || config.otpremnice_api_key.trim() === '') {
