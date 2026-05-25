@@ -36,6 +36,7 @@ export const TaxSubtotalSchema = v.pipe(
     taxableAmount: v.number([v.minValue(0, '[FATAL] Osnovica ne sme biti negativna.')]),
     taxAmount: v.number([v.minValue(0, '[FATAL] Iznos poreza ne sme biti negativan.')]),
     taxCategoryCode: SefTaxCategoryPicklist,
+    taxCategoryPercent: v.number([v.minValue(0, '[FATAL] Poreska stopa mora biti pozitivna.'), v.maxValue(100, '[FATAL] Poreska stopa ne može preći 100%.')]),
     exemptionReasonCode: v.optional(v.string()),
     taxExemptionReason: v.optional(v.string())
   }),
@@ -44,14 +45,25 @@ export const TaxSubtotalSchema = v.pipe(
       return !!input.exemptionReasonCode && input.exemptionReasonCode.trim() !== '';
     }
     return true;
-  }, '[FATAL] Za sve poreske kategorije osim standardne (S), obavezno je uneti šifru zakonskog osnova (exemptionReasonCode).')
+  }, '[FATAL] Za sve poreske kategorije osim standardne (S), obavezno je uneti šifru zakonskog osnova (exemptionReasonCode).'),
+  
+  v.check((input) => {
+    const ocekivaniPorez = Math.round((input.taxableAmount * input.taxCategoryPercent / 100) * 100) / 100;
+    return Math.abs(input.taxAmount - ocekivaniPorez) < 0.01;
+  }, '[FATAL] Aritmetička greška [VRBL-CALC-21]: Iznos poreza (taxAmount) unutar podtotala ne odgovara proračunu na osnovu stope i osnovice.')
 );
 
-export const TaxTotalSchema = v.object({
-  currencyCode: v.string([v.length(3)]),
-  taxAmount: v.number(),
-  subtotals: v.array(TaxSubtotalSchema)
-});
+export const TaxTotalSchema = v.pipe(
+  v.object({
+    currencyCode: v.string([v.length(3)]),
+    taxAmount: v.number([v.minValue(0)]),
+    subtotals: v.array(TaxSubtotalSchema)
+  }),
+  v.check((input) => {
+    const sumaPodTotala = input.subtotals.reduce((acc, sub) => acc + sub.taxAmount, 0);
+    return Math.abs(input.taxAmount - sumaPodTotala) < 0.01;
+  }, '[FATAL] Aritmetička greška [VRBL-CALC-2]: Ukupan poreski iznos (taxAmount) mora biti jednak sumi svih pojedinačnih poreskih podtotala.')
+);
 
 // 4. Referenca na eOtpremnice
 export const DespatchDocumentReferenceSchema = v.object({
@@ -164,11 +176,25 @@ export const SefInvoiceSchema = v.pipe(
     customerElectronicAddress: SefCustomerEndpointSchema,
     customerPartyTaxScheme: SefCustomerPartyTaxSchemeSchema,
     customerPartyLegalEntity: SefCustomerPartyLegalEntitySchema,
-    advancePaymentReferences: v.optional(v.array(SefAdvancePaymentReferenceSchema))
+    advancePaymentReferences: v.optional(v.array(SefAdvancePaymentReferenceSchema)),
+    // Totali za [VRBL-CALC-10]
+    lineExtensionAmount: v.number([v.minValue(0)]),
+    taxExclusiveAmount: v.number([v.minValue(0)]),
+    taxInclusiveAmount: v.number([v.minValue(0)]),
+    prepaidAmount: v.optional(v.number([v.minValue(0)]))
   }),
 
+  // Hronologija datuma
   v.check((input) => new Date(input.issueDate) <= new Date(input.paymentDueDate), '[FATAL] Rok plaćanja ne može biti pre datuma izdavanja fakture.'),
 
+  // 🎯 VERTEX [VRBL-CALC-10]: Krovno finansijsko poravnanje
+  v.check((input) => {
+    const ukupniPorez = input.taxTotals.reduce((acc, t) => acc + t.taxAmount, 0);
+    const ocekivaniTotal = Math.round((input.taxExclusiveAmount + ukupniPorez) * 100) / 100;
+    return Math.abs(input.taxInclusiveAmount - ocekivaniTotal) < 0.01;
+  }, '[FATAL] Aritmetička greška [VRBL-CALC-10]: Ukupan iznos sa porezom (taxInclusiveAmount) mora biti tačan zbir osnovice i ukupnog poreza.'),
+
+  // Avansni računi (386) zahtevaju fiksni rok i fiksnu šifru perioda
   v.check((input) => {
     if (input.invoiceTypeCode === '386') {
       return input.paymentDueDate === input.issueDate && input.invoicingPeriodCode === '432';
@@ -176,6 +202,7 @@ export const SefInvoiceSchema = v.pipe(
     return true;
   }, '[FATAL] Avansni računi (386) moraju imati rok plaćanja jednak datumu izdavanja i koristiti invoicingPeriodCode 432.'),
 
+  // 🎯 VERTEX [VRBL-RS-1p0p0-5] USLOVNA VALIDACIJA ZA KNJIŽNA ODOBRENJA (381):
   v.check((input) => {
     if (input.invoiceTypeCode === '381') {
       return !!input.billingReference && !!input.billingReference.id && !!input.billingReference.issueDate;
@@ -183,6 +210,7 @@ export const SefInvoiceSchema = v.pipe(
     return true;
   }, '[FATAL] Knjižno odobrenje (381) mora sadržati BillingReference sa ispravnim ID-jem i datumom (IssueDate) originalne fakture koju korigujete.'),
 
+  // Komercijalna faktura (380) na osnovu prometa (35) zahteva otpremnice
   v.check((input) => {
     if (input.invoiceTypeCode === '380' && input.invoicingPeriodCode === '35') {
       return !!input.despatchDocumentReferences && input.despatchDocumentReferences.length > 0;
@@ -190,6 +218,7 @@ export const SefInvoiceSchema = v.pipe(
     return true;
   }, '[FATAL] Komercijalna faktura (380) zasnovana na prometu (kod 35) mora sadržati bar jednu referencu na eOtpremnicu.'),
 
+  // 🎯 VERTEX / B2G ZAVISNA VALIDACIJA ZA BUYER REFERENCE:
   v.check((input) => {
     if (!!input.customerJbkjs && input.customerJbkjs.trim() !== '') {
       return input.buyerReference.tip !== 'NEMA';
@@ -242,9 +271,11 @@ export const SefInvoiceSchema = v.pipe(
   }, '[FATAL] Neslaganje poreskog osnova: Avansni računi (386) moraju koristiti kod 432, dok standardne fakture (380) koriste 35, 3 ili 0.'),
 
   v.check((input) => {
-    const cisceniSenderPib = input.routingDetails.sender.replace(/^RS/, '');
-    return cisceniSenderPib === input.supplierPib;
-  }, '[FATAL] Poreski nesklad: PIB unutar routingDetails.sender mora odgovarati biznis PIB-u prodavca (supplierPib).')
+    if (input.advancePaymentReferences && input.advancePaymentReferences.length > 0) {
+      return input.invoiceTypeCode === '380';
+    }
+    return true;
+  }, '[FATAL] Strukturalna greška [VRBL-CALC-10]: Reference prebijanja avansa (OriginatorDocumentReference) se mogu nalaziti isključivo unutar Konačne Fakture (tip 380).')
 );
 
 export type SefInvoiceInput = v.InferOutput<typeof SefInvoiceSchema>;
