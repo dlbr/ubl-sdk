@@ -63,6 +63,13 @@ export const SefPartyIdentificationSchema = v.object({
   value: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] Poreski identifikacioni broj unutar Supplier ID mora imati tačno 9 cifara.'))
 });
 
+// 6.1 Šema za poreski sistem kompanije (PartyTaxScheme) prema [VRBL-RS-1p0p0-8]
+export const SefPartyTaxSchemeSchema = v.object({
+  companySchemeId: v.literal('RS', '[FATAL] schemeID za CompanyID unutar PartyTaxScheme mora biti "RS".'),
+  companyId: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] CompanyID unutar poreskog sistema prodavca mora imati tačno 9 cifara.')),
+  taxSchemeId: v.literal('VAT', '[FATAL] Poreska šema (TaxScheme ID) za prodavca u Srbiji mora biti postavljena na "VAT".')
+});
+
 // 🛡️ KROVNI TITANIJUMSKI VALIDATOR (Srbija Profile)
 export const SefInvoiceSchema = v.pipe(
   v.object({
@@ -83,7 +90,8 @@ export const SefInvoiceSchema = v.pipe(
     taxTotals: v.array(TaxTotalSchema),
     // 🟢 Novi obavezni elementi prema Vertex pravilu
     supplierElectronicAddress: SefEndpointIdSchema,
-    supplierPartyIdentification: SefPartyIdentificationSchema
+    supplierPartyIdentification: SefPartyIdentificationSchema,
+    supplierPartyTaxScheme: SefPartyTaxSchemeSchema
   }),
 
   // Hronologija datuma
@@ -131,6 +139,11 @@ export const SefInvoiceSchema = v.pipe(
     return input.supplierPartyIdentification.value === input.supplierPib;
   }, '[FATAL] Poreski nesklad: Vrednost u supplierPartyIdentification (Supplier ID) mora biti identična glavnom PIB-u prodavca.'),
 
+  // 🎯 VERTEX / SCHEMATRON PRAVILO: ZAVISNA VALIDACIJA ZA SUPPLIER TAX SCHEME
+  v.check((input) => {
+    return input.supplierPartyTaxScheme.companyId === input.supplierPib;
+  }, '[FATAL] Poreski nesklad: Vrednost u supplierPartyTaxScheme (CompanyID) mora biti identična glavnom PIB-u prodavca.'),
+
   // 🎯 VERTEX / SCHEMATRON PRAVILO: Valutna konzistentnost za domaći promet
   v.check((input) => {
     if (input.documentCurrencyCode === 'RSD') {
@@ -161,6 +174,7 @@ export const SefInvoiceSchema = v.pipe(
     return true;
   }, '[FATAL] Neslaganje poreskog osnova: Avansni računi (386) moraju koristiti kod 432, dok standardne fakture (380) koriste 35, 3 ili 0.')
 );
+
 
 
 export type SefInvoiceInput = v.InferOutput<typeof SefInvoiceSchema>;
