@@ -18,14 +18,9 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: 🛠️ Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: ⛰️ Instalacija alata
+      - name: ⛰️ Instalacija okruženja (Git, Node, pnpm) direktno kroz Alpine
         run: |
-          apk add --no-cache git
+          apk add --no-cache git nodejs npm
           npm install -g pnpm
 
       - name: 🗄️ Keširanje pnpm store
@@ -58,14 +53,9 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: 🛠️ Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: ⛰️ Instalacija alata
+      - name: ⛰️ Instalacija okruženja (Git, Node, pnpm) direktno kroz Alpine
         run: |
-          apk add --no-cache git
+          apk add --no-cache git nodejs npm
           npm install -g pnpm
 
       - name: 🗄️ Keširanje pnpm store
@@ -108,14 +98,9 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: 🛠️ Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: ⛰️ Instalacija alata
+      - name: ⛰️ Instalacija okruženja (Git, Node, pnpm) direktno kroz Alpine
         run: |
-          apk add --no-cache git
+          apk add --no-cache git nodejs npm
           npm install -g pnpm
 
       - name: 🗄️ Keširanje pnpm store
