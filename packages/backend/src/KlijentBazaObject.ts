@@ -466,16 +466,17 @@ export class KlijentBaza extends DurableObject<Env> {
     const dateTo = (new Date().toISOString().split('T')[0]) ?? '';
     
     try {
-      const rawIds = await sefClient.getSalesInvoiceIds(dateFrom, dateTo);
-      console.log(`[Sync] Povučeni sirovi ID-jevi:`, rawIds);
+      const invoices = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo);
+      console.log(`[Sync] Povučene fakture iz overview-a:`, invoices ? invoices.length : 'null');
       
-      const invoiceIds = Array.isArray(rawIds) ? rawIds : ((rawIds as any).salesInvoiceIds || []);
-      for (const id of invoiceIds.slice(-10)) {
-        console.log(`[Sync] Obrađujem fakturu: ${id}`);
-        const details = await sefClient.getSalesInvoiceDetails(id);
-        if (details) await this.processStatusUpdate(String(id), String(details.InvoiceStatus || 'Unknown'));
+      if (invoices) {
+        for (const inv of invoices.slice(-20)) {
+          console.log(`[Sync] Obrađujem fakturu: ${inv.SalesInvoiceId || inv.InvoiceId}`);
+          await this.processStatusUpdate(String(inv.SalesInvoiceId || inv.InvoiceId), String(inv.InvoiceStatus || 'Unknown'));
+        }
+        return { discoveredSales: 0, discoveredPurchases: invoices.length };
       }
-      return { discoveredSales: invoiceIds.length, discoveredPurchases: 0 };
+      return { discoveredSales: 0, discoveredPurchases: 0 };
     } catch (err: any) { 
       console.error("Sync Error:", err); 
       return { discoveredSales: 0, discoveredPurchases: 0, error: err.message };
