@@ -344,14 +344,11 @@ export const SefInvoiceSchema = v.pipe(
   }, '[FATAL] Poreski nesklad: PIB unutar routingDetails.sender mora odgovarati biznis PIB-u prodavca (supplierPib).'),
 
   v.check((input) => {
-    const sumaPopusta = input.allowanceCharges ? input.allowanceCharges.filter(ac => !ac.chargeIndicator).reduce((acc, ac) => acc + ac.amount, 0) : 0;
-    return Math.abs((input.allowanceTotalAmount || 0) - sumaPopusta) < 0.01;
-  }, '[FATAL] Nesklad u totalima: Krovno polje allowanceTotalAmount mora biti tačan zbir svih detaljnih stavki popusta.'),
-
-  v.check((input) => {
-    const sumaTroskova = input.allowanceCharges ? input.allowanceCharges.filter(ac => ac.chargeIndicator).reduce((acc, ac) => acc + ac.amount, 0) : 0;
-    return Math.abs((input.chargeTotalAmount || 0) - sumaTroskova) < 0.01;
-  }, '[FATAL] Nesklad u totalima: Krovno polje chargeTotalAmount mora biti tačan zbir svih detaljnih stavki dodatnih troškova.')
+    const sumaPoreskihOsnovica = input.taxTotals.reduce((totalAcc, total) => {
+      return totalAcc + total.subtotals.reduce((subAcc, sub) => subAcc + sub.taxableAmount, 0);
+    }, 0);
+    return Math.abs(input.taxExclusiveAmount - sumaPoreskihOsnovica) < 0.01;
+  }, '[FATAL] Nesklad u totalima [VRBL-CALC-24]: Zbir svih osnovica unutar poreskih grupa (TaxSubtotal) se ne poklapa sa krajnjom osnovicom dokumenta (taxExclusiveAmount). Popusti ili troškovi nisu pravilno raspoređeni.')
 );
 
 export type SefInvoiceInput = v.InferOutput<typeof SefInvoiceSchema>;
