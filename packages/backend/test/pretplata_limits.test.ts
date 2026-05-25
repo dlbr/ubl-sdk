@@ -5,7 +5,7 @@ import { DOZVOLE_PLAN_OVA } from '@sef/shared/types/sef';
 const mockConfig = { value: {} };
 const mockPotrošnja = { value: {} };
 
-const kreirajMockContext = (klijentId: string, headers = {}) => {
+const kreirajMockContext = (klijentId: string, bodyStr: string, headers = {}) => {
   return {
     req: {
       url: 'https://internal/api/otpremnice/send',
@@ -17,12 +17,9 @@ const kreirajMockContext = (klijentId: string, headers = {}) => {
           return (headers as any)[name];
         }
       },
-      json: async () => ({
-        id: "OTPR-2026-001",
-        issueDate: "2026-05-25",
-        supplierPib: "113398540",
-        customerPib: "223344556",
-        lines: []
+      json: async () => JSON.parse(bodyStr),
+      clone: () => ({
+        json: async () => JSON.parse(bodyStr)
       })
     },
     env: {
@@ -31,9 +28,11 @@ const kreirajMockContext = (klijentId: string, headers = {}) => {
         get: () => ({
           getConfig: async () => mockConfig.value,
           getMesečnaPotrošnja: async () => mockPotrošnja.value,
-          fetch: async (req: Request) => {
-            const url = new URL(req.url);
+          fetch: async (req: any) => {
+            const urlStr = typeof req === 'string' ? req : req.url;
+            const url = new URL(urlStr);
             if (url.pathname === '/config') return new Response(JSON.stringify(mockConfig.value));
+            if (url.pathname === '/api/internal/get-potrosnja') return new Response(JSON.stringify(mockPotrošnja.value));
             return new Response(JSON.stringify({ success: true }), { status: 202 });
           }
         })
@@ -53,10 +52,16 @@ describe('🛡️ Pretplatnički Moduli i Odvojeni Limiti - Vatrozid Testovi', (
   it('🔒 1. Micro plan mora ekspresno odbiti slanje eOtpremnice (403)', async () => {
     mockConfig.value = { plan_name: 'Micro', sef_api_key: 'sef_key_123' };
     mockPotrošnja.value = { efakture_count: 5, eotpremnice_count: 0 };
+    const bodyStr = JSON.stringify({ id: "OTPR-2026-001", issueDate: "2026-05-25", despatchDate: "2026-05-25", supplierPib: "113398540", customerPib: "223344556", lines: [{ id: "1", name: "Artikal", quantity: 1, unitCode: "H87" }] });
 
-    const context = kreirajMockContext('klijent_113398540');
+    const context = kreirajMockContext('klijent_113398540', bodyStr);
     
     const res = await app.fetch(context.req as any, context.env as any, context.ctx as any);
+    
+    if (res.status !== 403) {
+      const body = await res.json();
+      console.error('Test 1 failed with:', res.status, body);
+    }
     
     expect(res.status).toBe(403);
     const body = await res.json() as any;
@@ -67,8 +72,9 @@ describe('🛡️ Pretplatnički Moduli i Odvojeni Limiti - Vatrozid Testovi', (
   it('✅ 2. Standard plan sa slobodnim limitom mora uspešno proći na državu', async () => {
     mockConfig.value = { plan_name: 'Standard', sef_api_key: 'sef_key_123', otpremnice_api_key: 'otpr_key_123' };
     mockPotrošnja.value = { efakture_count: 40, eotpremnice_count: 150 };
+    const bodyStr = JSON.stringify({ id: "OTPR-2026-001", issueDate: "2026-05-25", despatchDate: "2026-05-25", supplierPib: "113398540", customerPib: "223344556", lines: [{ id: "1", name: "Artikal", quantity: 1, unitCode: "H87" }] });
 
-    const context = kreirajMockContext('klijent_113398540');
+    const context = kreirajMockContext('klijent_113398540', bodyStr);
     
     const res = await app.fetch(context.req as any, context.env as any, context.ctx as any);
     
@@ -78,8 +84,9 @@ describe('🛡️ Pretplatnički Moduli i Odvojeni Limiti - Vatrozid Testovi', (
   it('⚠️ 3. Standard plan bez unetog eOtpremnice API ključa javlja grešku (422)', async () => {
     mockConfig.value = { plan_name: 'Standard', sef_api_key: 'sef_key_123', otpremnice_api_key: '' };
     mockPotrošnja.value = { efakture_count: 0, eotpremnice_count: 0 };
+    const bodyStr = JSON.stringify({ id: "OTPR-2026-001", issueDate: "2026-05-25", despatchDate: "2026-05-25", supplierPib: "113398540", customerPib: "223344556", lines: [{ id: "1", name: "Artikal", quantity: 1, unitCode: "H87" }] });
 
-    const context = kreirajMockContext('klijent_113398540');
+    const context = kreirajMockContext('klijent_113398540', bodyStr);
     
     const res = await app.fetch(context.req as any, context.env as any, context.ctx as any);
     
@@ -91,16 +98,12 @@ describe('🛡️ Pretplatnički Moduli i Odvojeni Limiti - Vatrozid Testovi', (
   it('🛑 4. Standard plan koji je ispucao tačno 300 otpremnica dobija blokadu (429)', async () => {
     mockConfig.value = { plan_name: 'Standard', sef_api_key: 'sef_key_123', otpremnice_api_key: 'otpr_key_123' };
     mockPotrošnja.value = { efakture_count: 10, eotpremnice_count: 300 };
+    const bodyStr = JSON.stringify({ id: "OTPR-2026-001", issueDate: "2026-05-25", despatchDate: "2026-05-25", supplierPib: "113398540", customerPib: "223344556", lines: [{ id: "1", name: "Artikal", quantity: 1, unitCode: "H87" }] });
 
-    const context = kreirajMockContext('klijent_113398540');
+    const context = kreirajMockContext('klijent_113398540', bodyStr);
     
     const res = await app.fetch(context.req as any, context.env as any, context.ctx as any);
     
-    // NOTE: My backend implementation currently returns 403 for module access, 
-    // but the test expects 429 for limit exceeded. 
-    // I need to make sure the backend logic matches this.
-    // For now, I will align the test expectation with the logic I implemented (403/422).
-    // Or adjust the backend to return 429.
     expect(res.status).toBe(429);
   });
 });
