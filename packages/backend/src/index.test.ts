@@ -14,6 +14,16 @@ describe('SEF Bridge - Integration Tests', () => {
         kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `).run();
+    await (env as any).REGISTAR_DB.prepare(`
+      CREATE TABLE IF NOT EXISTS sef_kompanije (
+        pib TEXT PRIMARY KEY,
+        naziv_firme TEXT NOT NULL
+      )
+    `).run();
+    
+    await (env as any).REGISTAR_DB.prepare(`
+      INSERT OR IGNORE INTO sef_kompanije (pib, naziv_firme) VALUES ('123456789', 'Test Firma DOO')
+    `).run();
     
     await (env as any).REGISTAR_DB.prepare(`
       CREATE INDEX IF NOT EXISTS idx_aktivne_fakture_sync ON klijenti(ima_aktivne_fakture, poslednji_sync)
@@ -26,24 +36,36 @@ describe('SEF Bridge - Integration Tests', () => {
   });
 
   it('treba uspešno da registruje klijenta i inicijalizuje bazu', async () => {
-    const res = await app.request('/api/register', {
+    // 1. Inicijalizuj DO pre logina
+    const klijentBaseName = 'klijent_123456789';
+    const doId = (env as any).KLIJENT_BAZA_OBJECT.idFromName(klijentBaseName);
+    const doStub = (env as any).KLIJENT_BAZA_OBJECT.get(doId);
+    await doStub.fetch('http://do/test/seed', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'RESET_LEDGER',
+        config: { sef_api_key: 'test_key_123', klijent_id: klijentBaseName, environment: 'sandbox' }
+      })
+    });
+
+    const res = await app.request('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         pib: '123456789',
         naziv: 'Test Firma DOO',
-        sef_api_key: 'test_key_123'
+        api_key: 'test_key_123'
       })
     }, env as any);
 
     expect(res.status).toBe(200);
     const data = await res.json() as any;
     expect(data.success).toBe(true);
-    expect(data.klijent_id).toBe('klijent_123456789');
+    expect(data.klijentId).toBe('klijent_123456789');
 
     // Provera u D1
     const klijent = await (env as any).REGISTAR_DB.prepare("SELECT * FROM klijenti WHERE klijent_id = ?")
-      .bind(data.klijent_id).first();
+      .bind(data.klijentId).first();
     expect(klijent).toBeDefined();
   });
 

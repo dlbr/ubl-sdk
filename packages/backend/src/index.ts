@@ -116,6 +116,7 @@ app.post('/api/auth/login', async ({ req, env }: RouterContext<Env>) => {
 
     return Response.json({ error: 'Nedostaju kredencijali' }, { status: 400 });
   } catch (e: any) {
+    console.error('[Login Error]', e);
     return Response.json({ error: 'AUTH_SERVER_ERROR', message: e.message }, { status: 500 });
   }
 });
