@@ -28,16 +28,16 @@ jobs:
           corepack prepare pnpm@latest --activate
 
       - name: 📥 Instalacija zavisnosti
-        run: pnpm install --frozen-lockfile
+        run: npx pnpm install --frozen-lockfile
 
       - name: 🏗️ Nuxt Prepare
-        run: pnpm --filter @sef/frontend exec nuxt prepare
+        run: npx pnpm --filter @sef/frontend exec nuxt prepare
 
       - name: 🧪 Pokretanje Testova
         env:
           ADMIN_API_KEY: "admin_secret"
           SESSION_SECRET: "test_secret_32_chars_long_ver_2026"
-        run: pnpm test
+        run: npx pnpm test
 
   deploy-backend:
     name: ⚡ Deploy Backend Worker
@@ -67,10 +67,10 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: 📥 Instalacija zavisnosti
-        run: pnpm install --frozen-lockfile
+        run: npx pnpm install --frozen-lockfile
 
       - name: 🏗️ Build Shared Paketa
-        run: pnpm build:shared
+        run: npx pnpm build:shared
 
       # KORAK A: Ako je kôd na PR-u, šaljemo ga na Preview URL (*-sef-bridge...)
       - name: 🌤️ Deploy Backend (Preview)
