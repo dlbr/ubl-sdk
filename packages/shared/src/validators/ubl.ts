@@ -95,6 +95,20 @@ export const SefCustomerPartyTaxSchemeSchema = v.object({
   ])
 });
 
+// 13. Šema za pravni entitet kupca (PartyLegalEntity) prema [VRBL-RS-1p0p0-13]
+export const SefCustomerPartyLegalEntitySchema = v.union([
+  v.object({
+    registrationName: v.pipe(v.string(), v.minLength(1, '[FATAL] Naziv kupca ne sme biti prazan.')),
+    companySchemeId: v.literal('RS:MB', '[FATAL] Za matični broj kupca, schemeID mora biti "RS:MB".'),
+    companyId: v.pipe(v.string(), v.regex(/^\d{8}$/, '[FATAL] Matični broj kupca mora imati tačno 8 cifara.'))
+  }),
+  v.object({
+    registrationName: v.pipe(v.string(), v.minLength(1, '[FATAL] Naziv kupca ne sme biti prazan.')),
+    companySchemeId: v.literal('RS:JMBG', '[FATAL] Za JMBG kupca, schemeID mora biti "RS:JMBG".'),
+    companyId: v.pipe(v.string(), v.regex(/^\d{13}$/, '[FATAL] JMBG kupca mora imati tačno 13 cifara.'))
+  })
+], '[FATAL] Nevalidna struktura pravnog entiteta kupca.');
+
 // 🛡️ KROVNI TITANIJUMSKI VALIDATOR (Srbija Profile)
 export const SefInvoiceSchema = v.pipe(
   v.object({
@@ -118,7 +132,8 @@ export const SefInvoiceSchema = v.pipe(
     supplierPartyTaxScheme: SefPartyTaxSchemeSchema,
     supplierPartyLegalEntity: SefPartyLegalEntitySchema,
     customerElectronicAddress: SefCustomerEndpointSchema,
-    customerPartyTaxScheme: SefCustomerPartyTaxSchemeSchema
+    customerPartyTaxScheme: SefCustomerPartyTaxSchemeSchema,
+    customerPartyLegalEntity: SefCustomerPartyLegalEntitySchema
   }),
 
   v.check((input) => new Date(input.issueDate) <= new Date(input.paymentDueDate), '[FATAL] Rok plaćanja ne može biti pre datuma izdavanja fakture.'),
