@@ -123,6 +123,12 @@ export const SefCustomerPartyLegalEntitySchema = v.union([
   })
 ], '[FATAL] Nevalidna struktura pravnog entiteta kupca.');
 
+// 14. Šema za referenciranje avansnih računa (OriginatorDocumentReference) prema [VRBL-RS-1p0p0-16]
+export const SefAdvancePaymentReferenceSchema = v.object({
+  schemeId: v.literal('SRB:ADVANCE', '[FATAL] schemeID za avansnu referencu unutar OriginatorDocumentReference mora biti "SRB:ADVANCE".'),
+  value: v.pipe(v.string(), v.minLength(1, '[FATAL] Broj avansnog računa ne sme biti prazan.'), v.maxLength(50, '[FATAL] Broj avansnog računa ne sme biti duži od 50 karaktera.'))
+});
+
 // 🛡️ KROVNI TITANIJUMSKI VALIDATOR (Srbija Profile)
 export const SefInvoiceSchema = v.pipe(
   v.object({
@@ -147,10 +153,20 @@ export const SefInvoiceSchema = v.pipe(
     supplierPartyLegalEntity: SefPartyLegalEntitySchema,
     customerElectronicAddress: SefCustomerEndpointSchema,
     customerPartyTaxScheme: SefCustomerPartyTaxSchemeSchema,
-    customerPartyLegalEntity: SefCustomerPartyLegalEntitySchema
+    customerPartyLegalEntity: SefCustomerPartyLegalEntitySchema,
+    // 🟢 Novi opcioni niz za prebijanje avansa prema Vertex specifikaciji
+    advancePaymentReferences: v.optional(v.array(SefAdvancePaymentReferenceSchema))
   }),
 
   v.check((input) => new Date(input.issueDate) <= new Date(input.paymentDueDate), '[FATAL] Rok plaćanja ne može biti pre datuma izdavanja fakture.'),
+
+  // 🎯 VERTEX [VRBL-RS-1p0p0-16] USLOVNA VALIDACIJA ZA AVANSE:
+  v.check((input) => {
+    if (input.advancePaymentReferences && input.advancePaymentReferences.length > 0) {
+      return input.invoiceTypeCode === '380';
+    }
+    return true;
+  }, '[FATAL] Strukturalna greška: Reference prebijanja avansa (OriginatorDocumentReference) se mogu nalaziti isključivo unutar Konačne Fakture (tip 380).'),
 
   v.check((input) => {
     if (input.invoiceTypeCode === '386') {
