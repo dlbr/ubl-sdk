@@ -3,18 +3,20 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predeploy": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:@dlbr/ubl-sdk --external:cloudflare:workers",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev"
   },
   "dependencies": {
-    "@sef/shared": "workspace:*",
     "@dlbr/ubl-sdk": "workspace:*",
+    "@sef/shared": "workspace:*",
     "itty-router": "^5.0.18",
     "valibot": "^1.4.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.4",
     "@cloudflare/workers-types": "^4.20260523.1",
+    "esbuild": "^0.21.5",
     "vitest": "^4.1.6",
     "wrangler": "^4.92.0"
   }

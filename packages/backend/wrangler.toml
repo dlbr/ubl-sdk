@@ -1,7 +1,10 @@
 name = "sef-bridge-backend"
 main = "src/index.ts"
 compatibility_date = "2026-05-25"
-compatibility_flags = ["nodejs_compat"]
+node_compatibility = true
+
+[alias]
+"@dlbr/ubl-sdk" = "../ubl-sdk/src/index.ts"
 
 [[d1_databases]]
 binding = "REGISTAR_DB"
@@ -40,8 +43,6 @@ queue = "eotpremnice-reconciliation-queue"
 name = "sef-bridge-backend"
 workers_dev = false
 
-[build]
-bundle = true
 [[queues.consumers]]
 queue = "sef-compliance-queue"
 max_batch_size = 10

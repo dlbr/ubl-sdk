@@ -45,6 +45,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260523.1
         version: 4.20260523.1
+      esbuild:
+        specifier: ^0.21.5
+        version: 0.21.5
       vitest:
         specifier: ^4.1.6
         version: 4.1.7(@types/node@25.9.1)(vite@7.3.3(@types/node@25.9.1)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
