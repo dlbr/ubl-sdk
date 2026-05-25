@@ -51,6 +51,12 @@ export const SefInvoiceDocumentReferenceSchema = v.object({
   issueDate: v.pipe(v.string(), v.isoDate('[FATAL] Datum izdavanja prethodnog dokumenta (IssueDate) mora biti u ispravnom ISO formatu YYYY-MM-DD.'))
 });
 
+// 6. Šema za elektronsku adresu (EndpointID) prema pravilu [VRBL-RS-1p0p0-6]
+export const SefEndpointIdSchema = v.object({
+  schemeId: v.literal('9948', '[FATAL] schemeID za elektronsku adresu prodavca u Srbiji mora biti "9948".'),
+  value: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] Elektronska adresa prodavca (vrednost) mora biti tačno devetocifreni PIB.'))
+});
+
 // 🛡️ KROVNI TITANIJUMSKI VALIDATOR (Srbija Profile)
 export const SefInvoiceSchema = v.pipe(
   v.object({
@@ -68,7 +74,9 @@ export const SefInvoiceSchema = v.pipe(
     buyerReference: SefBuyerReferenceSchema,
     despatchDocumentReferences: v.optional(v.array(DespatchDocumentReferenceSchema)),
     billingReference: v.optional(SefInvoiceDocumentReferenceSchema),
-    taxTotals: v.array(TaxTotalSchema)
+    taxTotals: v.array(TaxTotalSchema),
+    // 🟢 Novi obavezni element prema Vertex pravilu [VRBL-RS-1p0p0-6]
+    supplierElectronicAddress: SefEndpointIdSchema
   }),
 
   // Hronologija datuma
@@ -106,6 +114,11 @@ export const SefInvoiceSchema = v.pipe(
     return true;
   }, '[FATAL] Za budžetske korisnike (kupce sa JBKJS brojem), obavezno je uneti ispravan tip reference (Ugovor, Narudžbenica ili Javna Nabavka).'),
 
+  // 🎯 VERTEX / SCHEMATRON PRAVILO: ZAVISNA VALIDACIJA ZA SUPPLIER ENDPOINT
+  v.check((input) => {
+    return input.supplierElectronicAddress.value === input.supplierPib;
+  }, '[FATAL] Poreski nesklad: Vrednost u supplierElectronicAddress mora biti identična PIB-u prodavca.'),
+
   // 🎯 VERTEX / SCHEMATRON PRAVILO: Valutna konzistentnost za domaći promet
   v.check((input) => {
     if (input.documentCurrencyCode === 'RSD') {
@@ -123,7 +136,18 @@ export const SefInvoiceSchema = v.pipe(
       return imaRsdPorez && imaDevizniPorez;
     }
     return true;
-  }, '[FATAL] Devizne fakture moraju sadržati tačno dva TaxTotal bloka (jedan u devizama, jedan preračunat u RSD po kursu NBS).')
+  }, '[FATAL] Devizne fakture moraju sadržati tačno dva TaxTotal bloka (jedan u devizama, jedan preračunat u RSD po kursu NBS).'),
+
+  // 🎯 VERTEX / SCHEMATRON PRAVILO: ZAVISNA VALIDACIJA ZA INVOICING PERIOD
+  v.check((input) => {
+    if (input.invoiceTypeCode === '386') {
+      return input.invoicingPeriodCode === '432';
+    }
+    if (input.invoiceTypeCode === '380' && input.invoicingPeriodCode === '432') {
+      return false;
+    }
+    return true;
+  }, '[FATAL] Neslaganje poreskog osnova: Avansni računi (386) moraju koristiti kod 432, dok standardne fakture (380) koriste 35, 3 ili 0.')
 );
 
 export type SefInvoiceInput = v.InferOutput<typeof SefInvoiceSchema>;
