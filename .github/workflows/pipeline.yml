@@ -18,9 +18,14 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
+      - name: 🛠️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: ⛰️ Instalacija alata
         run: |
-          apk add --no-cache nodejs-current npm git
+          apk add --no-cache git
           npm install -g pnpm
 
       - name: 🗄️ Keširanje pnpm store
@@ -53,9 +58,14 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
+      - name: 🛠️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: ⛰️ Instalacija alata
         run: |
-          apk add --no-cache nodejs-current npm git
+          apk add --no-cache git
           npm install -g pnpm
 
       - name: 🗄️ Keširanje pnpm store
@@ -98,9 +108,14 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
+      - name: 🛠️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: ⛰️ Instalacija alata
         run: |
-          apk add --no-cache nodejs-current npm git
+          apk add --no-cache git
           npm install -g pnpm
 
       - name: 🗄️ Keširanje pnpm store
