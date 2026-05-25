@@ -98,14 +98,14 @@ jobs:
       - name: 🌤️ Deploy Backend (Preview)
         if: github.event_name == 'pull_request'
         run: |
-          pnpm --filter @sef/backend deploy --preproduction
+          pnpm --filter @sef/backend exec wrangler deploy --preproduction
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: 🛑 Deploy Backend (Production)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
-          pnpm --filter @sef/backend deploy --env production
+          pnpm --filter @sef/backend exec wrangler deploy --env production
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
