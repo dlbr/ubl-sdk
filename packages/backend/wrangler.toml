@@ -72,12 +72,12 @@ queue = "sef-compliance-queue"
 binding = "OTPREMNICA_QUEUE"
 queue = "eotpremnice-reconciliation-queue"
 
-[[env.production.queues.consumers]]
+[[queues.consumers]]
 queue = "sef-compliance-queue"
 max_batch_size = 10
 max_batch_timeout = 30
 
-[[env.production.queues.consumers]]
+[[queues.consumers]]
 queue = "eotpremnice-reconciliation-queue"
 max_batch_size = 10
 max_batch_timeout = 5
