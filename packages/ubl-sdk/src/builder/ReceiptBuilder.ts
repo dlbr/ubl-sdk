@@ -29,6 +29,36 @@ export class ReceiptBuilder {
     return this;
   }
 
+  setShipmentMethod(method: ReceiptAdvice['shipmentMethod']): this {
+    this.receipt.shipmentMethod = method;
+    return this;
+  }
+
+  setThirdPartyGoodsId(id: string): this {
+    this.receipt.thirdPartyGoodsId = id;
+    return this;
+  }
+
+  setIsReturn(isReturn: boolean): this {
+    this.receipt.isReturn = isReturn;
+    return this;
+  }
+
+  setOfflineZinNumber(zin: string): this {
+    this.receipt.offlineZinNumber = zin;
+    return this;
+  }
+
+  setFrameworkAgreementId(id: string): this {
+    this.receipt.frameworkAgreementId = id;
+    return this;
+  }
+
+  setContractId(id: string): this {
+    this.receipt.contractId = id;
+    return this;
+  }
+
   setDespatchReference(id: string, date?: string): this {
     this.receipt.despatchDocumentReference = { id, issueDate: date };
     return this;

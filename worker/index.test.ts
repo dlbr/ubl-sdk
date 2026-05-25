@@ -5,7 +5,7 @@ describe('SEF Bridge - Integration Tests', () => {
   
   beforeAll(async () => {
     // Inicijalizacija šeme na testnoj bazi
-    await env.REGISTAR_DB.prepare(`
+    await (env as any).REGISTAR_DB.prepare(`
       CREATE TABLE IF NOT EXISTS klijenti (
         klijent_id TEXT PRIMARY KEY,
         naziv TEXT NOT NULL,
@@ -15,14 +15,14 @@ describe('SEF Bridge - Integration Tests', () => {
       )
     `).run();
     
-    await env.REGISTAR_DB.prepare(`
+    await (env as any).REGISTAR_DB.prepare(`
       CREATE INDEX IF NOT EXISTS idx_aktivne_fakture_sync ON klijenti(ima_aktivne_fakture, poslednji_sync)
     `).run();
   });
   
   beforeEach(async () => {
     // Čišćenje centralne baze pre svakog testa
-    await env.REGISTAR_DB.prepare("DELETE FROM klijenti").run();
+    await (env as any).REGISTAR_DB.prepare("DELETE FROM klijenti").run();
   });
 
   it('treba uspešno da registruje klijenta i inicijalizuje bazu', async () => {
@@ -42,7 +42,7 @@ describe('SEF Bridge - Integration Tests', () => {
     expect(data.klijent_id).toBe('klijent_123456789');
 
     // Provera u D1
-    const klijent = await env.REGISTAR_DB.prepare("SELECT * FROM klijenti WHERE klijent_id = ?")
+    const klijent = await (env as any).REGISTAR_DB.prepare("SELECT * FROM klijenti WHERE klijent_id = ?")
       .bind(data.klijent_id).first();
     expect(klijent).toBeDefined();
   });

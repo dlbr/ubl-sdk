@@ -21,7 +21,9 @@ export const DespatchSchema = v.object({
       id: v.string(),
       name: v.pipe(v.string(), v.minLength(1)),
       quantity: v.pipe(v.number(), v.minValue(0)),
-      unitCode: v.string()
+      unitCode: v.string(),
+      exciseCategory: v.optional(v.string()),
+      itemProperties: v.optional(v.record(v.string(), v.string()))
     })),
     v.minLength(1, 'Otpremnica mora imati bar jednu stavku')
   ),

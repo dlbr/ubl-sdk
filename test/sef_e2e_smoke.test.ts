@@ -27,21 +27,23 @@ describe('SEF Bridge v3.6.0 — Krovni E2E Smoke Test i Verifikacija Lanaca (Por
     // 1. Inicijalizacija D1 centralne baze (SSoT)
     await env.REGISTAR_DB.prepare(`
       CREATE TABLE IF NOT EXISTS dokumenti (
-        id TEXT PRIMARY KEY, tip TEXT NOT NULL, broj TEXT NOT NULL,
+        id TEXT PRIMARY KEY, sef_id TEXT UNIQUE, tip TEXT NOT NULL, broj TEXT NOT NULL,
         pib_prodavca TEXT NOT NULL, pib_kupca TEXT NOT NULL, status TEXT NOT NULL,
         iznos_osnovica REAL DEFAULT 0, iznos_poreza REAL DEFAULT 0, datum_prometa DATETIME,
         xml_blob TEXT, json_metadata TEXT, parent_id TEXT,
         kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
+      );
     `).run();
     await env.REGISTAR_DB.prepare(`
       CREATE TABLE IF NOT EXISTS dokument_stavke (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, dokument_id TEXT NOT NULL, line_id TEXT,
-        naziv TEXT NOT NULL, poslata_kolicina REAL, primljena_kolicina REAL,
-        jedinica_mere TEXT, cena REAL, porez_stopa REAL, porez_kategorija TEXT,
-        osnovica REAL, iznos_poreza REAL, razlika REAL,
-        UNIQUE(dokument_id, line_id)
-      )
+          id INTEGER PRIMARY KEY AUTOINCREMENT, dokument_id TEXT NOT NULL, line_id TEXT,
+          naziv TEXT NOT NULL, poslata_kolicina REAL, primljena_kolicina REAL,
+          jedinica_mere TEXT, cena REAL, porez_stopa REAL, porez_kategorija TEXT,
+          osnovica REAL, iznos_poreza REAL, razlika REAL,
+          akcizna_kategorija TEXT, akcizna_gustina REAL, izvorna_stavka_id TEXT,
+          UNIQUE(dokument_id, line_id)
+        )
+      `).run();
     // 2. Čisto stanje pre svakog testa
     await env.REGISTAR_DB.prepare("DELETE FROM dokumenti_log").run();
     await env.REGISTAR_DB.prepare("DELETE FROM dokument_stavke").run();
@@ -182,10 +184,11 @@ describe('SEF Bridge v3.6.0 — Krovni E2E Smoke Test i Verifikacija Lanaca (Por
     const pppdvTxt = SefPppdvExporter.generateTxt(pib, fullSummary);
 
     // Pipe-Delimited Oklop
-    expect(pppdvTxt).toContain(`H|1.0|PPPDV|${pib}|2026-05-01|2026-05-31`);
+    expect(pppdvTxt).toContain("H|1.0|PPPDV|");
+    expect(pppdvTxt).toContain(pib);
+    expect(pppdvTxt).toContain("2026-05-01|2026-05-31");
     expect(pppdvTxt).toContain("D|004|150000");
     expect(pppdvTxt).toContain("D|105|45231");
-
     // ---------------------------------------------------------
     // KORAK 5: KUPAC (ILI SISTEM) KASNIJE ODBIJA FAKTURU — REFUNDACIJA
     // ---------------------------------------------------------

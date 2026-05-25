@@ -191,18 +191,41 @@ export class KlijentBaza extends DurableObject<Env> {
         const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).one() as any;
         
         const client = new SefClient({ apiKey: config.sef_api_key, baseUrl: this.env.SEF_API_URL ?? 'https://demoefaktura.mfin.gov.rs', environment: config.environment });
-        const sefRes = await client.sendDespatchAdvice(advice, `req-otp-${Date.now()}`);
-        const finalStatus = sefRes.success ? 'SENT' : 'ERROR';
+        const requestId = `req-otp-${Date.now()}`;
+        const sefRes = await client.sendDespatchAdvice(advice, requestId, data.ID);
+        
+        let finalStatus = 'SENT';
+        if (!sefRes.success) {
+          finalStatus = sefRes.error === 'MFIN_PROCESSING_TIMEOUT' ? 'PENDING_PROCESSING' : 'ERROR';
+        }
 
         const bridge = new D1SyncBridge(this.env.REGISTAR_DB);
-        await bridge.upsertDocument({ id: internalId, tip: 'OTPREMNICA', broj: data.ID, pibProdavca: data.Supplier.Pib, pibKupca: data.Customer.Pib, status: finalStatus, xmlBlob: advice, parentId: data.BillingReference || null });
-        await bridge.logEvent(internalId, finalStatus, sefRes.success ? 'Poslato na Centralni Registar' : sefRes.error);
+        await bridge.upsertDocument({ 
+          id: internalId, 
+          tip: 'OTPREMNICA', 
+          broj: data.ID, 
+          pibProdavca: data.Supplier.Pib, 
+          pibKupca: data.Customer.Pib, 
+          status: finalStatus, 
+          xmlBlob: advice, 
+          parentId: data.BillingReference || null,
+          sefId: sefRes.mfinId && sefRes.mfinId !== 'PENDING' ? sefRes.mfinId : undefined
+        });
+        await bridge.logEvent(internalId, finalStatus, sefRes.success ? 'Poslato na Centralni Registar' : (sefRes.error === 'MFIN_PROCESSING_TIMEOUT' ? 'Čekanje na asinhronu obradu' : sefRes.error));
 
-        const lines: D1DocumentLine[] = data.Lines.map((l: any) => ({ dokumentId: internalId, lineId: l.ID, naziv: l.ItemName, poslataKolicina: l.DeliveredQuantity, jedinicaMere: l.UnitCode }));
+        const lines: D1DocumentLine[] = data.Lines.map((l: any) => ({
+          dokumentId: internalId,
+          lineId: l.ID,
+          naziv: l.ItemName,
+          poslataKolicina: l.DeliveredQuantity,
+          jedinicaMere: l.UnitCode,
+          akciznaKategorija: l.exciseCategory,
+          akciznaGustina: l.itemProperties?.GUSTINA ? parseFloat(l.itemProperties.GUSTINA) : undefined
+        }));
         await bridge.upsertLines(lines);
 
         this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'POTROŠNJA', -1, 'Despatch Send')`, crypto.randomUUID(), internalId, data.ID);
-        return Response.json({ success: true, internalId, xml: advice }, { status: 202 });
+        return Response.json({ success: sefRes.success, internalId, xml: advice, error: sefRes.error }, { status: 202 });
       } catch (e: any) { return Response.json({ error: 'LOGISTICS_ERROR', message: e.message }, { status: 400 }); }
     });
 
@@ -210,30 +233,92 @@ export class KlijentBaza extends DurableObject<Env> {
       const data = await req.json() as any;
       const bridge = new D1SyncBridge(this.env.REGISTAR_DB);
       try {
-        const builder = ReceiptBuilder.create(data.ID, data.IssueDate).setSeller(data.Supplier).setBuyer(data.Customer);
-        if (data.DespatchDocumentReference) builder.setDespatchReference(data.DespatchDocumentReference.ID, data.DespatchDocumentReference.IssueDate);
-        for (const line of data.Lines) {
-          builder.addLine({ id: line.ID, receivedQuantity: line.ReceivedQuantity, unitCode: line.UnitCode, itemName: line.ItemName, shortQuantity: line.ShortQuantity, rejectedQuantity: line.RejectedQuantity, rejectReason: line.RejectReason, despatchLineReference: line.DespatchLineID ? { id: line.DespatchLineID } : undefined });
+        const builder = ReceiptBuilder.create(data.id, data.issueDate)
+          .setSeller(data.supplier)
+          .setBuyer(data.buyer)
+          .setShipmentMethod(data.shipmentMethod)
+          .setIsReturn(data.isReturn)
+          .setOfflineZinNumber(data.offlineZinNumber)
+          .setFrameworkAgreementId(data.frameworkAgreementId)
+          .setContractId(data.contractId);
+
+        if (data.despatchDocumentReference) {
+          builder.setDespatchReference(data.despatchDocumentReference.id, data.despatchDocumentReference.issueDate);
         }
+
+        for (const line of data.lines) {
+          builder.addLine({
+            id: line.id,
+            receivedQuantity: line.receivedQuantity,
+            unitCode: line.unitCode,
+            itemName: line.itemName,
+            shortQuantity: line.shortQuantity,
+            rejectedQuantity: line.rejectedQuantity,
+            rejectReason: line.rejectReason,
+            despatchLineReference: line.despatchLineReference,
+            exciseCategory: line.exciseCategory,
+            itemProperties: line.itemProperties
+          });
+        }
+
         const xml = builder.toXml();
         const internalId = `REC-${Date.now()}`;
-        const parentId = data.DespatchDocumentReference?.ID;
+        const requestId = `req-rec-${Date.now()}`;
+        
+        const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).one() as any;
+        const client = new SefClient({ apiKey: config.sef_api_key, baseUrl: this.env.SEF_API_URL ?? 'https://demoefaktura.mfin.gov.rs', environment: config.environment });
+        
+        const sefRes = await client.sendReceiptAdvice(xml, requestId, data.id);
+
+        let parentInternalId = data.despatchDocumentReference?.id;
         let hasDiscrepancy = false;
         
-        if (parentId) {
-          const despatch = await this.env.REGISTAR_DB.prepare("SELECT id FROM dokumenti WHERE broj = ? AND tip = 'OTPREMNICA'").bind(parentId).first() as any;
+        if (parentInternalId) {
+          const despatch = await this.env.REGISTAR_DB.prepare("SELECT id FROM dokumenti WHERE (broj = ? OR id = ?) AND tip = 'OTPREMNICA'").bind(parentInternalId, parentInternalId).first() as any;
           if (despatch) {
-            for (const line of data.Lines) {
-              const diff = (line.ShortQuantity || 0) + (line.RejectedQuantity || 0);
+            parentInternalId = despatch.id; // Use the internal ID for D1 parent_id
+            for (const line of data.lines) {
+              const diff = (line.shortQuantity || 0) + (line.rejectedQuantity || 0);
               if (diff > 0) hasDiscrepancy = true;
-              await this.env.REGISTAR_DB.prepare(`UPDATE dokument_stavke SET primljena_kolicina = ?, razlika = ? WHERE dokument_id = ? AND line_id = ?`).bind(line.ReceivedQuantity, diff, despatch.id, line.DespatchLineID || line.ID).run();
+              await this.env.REGISTAR_DB.prepare(`UPDATE dokument_stavke SET primljena_kolicina = ?, razlika = ? WHERE dokument_id = ? AND line_id = ?`).bind(line.receivedQuantity, diff, despatch.id, line.despatchLineReference?.id || line.id).run();
             }
             await this.env.REGISTAR_DB.prepare("UPDATE dokumenti SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE id = ?").bind(hasDiscrepancy ? 'DISCREPANCY' : 'ACCEPTED', despatch.id).run();
           }
         }
-        await bridge.upsertDocument({ id: internalId, tip: 'PRIJEMNICA', broj: data.ID, pibProdavca: data.Supplier.Pib, pibKupca: data.Customer.Pib, status: hasDiscrepancy ? 'DISCREPANCY' : 'ACCEPTED', xmlBlob: xml, parentId: parentId });
-        await bridge.logEvent(internalId, hasDiscrepancy ? 'DISCREPANCY' : 'ACCEPTED', hasDiscrepancy ? 'Prijemnica sa razlikom' : 'Roba primljena u celosti');
-        return Response.json({ success: true, internalId, hasDiscrepancy, xml }, { status: 202 });
+
+        let finalStatus = hasDiscrepancy ? 'DISCREPANCY' : 'ACCEPTED';
+        if (!sefRes.success) {
+          finalStatus = sefRes.error === 'MFIN_PROCESSING_TIMEOUT' ? 'PENDING_PROCESSING' : 'ERROR';
+        }
+
+        await bridge.upsertDocument({ 
+          id: internalId, 
+          tip: 'PRIJEMNICA', 
+          broj: data.id, 
+          pibProdavca: data.supplier.pib, 
+          pibKupca: data.buyer.pib, 
+          status: finalStatus, 
+          xmlBlob: xml, 
+          parentId: parentInternalId,
+          sefId: sefRes.mfinId && sefRes.mfinId !== 'PENDING' ? sefRes.mfinId : undefined
+        });
+
+        await bridge.logEvent(internalId, finalStatus, sefRes.success ? 'Prijemnica procesirana' : (sefRes.error === 'MFIN_PROCESSING_TIMEOUT' ? 'Čekanje na asinhronu obradu prijemnice' : sefRes.error));
+
+        const recLines: D1DocumentLine[] = data.lines.map((l: any) => ({
+          dokumentId: internalId,
+          lineId: l.id,
+          naziv: l.itemName,
+          primljenaKolicina: l.receivedQuantity,
+          razlika: (l.shortQuantity || 0) + (l.rejectedQuantity || 0),
+          jedinicaMere: l.unitCode,
+          akciznaKategorija: l.exciseCategory,
+          akciznaGustina: l.itemProperties?.GUSTINA ? parseFloat(l.itemProperties.GUSTINA) : undefined,
+          izvornaStavkaId: l.despatchLineReference?.id
+        }));
+        await bridge.upsertLines(recLines);
+
+        return Response.json({ success: sefRes.success, internalId, hasDiscrepancy, xml, error: sefRes.error }, { status: 202 });
       } catch (e: any) { return Response.json({ error: 'LOGISTICS_ERROR', message: e.message }, { status: 400 }); }
     });
 
@@ -278,23 +363,38 @@ export class KlijentBaza extends DurableObject<Env> {
       await this.processStatusUpdate(faktura_id, novi_status);
       return Response.json({ success: true });
     });
+
+    this.app.post('/webhooks/despatch-update', async ({ req }: RouterContext<Env>) => {
+      const { despatch_id, novi_status } = await req.json() as { despatch_id: string, novi_status: string };
+      this.sql.exec(`UPDATE otpremnice SET status = ?, potvrdjeno_u = CURRENT_TIMESTAMP WHERE sef_id = ? OR internal_id = ?`, novi_status, despatch_id, despatch_id);
+      
+      // Update D1
+      await this.env.REGISTAR_DB.prepare(`UPDATE dokumenti SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE sef_id = ? OR id = ?`)
+        .bind(novi_status, despatch_id, despatch_id).run();
+
+      return Response.json({ success: true });
+    });
   }
 
   private async processStatusUpdate(sefId: string, noviStatus: string) {
+    let internalId: string | undefined;
     this.ctx.storage.transactionSync(() => {
       const rows = this.sql.exec(`SELECT internal_id, broj_fakture, status FROM fakture WHERE sef_id = ?`, sefId).toArray();
       const f = rows[0] as any;
       if (f) {
+        internalId = f.internal_id;
         if (noviStatus === 'Rejected' || noviStatus === 'Canceled') {
           const alreadyRefunded = this.sql.exec(`SELECT COUNT(*) as c FROM billing_ledger WHERE faktura_id = ? AND tip_transakcije = 'REFUNDACIJA'`, f.internal_id).one() as { c: number };
           if (alreadyRefunded.c === 0) {
-            this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'REFUNDACIJA', 1, 'SEF Rejected')`, crypto.randomUUID(), f.internal_id, f.broj_fakture);
+            this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'REFUNDACIJA', 1, 'SEF Rejected')`, 
+              crypto.randomUUID(), f.internal_id, f.broj_fakture);
           }
         }
         this.sql.exec(`UPDATE fakture SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE internal_id = ?`, noviStatus, f.internal_id);
       }
     });
-    await this.env.REGISTAR_DB.prepare(`UPDATE dokumenti SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE id IN (SELECT internal_id FROM fakture WHERE sef_id = ?) OR sef_id = ?`).bind(noviStatus, sefId, sefId).run();
+    // UPDATE D1 (SSoT)
+    await this.env.REGISTAR_DB.prepare(`UPDATE dokumenti SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE id = ? OR sef_id = ?`).bind(noviStatus, internalId || sefId, sefId).run();
   }
 
   private async checkLimit(noviBroj: number, invoiceData?: any, testNow?: string | null): Promise<{ moze: boolean, error?: any }> {

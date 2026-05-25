@@ -37,7 +37,12 @@ export default defineConfig({
           miniflare: {
             compatibilityDate: '2026-05-21',
             compatibilityFlags: ['nodejs_compat'],
-            remote: false
+            remote: false,
+            // v4.38.0: Disable AI binding to avoid remote connection hang.
+            // Tests that need AI must mock it manually.
+            bindings: {
+              AI: undefined
+            }
           },
         },
       },

@@ -6,7 +6,7 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit', () 
   it('1. Avansna Faktura (386) sa obračunatim PDV-om', () => {
     const xml = SefUblBuilder.buildAvansni({
       broj: 'AV-1', pibProdavca: '100000001', pibKupca: '200000002', osnovica: 1000, pdv: 200,
-      datumUplate: '2026-05-24', referentniRacun: 'PONUDA-1'
+      datumUplate: '2026-05-25', referentniRacun: 'PONUDA-1'
     });
     console.log("XML 386:", xml);
     expect(xml).toContain('<cbc:InvoiceTypeCode>386</cbc:InvoiceTypeCode>');

@@ -3,6 +3,7 @@ import { D1Database } from "@cloudflare/workers-types";
 
 export interface D1Document {
   id: string;
+  sefId?: string;
   tip: string;
   broj: string;
   pibProdavca: string;
@@ -29,6 +30,11 @@ export interface D1DocumentLine {
   osnovica?: number;
   iznosPoreza?: number;
   razlika?: number;
+
+  // Akcizni blok (v4.30.0)
+  akciznaKategorija?: string;
+  akciznaGustina?: number;
+  izvornaStavkaId?: string;
 }
 
 /**
@@ -44,18 +50,20 @@ export class D1SyncBridge {
   async upsertDocument(doc: D1Document) {
     return await this.db.prepare(`
       INSERT INTO dokumenti (
-        id, tip, broj, pib_prodavca, pib_kupca, status, 
+        id, sef_id, tip, broj, pib_prodavca, pib_kupca, status, 
         iznos_osnovica, iznos_poreza, datum_prometa, 
         xml_blob, json_metadata, parent_id, azurirano_u
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET
+        sef_id = COALESCE(excluded.sef_id, sef_id),
         status = excluded.status,
         xml_blob = COALESCE(excluded.xml_blob, xml_blob),
         json_metadata = COALESCE(excluded.json_metadata, json_metadata),
         azurirano_u = CURRENT_TIMESTAMP
     `).bind(
       doc.id, 
+      doc.sefId || null,
       doc.tip, 
       doc.broj, 
       doc.pibProdavca, 
@@ -80,12 +88,16 @@ export class D1SyncBridge {
       this.db.prepare(`
         INSERT INTO dokument_stavke (
           dokument_id, line_id, naziv, poslata_kolicina, primljena_kolicina, 
-          jedinica_mere, cena, porez_stopa, porez_kategorija, osnovica, iznos_poreza, razlika
+          jedinica_mere, cena, porez_stopa, porez_kategorija, osnovica, iznos_poreza, razlika,
+          akcizna_kategorija, akcizna_gustina, izvorna_stavka_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(dokument_id, line_id) DO UPDATE SET
           primljena_kolicina = excluded.primljena_kolicina,
-          razlika = excluded.razlika
+          razlika = excluded.razlika,
+          akcizna_kategorija = COALESCE(excluded.akcizna_kategorija, akcizna_kategorija),
+          akcizna_gustina = COALESCE(excluded.akcizna_gustina, akcizna_gustina),
+          izvorna_stavka_id = COALESCE(excluded.izvorna_stavka_id, izvorna_stavka_id)
       `).bind(
         l.dokumentId, 
         l.lineId || null, 
@@ -98,7 +110,10 @@ export class D1SyncBridge {
         l.porezKategorija || null,
         l.osnovica || 0,
         l.iznosPoreza || 0,
-        l.razlika || 0
+        l.razlika || 0,
+        l.akciznaKategorija || null,
+        l.akciznaGustina || null,
+        l.izvornaStavkaId || null
       )
     );
 
@@ -138,6 +153,32 @@ export class D1SyncBridge {
       SELECT DISTINCT d.* FROM dokumenti d JOIN chain c ON d.id = c.id
       ORDER BY d.kreirano_u ASC
     `).bind(id).all();
+  }
+
+  /**
+   * analyzeReconciliation - Quantitative and Excise Deviation Analysis
+   * v4.31.0: Detects theft, leaks, density changes, or quantitative errors.
+   */
+  async analyzeReconciliation(otpremnicaId: string) {
+    return await this.db.prepare(`
+      SELECT 
+        o.line_id as stavka_otpremnice_id,
+        o.naziv as artikal_naziv,
+        o.poslata_kolicina,
+        p.primljena_kolicina,
+        p.razlika as odbijena_kolicina,
+        o.akcizna_gustina as gustina_otprema,
+        p.akcizna_gustina as gustina_prijem,
+        
+        -- Kalkulacija anomalija
+        (o.poslata_kolicina - (IFNULL(p.primljena_kolicina, 0) + IFNULL(p.razlika, 0))) as kvantitativni_manjak,
+        (IFNULL(o.akcizna_gustina, 0) - IFNULL(p.akcizna_gustina, 0)) as devijacija_gustine
+      FROM dokument_stavke o
+      LEFT JOIN dokument_stavke p ON o.line_id = p.izvorna_stavka_id AND p.dokument_id IN (
+        SELECT id FROM dokumenti WHERE parent_id = o.dokument_id AND tip = 'PRIJEMNICA'
+      )
+      WHERE o.dokument_id = ?
+    `).bind(otpremnicaId).all();
   }
 
   /**

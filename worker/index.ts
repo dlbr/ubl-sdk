@@ -10,6 +10,7 @@ import { SefClient } from '../shared/services/sefClient';
 import { D1SyncBridge } from '../shared/services/D1SyncBridge';
 import { KVRegistry } from './services/KVRegistry';
 import { posaljiHotfixTelegramAlarm } from '../shared/services/telegram-notifier';
+import { handleLogisticsQueue } from '../shared/services/queueConsumer';
 
 export interface Env extends globalThis.Env {
   ADMIN_API_KEY: string;
@@ -21,6 +22,7 @@ export interface Env extends globalThis.Env {
   SEF_UBL_ARHIVA: R2Bucket;
   PORESKI_KV: KVNamespace;
   SEF_QUEUE: Queue<any>;
+  OTPREMNICA_QUEUE: Queue<any>;
 }
 export { KlijentBaza } from './KlijentBazaObject';
 
@@ -180,6 +182,47 @@ app.get('/api/dokumenti/chain/:id', auth(async (c: RouterContext<Env> & { result
   return Response.json({ success: true, chain: chain.results });
 }));
 
+app.get('/api/otpremnice/reconciliation/:id', auth(async (c: RouterContext<Env> & { result?: any }) => {
+  const bridge = new D1SyncBridge(c.env.REGISTAR_DB);
+  const otpremnicaId = c.result?.pathname?.groups?.id;
+  if (!otpremnicaId) return new Response('Missing ID', { status: 400 });
+
+  // 1. Povlačimo osnovne podatke o lancu dokumenata (Otpremnica -> Prijemnica)
+  const documentChain = await bridge.getDocumentChain(otpremnicaId);
+  if (documentChain.results.length === 0) {
+    return Response.json({ error: 'Logistički lanac nije pronađen' }, { status: 404 });
+  }
+
+  // 2. Pokrećemo duboku SQL forenziku nad stavkama i akciznim parametrima
+  const reconciliationData = await bridge.analyzeReconciliation(otpremnicaId);
+  const results = reconciliationData.results as any[];
+
+  // 3. Evaluiramo globalni status lanca za Dashboard "Badge"
+  const imaKvantitativniManjak = results.some(r => r.kvantitativni_manjak > 0);
+  const imaAkciznuDevijaciju = results.some(r => Math.abs(r.devijacija_gustine) > 0.0001);
+
+  let statusZastite = 'SECURE 🟢';
+  if (imaKvantitativniManjak) statusZastite = 'QUANTITY_DISCREPANCY 🟡';
+  if (imaAkciznuDevijaciju) statusZastite = 'EXCISE_BREACH 🔴';
+
+  // 4. Vraćamo strukturu optimizovanu za munjevito renderovanje na UI-ju
+  return Response.json({
+    success: true,
+    meta: {
+      otpremnicaId,
+      statusZastite,
+      verifikovanoAt: new Date().toISOString()
+    },
+    chain: documentChain.results.map((doc: any) => ({
+      id: doc.id,
+      tip: doc.tip,
+      status: doc.status,
+      kreirano_u: doc.kreirano_u
+    })),
+    stavke: results
+  });
+}));
+
 app.post('/api/dashboard/webhook', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
   const telo = await c.req.json();
   const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
@@ -224,7 +267,9 @@ app.post('/api/otpremnice/send', auth(validateJson(DespatchSchema, async (c: Rou
       ID: l.id,
       ItemName: l.name,
       DeliveredQuantity: l.quantity,
-      UnitCode: l.unitCode
+      UnitCode: l.unitCode,
+      exciseCategory: l.exciseCategory,
+      itemProperties: l.itemProperties
     })),
     BillingReference: input.billingReference
   };
@@ -241,6 +286,17 @@ app.post('/api/otpremnice/send', auth(validateJson(DespatchSchema, async (c: Rou
 
   if (doResponse.ok && c.env.SEF_QUEUE) {
     const result = await doResponse.clone().json() as any;
+    
+    // 4. ASYNC FALLBACK (v4.43.0)
+    if (result.error === 'MFIN_PROCESSING_TIMEOUT') {
+      await c.env.OTPREMNICA_QUEUE.send({
+        documentNumber: input.id,
+        pib: c.klijentId!.replace('klijent_', ''),
+        tip: 'OTPREMNICA',
+        pokusaj: 1
+      });
+    }
+
     if (result.success && result.xml) {
       c.ctx.waitUntil((async () => {
         try {
@@ -266,30 +322,36 @@ app.post('/api/prijemnice/receive', auth(validateJson(ReceiptSchema, async (c: R
 
   const input = c.validJson!;
 
-  // MAPPING FLAT -> UBL
+  // MAPPING FLAT -> UBL (Hardened v4.21.0)
   const ublPayload = {
-    ID: input.id,
-    IssueDate: input.issueDate,
-    Supplier: { Pib: input.supplierPib, Name: 'PRODAVAC' },
-    Customer: { Pib: input.customerPib, Name: 'KUPAC' },
-    DespatchDocumentReference: input.despatchReference ? {
-      ID: input.despatchReference.id,
-      IssueDate: input.despatchReference.issueDate
+    id: input.id,
+    issueDate: input.issueDate,
+    supplier: { pib: input.supplierPib, name: 'PRODAVAC' },
+    buyer: { pib: input.customerPib, name: 'KUPAC' },
+    despatchDocumentReference: input.despatchReference ? {
+      id: input.despatchReference.id,
+      issueDate: input.despatchReference.issueDate
     } : undefined,
-    Lines: input.lines.map((l: any) => ({
-      ID: l.id,
-      ReceivedQuantity: l.receivedQuantity,
-      UnitCode: l.unitCode,
-      ShortQuantity: l.shortQuantity,
-      RejectedQuantity: l.rejectedQuantity,
-      RejectReason: l.rejectReason,
-      ItemName: l.itemName,
-      ItemIdentification: l.itemIdentification,
-      DespatchLineID: l.despatchLineId
+    lines: input.lines.map((l: any) => ({
+      id: l.id,
+      receivedQuantity: l.receivedQuantity,
+      unitCode: l.unitCode,
+      shortQuantity: l.shortQuantity,
+      rejectedQuantity: l.rejectedQuantity,
+      rejectReason: l.rejectReason,
+      itemName: l.itemName,
+      itemIdentification: l.itemIdentification,
+      despatchLineReference: l.despatchLineId ? { id: l.despatchLineId } : undefined,
+      exciseCategory: l.exciseCategory,
+      itemProperties: l.itemProperties
     })),
-    Note: input.note
+    note: input.note,
+    shipmentMethod: input.shipmentMethod,
+    isReturn: input.isReturn,
+    offlineZinNumber: input.offlineZinNumber,
+    frameworkAgreementId: input.frameworkAgreementId,
+    contractId: input.contractId
   };
-
   // ATOMIC RECEIVE (Prijemnica)
   const doResponse = await klijentDO.fetch(new Request('http://do/prijemnice/receive', { 
     method: 'POST', 
@@ -302,6 +364,17 @@ app.post('/api/prijemnice/receive', auth(validateJson(ReceiptSchema, async (c: R
 
   if (doResponse.ok && c.env.SEF_QUEUE) {
     const result = await doResponse.clone().json() as any;
+
+    // 4. ASYNC FALLBACK (v4.43.0)
+    if (result.error === 'MFIN_PROCESSING_TIMEOUT') {
+      await c.env.OTPREMNICA_QUEUE.send({
+        documentNumber: input.id,
+        pib: c.klijentId!.replace('klijent_', ''),
+        tip: 'PRIJEMNICA',
+        pokusaj: 1
+      });
+    }
+
     if (result.success && result.xml) {
       c.ctx.waitUntil((async () => {
         try {
@@ -317,9 +390,9 @@ app.post('/api/prijemnice/receive', auth(validateJson(ReceiptSchema, async (c: R
       })());
     }
   }
-
   return doResponse;
 })));
+
 app.post('/api/fakture/send', auth(validateJson(SefInvoiceSchema, async (c: RouterContext<Env> & { klijentId?: string }) => {  const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!);
   const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
 
@@ -487,15 +560,34 @@ app.post('/api/webhooks/otpremnice', async (c: RouterContext<Env>) => {
     const klijentId = `klijent_${pib_kompanije}`;
     const doId = c.env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
     const klijentDO = c.env.KLIJENT_BAZA_OBJECT.get(doId);
-    c.ctx.waitUntil(klijentDO.fetch(new Request('http://do/webhooks/despatch-update', {
-      method: 'POST',
-      body: JSON.stringify({ despatch_id: id, novi_status: status })
-    })));
+
+    c.ctx.waitUntil((async () => {
+      await klijentDO.fetch(new Request('http://do/webhooks/despatch-update', {
+        method: 'POST',
+        body: JSON.stringify({ despatch_id: id, novi_status: status })
+      }));
+
+      // AUTOMATSKI ALARM ZA ANOMALIJE (v4.32.0)
+      if (status === 'ACCEPTED' || status === 'CONFIRMED' || status === 'DISCREPANCY') {
+        const analysis = await bridge.analyzeReconciliation(id);
+        for (const row of (analysis.results as any[])) {
+          if (row.devijacija_gustine !== 0 || row.kvantitativni_manjak !== 0) {
+            await posaljiHotfixTelegramAlarm(
+              `🚨 **LOGISTIČKA ANOMALIJA** 🚨\n` +
+              `Artikal: ${row.artikal_naziv}\n` +
+              `Manjak: ${row.kvantitativni_manjak}\n` +
+              `Devijacija Gustine: ${row.devijacija_gustine}\n` +
+              `Status: ${status}`,
+              id, // Broj dokumenta
+              c.env
+            );
+          }
+        }      }
+    })());
   }
 
   return Response.json({ success: true });
-});
-
+  });
   // TEST & DEBUG ROUTES (Isolated in CI/Local)
   app.post('/test/seed', async ({ req, env }: RouterContext<Env>) => {
   const { klijentId, data } = await req.json() as any;
@@ -535,7 +627,11 @@ export default {
     return nuxtHandler.fetch(req, env, ctx);
   },
 
-  async queue(batch: MessageBatch<any>, env: Env): Promise<void> {
+  async queue(batch: MessageBatch<any>, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (batch.queue === "eotpremnice-reconciliation-queue") {
+      return await handleLogisticsQueue(batch, env);
+    }
+
     for (const msg of batch.messages) {
       try {
         const { id, xml, pib } = msg.body;

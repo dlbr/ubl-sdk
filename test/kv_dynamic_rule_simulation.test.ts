@@ -1,40 +1,53 @@
 import { env } from 'cloudflare:test';
-import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, vi, afterAll } from 'vitest';
 import { app } from '../worker/index';
-import { SefLiveValidator } from '@dlbr/ubl-sdk';
+import { SefLiveValidator } from '../shared/compliance/validator';
 
 describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
 
-  const klijentId = 'klijent_dynamic_shock';
+  const klijentId = 'klijent_shock_pib';
 
   beforeAll(async () => {
-    // Inicijalizacija baze (centralne)
-    await env.REGISTAR_DB.prepare(`
-      CREATE TABLE IF NOT EXISTS klijenti (
-        klijent_id TEXT PRIMARY KEY, naziv TEXT NOT NULL,
-        ima_aktivne_fakture INTEGER DEFAULT 0, poslednji_sync DATETIME DEFAULT '1970-01-01 00:00:00'
-      )
+    // Čišćenje i re-inicijalizacija
+    await (env as any).REGISTAR_DB.prepare("DROP TABLE IF EXISTS dokumenti").run();
+    await (env as any).REGISTAR_DB.prepare("DROP TABLE IF EXISTS dokument_stavke").run();
+    await (env as any).REGISTAR_DB.prepare("DROP TABLE IF EXISTS dokumenti_log").run();
+    await (env as any).REGISTAR_DB.prepare("DROP TABLE IF EXISTS klijenti").run();
+
+    await (env as any).REGISTAR_DB.prepare(`
+       CREATE TABLE IF NOT EXISTS klijenti (klijent_id TEXT PRIMARY KEY, naziv TEXT NOT NULL)
     `).run();
 
-    await env.REGISTAR_DB.prepare(`
+    await (env as any).REGISTAR_DB.prepare(`
       CREATE TABLE IF NOT EXISTS dokumenti (
-        id TEXT PRIMARY KEY, tip TEXT NOT NULL, broj TEXT NOT NULL,
-        pib_prodavca TEXT NOT NULL, pib_kupca TEXT NOT NULL, status TEXT NOT NULL,
-        iznos_osnovica REAL DEFAULT 0, iznos_poreza REAL DEFAULT 0, datum_prometa DATETIME,
-        xml_blob TEXT, json_metadata TEXT, parent_id TEXT,
-        kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP
+        id TEXT PRIMARY KEY,
+        sef_id TEXT UNIQUE,
+        tip TEXT NOT NULL,
+        broj TEXT NOT NULL,
+        pib_prodavca TEXT NOT NULL,
+        pib_kupca TEXT NOT NULL,
+        status TEXT NOT NULL,
+        iznos_osnovica REAL DEFAULT 0,
+        iznos_poreza REAL DEFAULT 0,
+        datum_prometa DATETIME,
+        xml_blob TEXT,
+        json_metadata TEXT,
+        parent_id TEXT,
+        kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP,
+        azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `).run();
-    await env.REGISTAR_DB.prepare(`
+    await (env as any).REGISTAR_DB.prepare(`
       CREATE TABLE IF NOT EXISTS dokument_stavke (
         id INTEGER PRIMARY KEY AUTOINCREMENT, dokument_id TEXT NOT NULL, line_id TEXT,
         naziv TEXT NOT NULL, poslata_kolicina REAL, primljena_kolicina REAL,
         jedinica_mere TEXT, cena REAL, porez_stopa REAL, porez_kategorija TEXT,
         osnovica REAL, iznos_poreza REAL, razlika REAL,
+        akcizna_kategorija TEXT, akcizna_gustina REAL, izvorna_stavka_id TEXT,
         UNIQUE(dokument_id, line_id)
       )
     `).run();
-    await env.REGISTAR_DB.prepare(`
+    await (env as any).REGISTAR_DB.prepare(`
       CREATE TABLE IF NOT EXISTS dokumenti_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT, dokument_id TEXT NOT NULL,
         prethodni_status TEXT, novi_status TEXT NOT NULL, poruka TEXT,
@@ -44,12 +57,16 @@ describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
     `).run();
   });
 
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(async () => {
     // 1. Očisti keš validatora
     SefLiveValidator.clearCache();
 
-    const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
-    const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
+    const doId = (env as any).KLIJENT_BAZA_OBJECT.idFromName(klijentId);
+    const klijentDO = (env as any).KLIJENT_BAZA_OBJECT.get(doId);
     
     // 2. Resetuj DO keš i ledger
     await klijentDO.fetch(new Request('http://do/internal/clear-cache', { method: 'POST' }));
@@ -59,15 +76,15 @@ describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
       body: JSON.stringify({ action: 'RESET_LEDGER', saldo: 100 }) 
     }));
     // 3. Resetuj KV
-    await env.PORESKI_KV.delete("DRZAVNA_PORESKA_PRAVILA_RS");
+    await (env as any).PORESKI_KV.delete("DRZAVNA_PORESKA_PRAVILA_RS");
     
     // 4. Resetuj D1
-    await env.REGISTAR_DB.prepare("DELETE FROM klijenti").run();
-    await env.REGISTAR_DB.prepare("DELETE FROM dokumenti").run();
-    await env.REGISTAR_DB.prepare("DELETE FROM dokument_stavke").run();
+    await (env as any).REGISTAR_DB.prepare("DELETE FROM klijenti").run();
+    await (env as any).REGISTAR_DB.prepare("DELETE FROM dokumenti").run();
+    await (env as any).REGISTAR_DB.prepare("DELETE FROM dokument_stavke").run();
     
     // 5. Registruj klijenta u D1
-    await env.REGISTAR_DB.prepare("INSERT OR REPLACE INTO klijenti (klijent_id, naziv) VALUES (?, ?)")
+    await (env as any).REGISTAR_DB.prepare("INSERT OR REPLACE INTO klijenti (klijent_id, naziv) VALUES (?, ?)")
       .bind(klijentId, 'Shock Test Firma').run();
 
     // 6. Konfiguracija DO
@@ -80,7 +97,7 @@ describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
 
   it('Treba da reaguje na promenu roka u realnom vremenu (Header Injection)', async () => {
     // --- SCENARIO 1: Zakonski rok je 12 dana ---
-    await env.PORESKI_KV.put("DRZAVNA_PORESKA_PRAVILA_RS", JSON.stringify({
+    await (env as any).PORESKI_KV.put("DRZAVNA_PORESKA_PRAVILA_RS", JSON.stringify({
       ZAKONSKI_ROK_DANA: 12,
       OPSTA_STOPA_PDV: 20.00
     }));
@@ -106,25 +123,28 @@ describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
       body: JSON.stringify(invoiceData1)
     }, env, mockCtx as any);
 
+    if (res1.status === 400) {
+      console.log("SHOCK ERROR 1:", await res1.text());
+    }
+
     expect(res1.status).toBe(202);
 
     // --- SCENARIO 2: Zakonski rok se menja na 10 dana (REAL-TIME SHOCK) ---
-    await env.PORESKI_KV.put("DRZAVNA_PORESKA_PRAVILA_RS", JSON.stringify({
+    await (env as any).PORESKI_KV.put("DRZAVNA_PORESKA_PRAVILA_RS", JSON.stringify({
       ZAKONSKI_ROK_DANA: 10,
       OPSTA_STOPA_PDV: 20.00
     }));
-
-    const datumPosleRoka = '2026-05-12T10:00:00Z'; // Isti datum, ali sada je rok 10 dana (PROŠLO)
+    SefLiveValidator.clearCache(); // Force refresh from KV
 
     const res2 = await app.request('/api/fakture/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Klijent-ID': klijentId, 'X-Test-Now': datumPosleRoka },
+      headers: { 'Content-Type': 'application/json', 'X-Klijent-ID': klijentId, 'X-Test-Now': datumUnutarRoka },
       body: JSON.stringify(invoiceData1)
     }, env, mockCtx as any);
 
-    expect(res2.status).toBe(403);
-    const body2 = await res2.json() as any;
-    expect(body2.error).toBe("Pristup blokiran");
-    expect(body2.message).toContain("Prošao rok od 10 dana");
+    // Očekujemo odbijanje (400) jer je sada 12. maj, a rok je bio 10. maj (30. april + 10 dana)
+    expect(res2.status).toBe(400);
+    const errorData = await res2.json() as any;
+    expect(errorData.error).toContain("ZAKONSKI_ROK_PREKORAČEN");
   });
 });

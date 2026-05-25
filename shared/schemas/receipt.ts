@@ -19,6 +19,13 @@ export const ReceiptSchema = v.object({
     issueDate: v.optional(v.pipe(v.string(), v.regex(DateRegex))),
   })),
 
+  // Serbian Extensions
+  shipmentMethod: v.optional(v.pipe(v.string(), v.picklist(['1', '2', '3', '4', '5']))),
+  isReturn: v.optional(v.boolean()),
+  offlineZinNumber: v.optional(v.string()),
+  frameworkAgreementId: v.optional(v.string()),
+  contractId: v.optional(v.string()),
+
   lines: v.pipe(
     v.array(v.object({
       id: v.string(),
@@ -30,6 +37,8 @@ export const ReceiptSchema = v.object({
       itemName: v.pipe(v.string(), v.minLength(1)),
       itemIdentification: v.optional(v.string()),
       despatchLineId: v.optional(v.string()),
+      exciseCategory: v.optional(v.string()),
+      itemProperties: v.optional(v.record(v.string(), v.string()))
     })),
     v.minLength(1, 'Prijemnica mora imati bar jednu stavku')
   ),

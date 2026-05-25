@@ -4,30 +4,51 @@ import type { SefInvoiceData } from '../shared/types/sef';
 
 describe('KlijentBaza: SEF E2E Integration', () => {
   const klijentId = 'klijent_test_pib';
-  const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentId);
-  const klijentDO = env.KLIJENT_BAZA_OBJECT.get(doId);
+  const doId = (env as any).KLIJENT_BAZA_OBJECT.idFromName(klijentId);
+  const klijentDO = (env as any).KLIJENT_BAZA_OBJECT.get(doId);
 
   beforeAll(async () => {
+    // Čišćenje šeme
+    await (env as any).REGISTAR_DB.prepare("DROP TABLE IF EXISTS dokumenti").run();
+    await (env as any).REGISTAR_DB.prepare("DROP TABLE IF EXISTS dokument_stavke").run();
+    await (env as any).REGISTAR_DB.prepare("DROP TABLE IF EXISTS dokumenti_log").run();
+    await (env as any).REGISTAR_DB.prepare("DROP TABLE IF EXISTS klijenti").run();
+
+    await (env as any).REGISTAR_DB.prepare(`
+       CREATE TABLE IF NOT EXISTS klijenti (klijent_id TEXT PRIMARY KEY, naziv TEXT NOT NULL)
+    `).run();
+
     // Inicijalizacija centralne baze (D1)
-    await env.REGISTAR_DB.prepare(`
+    await (env as any).REGISTAR_DB.prepare(`
       CREATE TABLE IF NOT EXISTS dokumenti (
-        id TEXT PRIMARY KEY, tip TEXT NOT NULL, broj TEXT NOT NULL,
-        pib_prodavca TEXT NOT NULL, pib_kupca TEXT NOT NULL, status TEXT NOT NULL,
-        iznos_osnovica REAL DEFAULT 0, iznos_poreza REAL DEFAULT 0, datum_prometa DATETIME,
-        xml_blob TEXT, json_metadata TEXT, parent_id TEXT,
-        kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP
+        id TEXT PRIMARY KEY,
+        sef_id TEXT UNIQUE,
+        tip TEXT NOT NULL,
+        broj TEXT NOT NULL,
+        pib_prodavca TEXT NOT NULL,
+        pib_kupca TEXT NOT NULL,
+        status TEXT NOT NULL,
+        iznos_osnovica REAL DEFAULT 0,
+        iznos_poreza REAL DEFAULT 0,
+        datum_prometa DATETIME,
+        xml_blob TEXT,
+        json_metadata TEXT,
+        parent_id TEXT,
+        kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP,
+        azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `).run();
-    await env.REGISTAR_DB.prepare(`
+    await (env as any).REGISTAR_DB.prepare(`
       CREATE TABLE IF NOT EXISTS dokument_stavke (
         id INTEGER PRIMARY KEY AUTOINCREMENT, dokument_id TEXT NOT NULL, line_id TEXT,
         naziv TEXT NOT NULL, poslata_kolicina REAL, primljena_kolicina REAL,
         jedinica_mere TEXT, cena REAL, porez_stopa REAL, porez_kategorija TEXT,
         osnovica REAL, iznos_poreza REAL, razlika REAL,
+        akcizna_kategorija TEXT, akcizna_gustina REAL, izvorna_stavka_id TEXT,
         UNIQUE(dokument_id, line_id)
       )
     `).run();
-    await env.REGISTAR_DB.prepare(`
+    await (env as any).REGISTAR_DB.prepare(`
       CREATE TABLE IF NOT EXISTS dokumenti_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT, dokument_id TEXT NOT NULL,
         prethodni_status TEXT, novi_status TEXT NOT NULL, poruka TEXT,
