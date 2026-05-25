@@ -160,6 +160,11 @@ app.get('/api/dashboard/stats', internalOnly, async (c: RouterContext<Env> & { k
   return Response.json(await kDO.getStats());
 });
 
+app.get('/api/dashboard/logs', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
+  return Response.json(await kDO.getLogs());
+});
+
 app.get('/api/logistika/documents', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
   const type = url.searchParams.get('type') || 'OTPREMNICA';
