@@ -454,7 +454,7 @@ export class KlijentBaza extends DurableObject<Env> {
   async syncWithSef() {
     let config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).one() as any;
     const baseUrl = this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs');
-    console.log(`[Sync] Pokrećem sinhronizaciju za ${config.klijent_id} na ${baseUrl} (${config.environment})`);
+    console.log(`[Sync] Pokrećem forenzičku sinhronizaciju za ${config.klijent_id} na ${baseUrl}`);
     
     const sefClient = new SefClient({ 
       apiKey: new Redacted(config.sef_api_key).get(), 
@@ -462,21 +462,9 @@ export class KlijentBaza extends DurableObject<Env> {
       baseUrl 
     });
     
-    const dateFrom = (new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]) ?? '';
-    const dateTo = (new Date().toISOString().split('T')[0]) ?? '';
-    
     try {
-      const invoices = await sefClient.getPurchaseInvoiceOverview(dateFrom, dateTo);
-      console.log(`[Sync] Povučene fakture iz overview-a:`, invoices ? invoices.length : 'null');
-      
-      if (invoices) {
-        for (const inv of invoices.slice(-20)) {
-          console.log(`[Sync] Obrađujem fakturu: ${inv.SalesInvoiceId || inv.InvoiceId}`);
-          await this.processStatusUpdate(String(inv.SalesInvoiceId || inv.InvoiceId), String(inv.InvoiceStatus || 'Unknown'));
-        }
-        return { discoveredSales: 0, discoveredPurchases: invoices.length };
-      }
-      return { discoveredSales: 0, discoveredPurchases: 0 };
+      const results = await sefClient.discoverInvoices();
+      return { discoveredSales: 0, discoveredPurchases: 0, discoveryResults: results };
     } catch (err: any) { 
       console.error("Sync Error:", err); 
       return { discoveredSales: 0, discoveredPurchases: 0, error: err.message };
