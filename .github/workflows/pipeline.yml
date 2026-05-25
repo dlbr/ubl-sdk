@@ -12,14 +12,11 @@ jobs:
   validate:
     name: 🛡️ Verify & Compliance
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/dlbr/sef-ci-env:latest
     steps:
       - name: 📥 Checkout repozitorijuma
         uses: actions/checkout@v4
-
-      - name: 🟢 Podešavanje Node.js okruženja
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
 
       - name: 📦 Podešavanje pnpm-a
         run: |
@@ -42,15 +39,12 @@ jobs:
     name: ⚡ Deploy Backend Worker
     needs: validate
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/dlbr/sef-ci-env:latest
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
       - name: 📥 Checkout repozitorijuma
         uses: actions/checkout@v4
-
-      - name: 🟢 Podešavanje Node.js okruženja
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
 
       - name: 📦 Podešavanje pnpm-a
         run: |
@@ -68,7 +62,6 @@ jobs:
       - name: 📥 Instalacija zavisnosti
         run: npx pnpm install --frozen-lockfile
 
-      # KORAK A: Ako je kôd na PR-u, šaljemo ga na Preview URL (*-sef-bridge...)
       - name: 🌤️ Deploy Backend (Preview)
         if: github.event_name == 'pull_request'
         uses: cloudflare/wrangler-action@v3
@@ -77,7 +70,6 @@ jobs:
           workingDirectory: 'packages/backend'
           command: deploy --preproduction
 
-      # KORAK B: Ako je kôd spojen u main, šaljemo ga direktno na Production URL
       - name: 🛑 Deploy Backend (Production)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: cloudflare/wrangler-action@v3
@@ -88,17 +80,14 @@ jobs:
 
   deploy-frontend:
     name: 🎨 Deploy Nuxt Frontend
-    needs: deploy-backend # Čekamo backend da završi da bi binding bio dostupan
+    needs: deploy-backend
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/dlbr/sef-ci-env:latest
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
       - name: 📥 Checkout repozitorijuma
         uses: actions/checkout@v4
-
-      - name: 🟢 Podešavanje Node.js okruženja
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
 
       - name: 📦 Podešavanje pnpm-a
         run: |
@@ -113,7 +102,6 @@ jobs:
         env:
           NITRO_PRESET: cloudflare-worker
 
-      # Ovde ispaljuješ Nuxt na Cloudflare Worker
       - name: 🚀 Deploy Frontend (Cloudflare Worker)
         uses: cloudflare/wrangler-action@v3
         with:
