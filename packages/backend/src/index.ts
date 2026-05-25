@@ -433,10 +433,15 @@ app.post('/api/dashboard/config', internalOnly, async (c: RouterContext<Env> & {
 
 // --- WEBHOOKS & BACKGROUND WORKERS ---
 app.post('/api/webhooks/otpremnice', async (c: RouterContext<Env>) => {
-  const { id, status, pib_kompanije } = await c.req.json() as any;
+  const { id, status, pib_kompanije, xml, tip, broj, pib_prodavca, pib_kupca, iznos } = await c.req.json() as any;
   const bridge = new D1SyncBridge(c.env.REGISTAR_DB);
 
-  await c.env.REGISTAR_DB.prepare("UPDATE dokumenti SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE id = ? OR sef_id = ?").bind(status, id, id).run();
+  // 1. UPSERT dokumenata u lokalnu bazu
+  await c.env.REGISTAR_DB.prepare(`
+    INSERT INTO dokumenti (id, sef_id, tip, broj, pib_prodavca, pib_kupca, status, iznos_osnovica, xml_blob, azurirano_u)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(sef_id) DO UPDATE SET status = excluded.status, azurirano_u = CURRENT_TIMESTAMP
+  `).bind(id || crypto.randomUUID(), id, tip || 'OTPREMNICA', broj || 'N/A', pib_prodavca || 'N/A', pib_kupca || 'N/A', status, iznos || 0, xml || null).run();
   
   if (pib_kompanije) {
     const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(`klijent_${pib_kompanije}`));
