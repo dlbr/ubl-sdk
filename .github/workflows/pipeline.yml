@@ -13,10 +13,15 @@ jobs:
     name: 🛡️ Verify & Compliance
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/dlbr/sef-ci-env:latest
+      image: alpine:3.19
     steps:
-      - name: 📥 Checkout repozitorijuma
+      - name: 📥 Checkout
         uses: actions/checkout@v4
+
+      - name: ⛰️ Instalacija alata
+        run: |
+          apk add --no-cache nodejs npm git
+          npm install -g pnpm
 
       - name: 🗄️ Keširanje pnpm store
         uses: actions/cache@v4
@@ -26,34 +31,32 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
-      - name: 📦 Podešavanje pnpm-a
+      - name: 📦 Instalacija i Build
         run: |
-          corepack enable
-          corepack prepare pnpm@latest --activate
           pnpm config set store-dir ~/.pnpm-store
-
-      - name: 📥 Instalacija zavisnosti
-        run: npx pnpm install --frozen-lockfile
-
-      - name: 🏗️ Nuxt Prepare
-        run: npx pnpm --filter @sef/frontend exec nuxt prepare
+          pnpm install --frozen-lockfile
 
       - name: 🧪 Pokretanje Testova
         env:
           ADMIN_API_KEY: "admin_secret"
           SESSION_SECRET: "test_secret_32_chars_long_ver_2026"
-        run: npx pnpm test
+        run: pnpm test
 
   deploy-backend:
     name: ⚡ Deploy Backend Worker
     needs: validate
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/dlbr/sef-ci-env:latest
+      image: alpine:3.19
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
-      - name: 📥 Checkout repozitorijuma
+      - name: 📥 Checkout
         uses: actions/checkout@v4
+
+      - name: ⛰️ Instalacija alata
+        run: |
+          apk add --no-cache nodejs npm git
+          npm install -g pnpm
 
       - name: 🗄️ Keširanje pnpm store
         uses: actions/cache@v4
@@ -63,14 +66,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
-      - name: 📦 Podešavanje pnpm-a
+      - name: 📦 Instalacija
         run: |
-          corepack enable
-          corepack prepare pnpm@latest --activate
           pnpm config set store-dir ~/.pnpm-store
-
-      - name: 📥 Instalacija zavisnosti
-        run: npx pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile
 
       - name: 🌤️ Deploy Backend (Preview)
         if: github.event_name == 'pull_request'
@@ -93,11 +92,16 @@ jobs:
     needs: deploy-backend
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/dlbr/sef-ci-env:latest
+      image: alpine:3.19
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
-      - name: 📥 Checkout repozitorijuma
+      - name: 📥 Checkout
         uses: actions/checkout@v4
+
+      - name: ⛰️ Instalacija alata
+        run: |
+          apk add --no-cache nodejs npm git
+          npm install -g pnpm
 
       - name: 🗄️ Keširanje pnpm store
         uses: actions/cache@v4
@@ -107,14 +111,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
-      - name: 📦 Podešavanje pnpm-a
+      - name: 📦 Instalacija
         run: |
-          corepack enable
-          corepack prepare pnpm@latest --activate
           pnpm config set store-dir ~/.pnpm-store
-
-      - name: 📥 Instalacija zavisnosti
-        run: pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile
 
       - name: 🏗️ Nuxt Production Build
         run: pnpm build:frontend
