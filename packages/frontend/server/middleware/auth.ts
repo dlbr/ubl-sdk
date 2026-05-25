@@ -73,13 +73,18 @@ export default defineEventHandler(async (event) => {
   // 4. TITANIUM UNSEAL: Dešifrovanje i verifikacija sesije (AES-256-GCM)
   try {
     const env = event.context.cloudflare.env;
+    if (!env.SESSION_SECRET) {
+      console.error('[Auth Middleware] FATAL: SESSION_SECRET nije definisan u env!');
+      throw createError({ statusCode: 500, statusMessage: 'Internal server configuration error.' });
+    }
+
     const sessionData = await SessionEngine.unseal(sessionCookie, env.SESSION_SECRET);
 
     if (!sessionData) {
-       if (!path.startsWith('/api/')) return sendRedirect(event, '/onboarding', 302);
-       throw createError({ statusCode: 401, statusMessage: 'Kompromitovana ili nevalidna sesija.' });
+      console.warn('[Auth Middleware] Neuspešan unseal sesije (možda pogrešan secret?)');
+      if (!path.startsWith('/api/')) return sendRedirect(event, '/onboarding', 302);
+      throw createError({ statusCode: 401, statusMessage: 'Sesija nevalidna.' });
     }
-
     // Sigurnosni fallback za starost sesije u slučaju da seal() nema eksplicitan createdAt
     const vremeKreiranja = sessionData.createdAt || Date.now();
     const OSAM_SATI_MS = 1000 * 60 * 60 * 8;
