@@ -154,6 +154,12 @@ app.post('/api/admin/renew-subscription', async ({ req, env }: RouterContext<Env
   return Response.json({ success: true, message: `Subscription renewed for ${body.pib}` });
 });
 
+app.post('/api/fakture/sync', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
+  const result = await kDO.syncWithSef();
+  return Response.json({ success: true, result });
+});
+
 // --- CORE API ROUTES ---
 
 app.get('/api/dashboard/stats', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
