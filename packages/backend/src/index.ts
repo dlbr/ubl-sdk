@@ -110,7 +110,6 @@ app.post('/api/auth/login', async ({ req, env }: RouterContext<Env>) => {
 
 // 🟢 REGISTRACIJA
 app.post('/api/register', async ({ req, env }: RouterContext<Env>) => {
-...
   try {
     const body = await req.json() as { pib: string, naziv: string, sef_api_key: string, otpremnice_api_key: string };
     const { pib, naziv, sef_api_key, otpremnice_api_key } = body;
