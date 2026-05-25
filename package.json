@@ -9,7 +9,6 @@
     "dev:backend": "pnpm --filter @sef/backend dev",
     "dev:frontend": "pnpm --filter @sef/frontend dev",
     "build": "pnpm -r build",
-    "build:shared": "pnpm --filter @sef/shared build",
     "build:frontend": "pnpm --filter @sef/frontend build",
     "deploy:backend": "pnpm --filter @sef/backend deploy",
     "deploy:frontend": "pnpm --filter @sef/frontend deploy",

@@ -68,9 +68,6 @@ jobs:
       - name: 📥 Instalacija zavisnosti
         run: npx pnpm install --frozen-lockfile
 
-      - name: 🏗️ Build Shared Paketa
-        run: npx pnpm build:shared
-
       # KORAK A: Ako je kôd na PR-u, šaljemo ga na Preview URL (*-sef-bridge...)
       - name: 🌤️ Deploy Backend (Preview)
         if: github.event_name == 'pull_request'
