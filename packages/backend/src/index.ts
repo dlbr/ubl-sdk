@@ -165,6 +165,18 @@ app.get('/api/dashboard/logs', internalOnly, async (c: RouterContext<Env> & { kl
   return Response.json(await kDO.getLogs());
 });
 
+app.get('/api/fakture', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const url = new URL(c.req.url);
+  const page = parseInt(url.searchParams.get('page') || '1');
+  const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
+  return Response.json(await kDO.getFakture(page));
+});
+
+app.get('/api/webhook-setup', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
+  return Response.json(await kDO.getWebhookInstructions());
+});
+
 app.get('/api/logistika/documents', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
   const type = url.searchParams.get('type') || 'OTPREMNICA';
