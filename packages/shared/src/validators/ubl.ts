@@ -32,6 +32,12 @@ export const TaxTotalSchema = v.object({
   subtotals: v.array(TaxSubtotalSchema)
 });
 
+// 1. Definišemo 4 dozvoljene UNTDID 2005 šifre za Srbiju
+export const SefInvoicePeriodDescriptionCode = v.picklist(
+  ['35', '432', '3', '0'],
+  '[FATAL] Nevalidan Invoice Period Description Code. Dozvoljene vrednosti: 35, 432, 3, 0.'
+);
+
 // 4. 🛡️ TITANIJUMSKA ŠEMA ZA SEF INVOICE (Srbija Profile via Vertex)
 export const SefInvoiceSchema = v.pipe(
   v.object({
@@ -46,6 +52,8 @@ export const SefInvoiceSchema = v.pipe(
     supplierPib: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] PIB mora sadržati tačno 9 numeričkih karaktera.')),
     customerPib: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] PIB mora sadržati tačno 9 numeričkih karaktera.')),
     customerJbkjs: v.optional(v.pipe(v.string(), v.regex(/^\d{5}$/, '[FATAL] JBKJS mora sadržati tačno 5 numeričkih karaktera za budžetske korisnike.'))),
+    // 🟢 Novi obavezni element prema Vertexu: Invoicing Period Description Code
+    invoicingPeriodCode: SefInvoicePeriodDescriptionCode,
     taxTotals: v.array(TaxTotalSchema, [v.minLength(1, '[FATAL] Faktura mora imati bar jedan TaxTotal blok.')])
   }),
 
@@ -79,7 +87,19 @@ export const SefInvoiceSchema = v.pipe(
       return imaRsdPorez && imaDevizniPorez;
     }
     return true;
-  }, '[FATAL] Devizne fakture moraju sadržati tačno dva TaxTotal bloka (jedan u devizama, jedan preračunat u RSD po kursu NBS).')
+  }, '[FATAL] Devizne fakture moraju sadržati tačno dva TaxTotal bloka (jedan u devizama, jedan preračunat u RSD po kursu NBS).'),
+
+  // 🎯 VERTEX / SCHEMATRON PRAVILO: ZAVISNA VALIDACIJA ZA INVOICING PERIOD
+  v.check((input) => {
+    if (input.invoiceTypeCode === '386') {
+      return input.invoicingPeriodCode === '432';
+    }
+    if (input.invoiceTypeCode === '380' && input.invoicingPeriodCode === '432') {
+      return false;
+    }
+    return true;
+  }, '[FATAL] Neslaganje poreskog osnova: Avansni računi (386) moraju koristiti kod 432, dok standardne fakture (380) koriste 35, 3 ili 0.')
 );
+
 
 export type SefInvoiceInput = v.InferOutput<typeof SefInvoiceSchema>;
