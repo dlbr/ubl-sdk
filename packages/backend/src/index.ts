@@ -208,9 +208,9 @@ app.get('/api/fakture', internalOnly, async (c: RouterContext<Env> & { klijentId
   return Response.json({ success: true, fakture: results });
 });
 
-app.get('/api/webhook-setup', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
-  const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
-  return Response.json(await kDO.getWebhookInstructions());
+app.get('/api/debug/dump', internalOnly, async (c: RouterContext<Env>) => {
+  const { results } = await c.env.REGISTAR_DB.prepare("SELECT * FROM dokumenti LIMIT 5").all();
+  return Response.json({ results });
 });
 
 app.get('/api/logistika/documents', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
