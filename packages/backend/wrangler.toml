@@ -1,7 +1,7 @@
 name = "sef-bridge-backend"
 main = "src/index.ts"
 compatibility_date = "2026-05-25"
-node_compatibility = true
+compatibility_flags = ["nodejs_compat"]
 
 [alias]
 "@dlbr/ubl-sdk" = "../ubl-sdk/src/index.ts"
