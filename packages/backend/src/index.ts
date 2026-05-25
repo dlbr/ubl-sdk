@@ -78,48 +78,38 @@ app.get('/api/onboarding/search', async ({ req, env }: RouterContext<Env>) => {
   }
 });
 
-// 🟢 LOGIN & REGISTRACIJA
-app.post('/api/auth/login', async ({ req, env }: RouterContext<Env>) => {
+// 🟢 REGISTRACIJA
+app.post('/api/register', async ({ req, env }: RouterContext<Env>) => {
   try {
-    const body = await req.json() as any;
-    const { pib, password, api_key } = body;
+    const body = await req.json() as { pib: string, naziv: string, sef_api_key: string, otpremnice_api_key: string };
+    const { pib, naziv, sef_api_key, otpremnice_api_key } = body;
+    
+    if (!pib || !sef_api_key || !otpremnice_api_key) {
+      return Response.json({ error: 'PIB, SEF API Key i Otpremnice API Key su obavezni.' }, { status: 400 });
+    }
 
-    if (!pib) return Response.json({ error: 'PIB je obavezan' }, { status: 400 });
+    const proveraKompanije = await env.REGISTAR_DB.prepare("SELECT pib FROM sef_kompanije WHERE pib = ?").bind(pib).first();
+    if (!proveraKompanije) {
+      return Response.json({ error: 'ONBOARDING_REJECTED', message: 'PIB nije nađen u registru.' }, { status: 422 });
+    }
 
     const klijentBaseName = `klijent_${pib}`;
-    const doId = env.KLIJENT_BAZA_OBJECT.idFromName(klijentBaseName);
-    const doStub = env.KLIJENT_BAZA_OBJECT.get(doId);
+    const klijentDO = env.KLIJENT_BAZA_OBJECT.get(env.KLIJENT_BAZA_OBJECT.idFromName(klijentBaseName));
 
-    if (password) {
-      const loginCheckRes = await doStub.fetch('http://do/api/internal/verify-password', {
-        method: 'POST',
-        body: JSON.stringify({ password })
-      });
-      if (!loginCheckRes.ok) return Response.json({ error: 'Pogrešna lozinka' }, { status: 401 });
-      return Response.json({ success: true, klijentId: klijentBaseName, pib, operater: body.operater || 'Operater' });
-    }
+    await env.REGISTAR_DB.prepare(`
+      INSERT INTO klijenti (klijent_id, naziv, ima_aktivne_fakture, poslednji_sync) VALUES (?, ?, 0, CURRENT_TIMESTAMP)
+      ON CONFLICT(klijent_id) DO UPDATE SET poslednji_sync = CURRENT_TIMESTAMP
+    `).bind(klijentBaseName, naziv || klijentBaseName).run();
 
-    if (api_key) {
-      const klijent = await env.REGISTAR_DB.prepare("SELECT pib FROM sef_kompanije WHERE pib = ?").bind(pib).first();
-      if (!klijent) return Response.json({ error: 'PIB nije u državnom registru' }, { status: 403 });
+    await klijentDO.fetch(new Request('http://do/config', {
+      method: 'POST',
+      body: JSON.stringify({ sef_api_key, otpremnice_api_key, klijent_id: klijentBaseName, plan: 'Micro', limit: 50 })
+    }));
 
-      await env.REGISTAR_DB.prepare(`
-        INSERT INTO klijenti (klijent_id, naziv, ima_aktivne_fakture, poslednji_sync) VALUES (?, ?, 0, CURRENT_TIMESTAMP)
-        ON CONFLICT(klijent_id) DO UPDATE SET poslednji_sync = CURRENT_TIMESTAMP
-      `).bind(klijentBaseName, body.naziv || klijentBaseName).run();
-
-      await doStub.fetch('http://do/config', {
-        method: 'POST',
-        body: JSON.stringify({ sef_api_key: api_key, klijent_id: klijentBaseName, plan: 'Micro', limit: 50 })
-      });
-
-      return Response.json({ success: true, klijentId: klijentBaseName, pib, operater: body.operater || 'Operater' });
-    }
-
-    return Response.json({ error: 'Nedostaju kredencijali' }, { status: 400 });
+    return Response.json({ success: true, klijentId: klijentBaseName, pib });
   } catch (e: any) {
-    console.error('[Login Error]', e);
-    return Response.json({ error: 'AUTH_SERVER_ERROR', message: e.message }, { status: 500 });
+    console.error('[Registration Error]', e);
+    return Response.json({ error: 'REGISTRATION_SERVER_ERROR', message: e.message }, { status: 500 });
   }
 });
 

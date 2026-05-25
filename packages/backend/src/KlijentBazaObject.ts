@@ -50,8 +50,8 @@ export class KlijentBaza extends DurableObject<Env> {
 
     this.app.post('/config', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
-      this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, klijent_id, environment, limit_faktura, status_pretplate) VALUES (1, ?, ?, ?, ?, ?)`, 
-        data.sef_api_key || '', data.klijent_id || null, data.environment || 'sandbox', data.limit || 50, data.status_pretplate || 'AKTIVAN');
+      this.sql.exec(`INSERT OR REPLACE INTO konfiguracija (id, sef_api_key, otpremnice_api_key, klijent_id, environment, limit_faktura, status_pretplate) VALUES (1, ?, ?, ?, ?, ?, ?)`, 
+        data.sef_api_key || '', data.otpremnice_api_key || '', data.klijent_id || null, data.environment || 'sandbox', data.limit || 50, data.status_pretplate || 'AKTIVAN');
       
       const ledgerCount = this.sql.exec(`SELECT COUNT(*) as c FROM billing_ledger`).one() as { c: number };
       if (ledgerCount.c === 0) {
@@ -426,7 +426,8 @@ export class KlijentBaza extends DurableObject<Env> {
 
   private initDatabase(): void {
     this.ctx.storage.transactionSync(() => {
-      this.sql.exec(`CREATE TABLE IF NOT EXISTS konfiguracija (id INTEGER PRIMARY KEY CHECK (id = 1), sef_api_key TEXT NOT NULL, klijent_id TEXT, environment TEXT DEFAULT 'sandbox', status_pretplate TEXT DEFAULT 'AKTIVAN', plan_name TEXT DEFAULT 'Micro', limit_faktura INTEGER DEFAULT 50);`);
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS konfiguracija (id INTEGER PRIMARY KEY CHECK (id = 1), sef_api_key TEXT NOT NULL, otpremnice_api_key TEXT, klijent_id TEXT, environment TEXT DEFAULT 'sandbox', status_pretplate TEXT DEFAULT 'AKTIVAN', plan_name TEXT DEFAULT 'Micro', limit_faktura INTEGER DEFAULT 50);`);
+      try { this.sql.exec(`ALTER TABLE konfiguracija ADD COLUMN otpremnice_api_key TEXT;`); } catch (e) {}
       this.sql.exec(`CREATE TABLE IF NOT EXISTS fakture (internal_id TEXT PRIMARY KEY, sef_id TEXT UNIQUE, broj_fakture TEXT NOT NULL, status TEXT NOT NULL, iznos REAL NOT NULL DEFAULT 0, raw_data TEXT, arhiva_r2_path TEXT, kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP, azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS sef_purchase_invoices (sef_id TEXT PRIMARY KEY, invoice_number TEXT NOT NULL, supplier_pib TEXT NOT NULL, issue_date TEXT NOT NULL, total_amount REAL NOT NULL, status TEXT NOT NULL, raw_xml TEXT, arhiva_r2_path TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);`);
       this.sql.exec(`CREATE TABLE IF NOT EXISTS billing_ledger (row_id INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, faktura_id TEXT, broj_fakture TEXT, tip_transakcije TEXT, iznos_kredita INTEGER, kreiran_u DATETIME DEFAULT CURRENT_TIMESTAMP, beleska TEXT);`);
