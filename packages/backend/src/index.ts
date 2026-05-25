@@ -77,9 +77,40 @@ app.get('/api/onboarding/search', async ({ req, env }: RouterContext<Env>) => {
     return Response.json({ uspeh: false, greska: e.message }, { status: 500 });
   }
 });
+// 🟢 LOGIN
+app.post('/api/auth/login', async ({ req, env }: RouterContext<Env>) => {
+  try {
+    const body = await req.json() as any;
+    const { pib, password } = body;
+
+    if (!pib) return Response.json({ error: 'PIB je obavezan' }, { status: 400 });
+
+    const klijentBaseName = `klijent_${pib}`;
+    const klijentDO = env.KLIJENT_BAZA_OBJECT.get(env.KLIJENT_BAZA_OBJECT.idFromName(klijentBaseName));
+
+    if (password) {
+      const loginCheckRes = await klijentDO.fetch('http://do/api/internal/verify-password', {
+        method: 'POST',
+        body: JSON.stringify({ password })
+      });
+      if (!loginCheckRes.ok) return Response.json({ error: 'Pogrešna lozinka' }, { status: 401 });
+      return Response.json({ success: true, klijentId: klijentBaseName, pib, operater: body.operater || 'Operater' });
+    }
+
+    // Fallback if no password is provided - check if client exists
+    const klijent = await env.REGISTAR_DB.prepare("SELECT pib FROM sef_kompanije WHERE pib = ?").bind(pib).first();
+    if (!klijent) return Response.json({ error: 'PIB nije u državnom registru' }, { status: 403 });
+
+    return Response.json({ success: true, klijentId: klijentBaseName, pib, operater: body.operater || 'Operater' });
+  } catch (e: any) {
+    console.error('[Login Error]', e);
+    return Response.json({ error: 'AUTH_SERVER_ERROR', message: e.message }, { status: 500 });
+  }
+});
 
 // 🟢 REGISTRACIJA
 app.post('/api/register', async ({ req, env }: RouterContext<Env>) => {
+...
   try {
     const body = await req.json() as { pib: string, naziv: string, sef_api_key: string, otpremnice_api_key: string };
     const { pib, naziv, sef_api_key, otpremnice_api_key } = body;
