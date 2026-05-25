@@ -12,17 +12,70 @@ import type { ReceiptAdvice, ReceiptLine } from '../models/ReceiptAdvice.js';
 export class XmlTransformer {
   static transformReceipt(receipt: ReceiptAdvice): string {
     const root = 'ReceiptAdvice';
+    
+    // 1. Extensions (SrbDtExt)
+    const sbtNs = "http://mfin.gov.rs/srbdt/srbdtext";
+    let extensionContent = '';
+    
+    if (receipt.shipmentMethod) {
+      extensionContent += `\n          <sbt:ShipmentMethod><cbc:ShipmentMethodType>${receipt.shipmentMethod}</cbc:ShipmentMethodType></sbt:ShipmentMethod>`;
+    }
+    if (receipt.thirdPartyGoodsId) {
+      extensionContent += `\n          <sbt:ThirdPartyGoods><cbc:ID>${receipt.thirdPartyGoodsId}</cbc:ID></sbt:ThirdPartyGoods>`;
+    }
+    if (receipt.isReturn) {
+      extensionContent += `\n          <sbt:GoodsReturn><cbc:Return>1</cbc:Return></sbt:GoodsReturn>`;
+    }
+    if (receipt.offlineZinNumber) {
+      extensionContent += `\n          <sbt:OfflineZinNumber>${receipt.offlineZinNumber}</sbt:OfflineZinNumber>`;
+    }
+
+    if (receipt.frameworkAgreementId || receipt.contractId) {
+      extensionContent += `\n          <sbt:ExtDocuments>`;
+      if (receipt.frameworkAgreementId) {
+        extensionContent += `\n            <cac:OriginatorDocumentReference><cbc:ID>${receipt.frameworkAgreementId}</cbc:ID></cac:OriginatorDocumentReference>`;
+      }
+      if (receipt.contractId) {
+        extensionContent += `\n            <cac:ContractDocumentReference><cbc:ID>${receipt.contractId}</cbc:ID></cac:ContractDocumentReference>`;
+      }
+      extensionContent += `\n          </sbt:ExtDocuments>`;
+    }
+
+    // v4.37.0: SrbDtExt is mandatory for MFIN
+    if (!extensionContent) {
+      extensionContent = `\n          <sbt:ShipmentMethod><cbc:ShipmentMethodType>${receipt.shipmentMethod || '1'}</cbc:ShipmentMethodType></sbt:ShipmentMethod>`;
+    }
+
+    const extensions = `
+  <cec:UBLExtensions>
+    <cec:UBLExtension>
+      <cec:ExtensionContent>
+        <sbt:SrbDtExt xmlns:sbt="${sbtNs}">${extensionContent}
+        </sbt:SrbDtExt>
+      </cec:ExtensionContent>
+    </cec:UBLExtension>
+  </cec:UBLExtensions>`;
+
     const id = `<cbc:ID>${receipt.id}</cbc:ID>`;
     const issueDate = `<cbc:IssueDate>${receipt.issueDate}</cbc:IssueDate>`;
-    const issueTime = receipt.issueTime ? `\n  <cbc:IssueTime>${receipt.issueTime}</cbc:IssueTime>` : '';
+    const now = new Date().toISOString();
+    const iTime = receipt.issueTime || `${now.split('T')[1]?.split('.')[0] || '08:00:00'}+01:00`;
+    const issueTimeTag = `\n  <cbc:IssueTime>${iTime}</cbc:IssueTime>`;
     
     const notes = (receipt.note || []).map(n => `\n  <cbc:Note>${n}</cbc:Note>`).join('');
-    const customization = `<cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>`;
+    const customization = `<cbc:CustomizationID>urn:fdc:mfin.gov.rs:logistics:trns:receipt_advice:1:2025.12</cbc:CustomizationID>`;
+    const profile = `<cbc:ProfileID>urn:fdc:peppol.eu:logistics:bis:despatch_advice_w_receipt_advice:1</cbc:ProfileID>`;
+    const typeCode = `<cbc:ReceiptAdviceTypeCode>Ext</cbc:ReceiptAdviceTypeCode>`;
 
     const despatchRef = receipt.despatchDocumentReference ? `
   <cac:DespatchDocumentReference>
     <cbc:ID>${receipt.despatchDocumentReference.id}</cbc:ID>
-    ${receipt.despatchDocumentReference.issueDate ? `<cbc:IssueDate>${receipt.despatchDocumentReference.issueDate}</cbc:IssueDate>` : ''}
+    <cbc:IssueDate>${receipt.despatchDocumentReference.issueDate || receipt.issueDate}</cbc:IssueDate>
+    <cac:IssuerParty>
+      <cbc:EndpointID schemeID="9948">${receipt.seller.pib}</cbc:EndpointID>
+      ${receipt.seller.jbkjs ? `<cac:PartyIdentification><cbc:ID>JBKJS:${receipt.seller.jbkjs}</cbc:ID></cac:PartyIdentification>` : ''}
+      <cac:PartyName><cbc:Name>${receipt.seller.name}</cbc:Name></cac:PartyName>
+    </cac:IssuerParty>
   </cac:DespatchDocumentReference>` : '';
 
     const orderRef = receipt.orderReference ? `
@@ -33,36 +86,84 @@ export class XmlTransformer {
 
     const seller = this.generateParty('DespatchSupplierParty', receipt.seller);
     const buyer = this.generateParty('DeliveryCustomerParty', receipt.buyer);
+    
+    const shipment = `
+  <cac:Shipment>
+    <cbc:ID>${receipt.id}-SHIP</cbc:ID>
+    <cac:ShipmentStage>
+      <cbc:ID>1</cbc:ID>
+      <cac:CarrierParty>
+        <cbc:EndpointID schemeID="9948">${receipt.carrier?.pib || receipt.seller.pib}</cbc:EndpointID>
+        <cac:PartyName><cbc:Name>${receipt.carrier?.name || receipt.seller.name}</cbc:Name></cac:PartyName>
+        <cac:PostalAddress>
+          <cbc:StreetName>${receipt.carrier?.address || receipt.seller.address || 'Ulica'}</cbc:StreetName>
+          <cbc:CityName>${receipt.carrier?.city || receipt.seller.city || 'Grad'}</cbc:CityName>
+          <cbc:PostalZone>${receipt.carrier?.zip || receipt.seller.zip || '11000'}</cbc:PostalZone>
+          <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
+        </cac:PostalAddress>
+        <cac:PartyTaxScheme><cbc:CompanyID>RS${receipt.carrier?.pib || receipt.seller.pib}</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
+        <cac:PartyLegalEntity>
+          <cbc:RegistrationName>${receipt.carrier?.name || receipt.seller.name}</cbc:RegistrationName>
+          <cbc:CompanyID>${receipt.carrier?.maticniBroj || receipt.seller.maticniBroj || '00000000'}</cbc:CompanyID>
+        </cac:PartyLegalEntity>
+      </cac:CarrierParty>
+      <cac:TransportMeans>
+        <cac:RoadTransport>
+          <cbc:LicensePlateID>BG-000-XX</cbc:LicensePlateID>
+        </cac:RoadTransport>
+      </cac:TransportMeans>
+    </cac:ShipmentStage>
+    <cac:Delivery>
+      <cbc:ActualDeliveryDate>${receipt.issueDate}</cbc:ActualDeliveryDate>
+      <cbc:ActualDeliveryTime>${iTime}</cbc:ActualDeliveryTime>
+    </cac:Delivery>
+  </cac:Shipment>`;
 
     const lines = receipt.lines.map((l, i) => {
-      const shortQty = l.shortQuantity ? `\n    <cbc:ShortQuantity unitCode="${l.unitCode}">${l.shortQuantity}</cbc:ShortQuantity>` : '';
-      const rejectedQty = l.rejectedQuantity ? `\n    <cbc:RejectedQuantity unitCode="${l.unitCode}">${l.rejectedQuantity}</cbc:RejectedQuantity>` : '';
+      const shortQty = `<cbc:ShortQuantity unitCode="${l.unitCode}">${l.shortQuantity || 0}</cbc:ShortQuantity>`;
+      const rejectedQty = `<cbc:RejectedQuantity unitCode="${l.unitCode}">${l.rejectedQuantity || 0}</cbc:RejectedQuantity>`;
       const rejectReason = l.rejectReason ? `\n    <cbc:RejectReason>${l.rejectReason}</cbc:RejectReason>` : '';
       const despatchLineRef = l.despatchLineReference ? `\n    <cac:DespatchLineReference><cbc:LineID>${l.despatchLineReference.id}</cbc:LineID></cac:DespatchLineReference>` : '';
+
+      let props = '';
+      if (l.exciseCategory) {
+        props += `\n      <cac:AdditionalItemProperty><cbc:Name>AKCIZE.KATEGORIJA</cbc:Name><cbc:Value>${l.exciseCategory}</cbc:Value></cac:AdditionalItemProperty>`;
+      }
+      if (l.itemProperties) {
+        for (const [name, val] of Object.entries(l.itemProperties)) {
+          props += `\n      <cac:AdditionalItemProperty><cbc:Name>${name}</cbc:Name><cbc:Value>${val}</cbc:Value></cac:AdditionalItemProperty>`;
+        }
+      }
 
       return `
   <cac:ReceiptLine>
     <cbc:ID>${l.id || (i + 1)}</cbc:ID>
-    <cbc:ReceivedQuantity unitCode="${l.unitCode}">${l.receivedQuantity}</cbc:ReceivedQuantity>${shortQty}${rejectedQty}${rejectReason}${despatchLineRef}
+    <cbc:ReceivedQuantity unitCode="${l.unitCode}">${l.receivedQuantity}</cbc:ReceivedQuantity>
+    ${shortQty}
+    ${rejectedQty}${rejectReason}${despatchLineRef}
     <cac:Item>
       <cbc:Name>${l.itemName}</cbc:Name>
-      ${l.itemIdentification ? `<cac:ManufacturersItemIdentification><cbc:ID>${l.itemIdentification}</cbc:ID></cac:ManufacturersItemIdentification>` : ''}
+      <cac:SellersItemIdentification><cbc:ID>${l.itemIdentification || l.id || (i + 1)}</cbc:ID></cac:SellersItemIdentification>${props}
     </cac:Item>
   </cac:ReceiptLine>`;
     }).join('');
 
     return `<?xml version="1.0" encoding="utf-8"?>
-<${root} xmlns="urn:oasis:names:specification:ubl:schema:xsd:${root}-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+<ubl:${root} xmlns:ubl="urn:oasis:names:specification:ubl:schema:xsd:${root}-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
+  ${extensions}
   ${customization}
+  ${profile}
   ${id}
-  ${issueDate}${issueTime}
+  ${issueDate}${issueTimeTag}
+  ${typeCode}
   ${notes}
-  ${despatchRef}
   ${orderRef}
-  ${seller}
+  ${despatchRef}
   ${buyer}
+  ${seller}
+  ${shipment}
   ${lines}
-</${root}>`.trim();
+</ubl:${root}>`.trim();
   }
 
   static transformDespatch(advice: DespatchAdvice): string {
@@ -85,7 +186,12 @@ export class XmlTransformer {
       extensionContent += `\n          <sbt:OfflineZinNumber>${advice.offlineZinNumber}</sbt:OfflineZinNumber>`;
     }
 
-    const extensions = extensionContent ? `
+    // v4.37.0: SrbDtExt is mandatory for MFIN
+    if (!extensionContent) {
+      extensionContent = `\n          <sbt:ShipmentMethod><cbc:ShipmentMethodType>${advice.shipmentMethod || '1'}</cbc:ShipmentMethodType></sbt:ShipmentMethod>`;
+    }
+
+    const extensions = `
   <cec:UBLExtensions>
     <cec:UBLExtension>
       <cec:ExtensionContent>
@@ -93,14 +199,17 @@ export class XmlTransformer {
         </sbt:SrbDtExt>
       </cec:ExtensionContent>
     </cec:UBLExtension>
-  </cec:UBLExtensions>` : '';
+  </cec:UBLExtensions>`;
 
     const id = `<cbc:ID>${advice.id}</cbc:ID>`;
     const issueDate = `<cbc:IssueDate>${advice.issueDate}</cbc:IssueDate>`;
-    const issueTime = advice.issueTime ? `\n  <cbc:IssueTime>${advice.issueTime}</cbc:IssueTime>` : '';
+    const now = new Date().toISOString();
+    const issueTime = advice.issueTime ? `\n  <cbc:IssueTime>${advice.issueTime}</cbc:IssueTime>` : `\n  <cbc:IssueTime>${now.split('T')[1]?.split('.')[0] || '08:00:00'}+01:00</cbc:IssueTime>`;
     
     const notes = (advice.note || []).map(n => `\n  <cbc:Note>${n}</cbc:Note>`).join('');
-    const customization = `<cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>`;
+    const customization = `<cbc:CustomizationID>urn:fdc:mfin.gov.rs:logistics:trns:despatch_advice:1:2025.12</cbc:CustomizationID>`;
+    const profile = `<cbc:ProfileID>urn:fdc:peppol.eu:logistics:bis:despatch_advice_only:1</cbc:ProfileID>`;
+    const typeCode = `<cbc:DespatchAdviceTypeCode>Ext</cbc:DespatchAdviceTypeCode>`;
 
     const orderRef = advice.orderReference ? `
   <cac:OrderReference>
@@ -111,23 +220,55 @@ export class XmlTransformer {
     const seller = this.generateParty('DespatchSupplierParty', advice.seller);
     const buyer = this.generateParty('DeliveryCustomerParty', advice.buyer);
     
+    const iTime = advice.issueTime || `${now.split('T')[1]?.split('.')[0] || '08:00:00'}+01:00`;
+
     const delivery = `
   <cac:Shipment>
     <cbc:ID>${advice.id}-SHIP</cbc:ID>
+    <cac:ShipmentStage>
+      <cbc:ID>1</cbc:ID>
+      <cac:CarrierParty>
+        <cbc:EndpointID schemeID="9948">${advice.carrier?.pib || advice.seller.pib}</cbc:EndpointID>
+        <cac:PartyName><cbc:Name>${advice.carrier?.name || advice.seller.name}</cbc:Name></cac:PartyName>
+        <cac:PostalAddress>
+          <cbc:StreetName>${advice.carrier?.address || advice.seller.address || 'Ulica'}</cbc:StreetName>
+          <cbc:CityName>${advice.carrier?.city || advice.seller.city || 'Grad'}</cbc:CityName>
+          <cbc:PostalZone>${advice.carrier?.zip || advice.seller.zip || '11000'}</cbc:PostalZone>
+          <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
+        </cac:PostalAddress>
+        <cac:PartyTaxScheme><cbc:CompanyID>RS${advice.carrier?.pib || advice.seller.pib}</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
+        <cac:PartyLegalEntity>
+          <cbc:RegistrationName>${advice.carrier?.name || advice.seller.name}</cbc:RegistrationName>
+          <cbc:CompanyID>${advice.carrier?.maticniBroj || advice.seller.maticniBroj || '00000000'}</cbc:CompanyID>
+        </cac:PartyLegalEntity>
+      </cac:CarrierParty>
+      <cac:TransportMeans>
+        <cac:RoadTransport>
+          <cbc:LicensePlateID>BG-000-XX</cbc:LicensePlateID>
+        </cac:RoadTransport>
+      </cac:TransportMeans>
+    </cac:ShipmentStage>
     <cac:Delivery>
       <cac:DeliveryAddress>
-        <cbc:StreetName>${advice.deliveryAddress?.street || advice.buyer.address || 'Ulica'}</cbc:StreetName>
+        <cbc:StreetName>${advice.deliveryAddress?.street || advice.buyer.address || 'Ulica 2'}</cbc:StreetName>
         <cbc:CityName>${advice.deliveryAddress?.city || advice.buyer.city || 'Grad'}</cbc:CityName>
         <cbc:PostalZone>${advice.deliveryAddress?.zip || advice.buyer.zip || '11000'}</cbc:PostalZone>
         <cac:Country><cbc:IdentificationCode>${advice.deliveryAddress?.countryCode || 'RS'}</cbc:IdentificationCode></cac:Country>
       </cac:DeliveryAddress>
-      ${advice.despatchAddress ? `
-      <cac:DespatchAddress>
-        <cbc:StreetName>${advice.despatchAddress.street || 'Ulica'}</cbc:StreetName>
-        <cbc:CityName>${advice.despatchAddress.city || 'Grad'}</cbc:CityName>
-        <cbc:PostalZone>${advice.despatchAddress.zip || '11000'}</cbc:PostalZone>
-        <cac:Country><cbc:IdentificationCode>${advice.despatchAddress.countryCode || 'RS'}</cbc:IdentificationCode></cac:Country>
-      </cac:DespatchAddress>` : ''}
+      <cac:EstimatedDeliveryPeriod>
+        <cbc:EndDate>${advice.issueDate}</cbc:EndDate>
+        <cbc:EndTime>23:59:59+01:00</cbc:EndTime>
+      </cac:EstimatedDeliveryPeriod>
+      <cac:Despatch>
+        <cbc:ActualDespatchDate>${advice.issueDate}</cbc:ActualDespatchDate>
+        <cbc:ActualDespatchTime>${iTime}</cbc:ActualDespatchTime>
+        <cac:DespatchAddress>
+          <cbc:StreetName>${advice.despatchAddress?.street || advice.seller.address || 'Ulica 1'}</cbc:StreetName>
+          <cbc:CityName>${advice.despatchAddress?.city || advice.seller.city || 'Grad'}</cbc:CityName>
+          <cbc:PostalZone>${advice.despatchAddress?.zip || advice.seller.zip || '11000'}</cbc:PostalZone>
+          <cac:Country><cbc:IdentificationCode>${advice.despatchAddress?.countryCode || 'RS'}</cbc:IdentificationCode></cac:Country>
+        </cac:DespatchAddress>
+      </cac:Despatch>
     </cac:Delivery>
   </cac:Shipment>`;
 
@@ -148,7 +289,7 @@ export class XmlTransformer {
     <cbc:DeliveredQuantity unitCode="${l.unitCode || 'H87'}">${l.deliveredQuantity}</cbc:DeliveredQuantity>
     <cac:Item>
       <cbc:Name>${l.name}</cbc:Name>
-      ${l.itemID ? `<cac:ManufacturersItemIdentification><cbc:ID>${l.itemID}</cbc:ID></cac:ManufacturersItemIdentification>` : ''}${props}
+      <cac:SellersItemIdentification><cbc:ID>${l.itemID || l.id || (i + 1)}</cbc:ID></cac:SellersItemIdentification>${props}
     </cac:Item>
   </cac:DespatchLine>`;
     }).join('');
@@ -156,9 +297,11 @@ export class XmlTransformer {
     return `<?xml version="1.0" encoding="utf-8"?>
 <${root} xmlns="urn:oasis:names:specification:ubl:schema:xsd:${root}-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cec="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:sbt="http://mfin.gov.rs/srbdt/srbdtext">
   ${extensions}
-  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
-  <cbc:ID>${advice.id}</cbc:ID>
-  <cbc:IssueDate>${advice.issueDate}</cbc:IssueDate>${issueTime}
+  ${customization}
+  ${profile}
+  ${id}
+  ${issueDate}${issueTime}
+  ${typeCode}
   ${notes}
   ${orderRef}
   ${seller}
@@ -360,6 +503,7 @@ export class XmlTransformer {
     <cac:Party>
       <cbc:EndpointID schemeID="9948">${party.pib}</cbc:EndpointID>
       ${partyIdent}
+      <cac:PartyName><cbc:Name>${party.name}</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>${party.address || 'Ulica'}</cbc:StreetName>
         <cbc:CityName>${party.city || 'Grad'}</cbc:CityName>
@@ -367,7 +511,10 @@ export class XmlTransformer {
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS${party.pib}</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>${party.name}</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>${party.name}</cbc:RegistrationName>
+        <cbc:CompanyID>${party.maticniBroj || '00000000'}</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:${tag}>`;
   }

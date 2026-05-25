@@ -52,22 +52,22 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 1. A
   </cec:UBLExtensions>
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>AV-1</cbc:ID>
-  <cbc:IssueDate>2026-05-20</cbc:IssueDate>
-  <cbc:DueDate>2026-05-20</cbc:DueDate>
+  <cbc:IssueDate>2026-05-25</cbc:IssueDate>
+  <cbc:DueDate>2026-05-25</cbc:DueDate>
   <cbc:InvoiceTypeCode>386</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
   
   <cac:InvoicePeriod>
-    <cbc:StartDate>2026-05-20</cbc:StartDate>
-    <cbc:EndDate>2026-05-20</cbc:EndDate>
+    <cbc:StartDate>2026-05-25</cbc:StartDate>
+    <cbc:EndDate>2026-05-25</cbc:EndDate>
     <cbc:DescriptionCode>432</cbc:DescriptionCode>
   </cac:InvoicePeriod>
   
   <cac:BillingReference>
     <cac:InvoiceDocumentReference>
       <cbc:ID>PONUDA-1</cbc:ID>
-      <cbc:IssueDate>2026-05-20</cbc:IssueDate>
+      <cbc:IssueDate>2026-05-25</cbc:IssueDate>
       <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
     </cac:InvoiceDocumentReference>
   </cac:BillingReference>
@@ -76,6 +76,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 1. A
     <cac:Party>
       <cbc:EndpointID schemeID="9948">100000001</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>PRODAVAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -83,7 +84,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 1. A
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS100000001</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>PRODAVAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>PRODAVAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
   
@@ -91,6 +95,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 1. A
     <cac:Party>
       <cbc:EndpointID schemeID="9948">200000002</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>KUPAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -98,7 +103,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 1. A
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS200000002</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>KUPAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>KUPAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
   
@@ -203,15 +211,15 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 2. K
   </cec:UBLExtensions>
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>KON-1</cbc:ID>
-  <cbc:IssueDate>2026-05-24</cbc:IssueDate>
-  <cbc:DueDate>2026-05-24</cbc:DueDate>
+  <cbc:IssueDate>2026-05-25</cbc:IssueDate>
+  <cbc:DueDate>2026-05-25</cbc:DueDate>
   <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
   
   <cac:InvoicePeriod>
-    <cbc:StartDate>2026-05-24</cbc:StartDate>
-    <cbc:EndDate>2026-05-24</cbc:EndDate>
+    <cbc:StartDate>2026-05-25</cbc:StartDate>
+    <cbc:EndDate>2026-05-25</cbc:EndDate>
     <cbc:DescriptionCode>35</cbc:DescriptionCode>
   </cac:InvoicePeriod>
   
@@ -227,6 +235,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 2. K
     <cac:Party>
       <cbc:EndpointID schemeID="9948">100000001</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>PRODAVAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -234,7 +243,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 2. K
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS100000001</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>PRODAVAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>PRODAVAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
   
@@ -242,6 +254,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 2. K
     <cac:Party>
       <cbc:EndpointID schemeID="9948">200000002</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>KUPAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -249,7 +262,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 2. K
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS200000002</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>KUPAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>KUPAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
   
@@ -326,7 +342,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 3. K
   
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>STO-1</cbc:ID>
-  <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+  <cbc:IssueDate>2026-05-25</cbc:IssueDate>
   <cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
@@ -335,7 +351,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 3. K
   <cac:BillingReference>
     <cac:InvoiceDocumentReference>
       <cbc:ID>KON-1</cbc:ID>
-      <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+      <cbc:IssueDate>2026-05-25</cbc:IssueDate>
       <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
     </cac:InvoiceDocumentReference>
   </cac:BillingReference>
@@ -344,6 +360,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 3. K
     <cac:Party>
       <cbc:EndpointID schemeID="9948">100000001</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>PRODAVAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -351,7 +368,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 3. K
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS100000001</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>PRODAVAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>PRODAVAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
   
@@ -359,6 +379,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 3. K
     <cac:Party>
       <cbc:EndpointID schemeID="9948">200000002</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>KUPAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -366,7 +387,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 3. K
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS200000002</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>KUPAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>KUPAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
   
@@ -425,8 +449,8 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 4. K
   
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>ZAD-1</cbc:ID>
-  <cbc:IssueDate>2026-05-24</cbc:IssueDate>
-  <cbc:DueDate>2026-05-24</cbc:DueDate>
+  <cbc:IssueDate>2026-05-25</cbc:IssueDate>
+  <cbc:DueDate>2026-05-25</cbc:DueDate>
   <cbc:InvoiceTypeCode>383</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
@@ -438,7 +462,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 4. K
   <cac:BillingReference>
     <cac:InvoiceDocumentReference>
       <cbc:ID>KON-1</cbc:ID>
-      <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+      <cbc:IssueDate>2026-05-25</cbc:IssueDate>
       <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
     </cac:InvoiceDocumentReference>
   </cac:BillingReference>
@@ -447,6 +471,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 4. K
     <cac:Party>
       <cbc:EndpointID schemeID="9948">100000001</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>PRODAVAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -454,7 +479,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 4. K
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS100000001</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>PRODAVAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>PRODAVAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
   
@@ -462,6 +490,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 4. K
     <cac:Party>
       <cbc:EndpointID schemeID="9948">200000002</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>KUPAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -469,7 +498,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 4. K
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS200000002</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>KUPAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>KUPAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
   
@@ -574,7 +606,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 5. D
   </cec:UBLExtensions>
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>SMAV-1</cbc:ID>
-  <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+  <cbc:IssueDate>2026-05-25</cbc:IssueDate>
   <cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
@@ -592,6 +624,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 5. D
     <cac:Party>
       <cbc:EndpointID schemeID="9948">100000001</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>PRODAVAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -599,7 +632,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 5. D
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS100000001</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>PRODAVAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>PRODAVAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
   
@@ -607,6 +643,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 5. D
     <cac:Party>
       <cbc:EndpointID schemeID="9948">200000002</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>KUPAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -614,7 +651,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 5. D
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS200000002</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>KUPAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>KUPAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
   
@@ -673,7 +713,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 6. D
   
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>SMPER-1</cbc:ID>
-  <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+  <cbc:IssueDate>2026-05-25</cbc:IssueDate>
   <cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
@@ -686,7 +726,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 6. D
   <cac:BillingReference>
     <cac:InvoiceDocumentReference>
       <cbc:ID>PERIOD</cbc:ID>
-      <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+      <cbc:IssueDate>2026-05-25</cbc:IssueDate>
       <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
     </cac:InvoiceDocumentReference>
   </cac:BillingReference>
@@ -695,6 +735,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 6. D
     <cac:Party>
       <cbc:EndpointID schemeID="9948">100000001</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>PRODAVAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -702,7 +743,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 6. D
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS100000001</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>PRODAVAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>PRODAVAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
   
@@ -710,6 +754,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 6. D
     <cac:Party>
       <cbc:EndpointID schemeID="9948">200000002</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>KUPAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -717,7 +762,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 6. D
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS200000002</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>KUPAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>KUPAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
   
@@ -776,15 +824,15 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 8. F
   
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>OSL-1</cbc:ID>
-  <cbc:IssueDate>2026-05-24</cbc:IssueDate>
-  <cbc:DueDate>2026-05-24</cbc:DueDate>
+  <cbc:IssueDate>2026-05-25</cbc:IssueDate>
+  <cbc:DueDate>2026-05-25</cbc:DueDate>
   <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
   
   <cac:InvoicePeriod>
-    <cbc:StartDate>2026-05-24</cbc:StartDate>
-    <cbc:EndDate>2026-05-24</cbc:EndDate>
+    <cbc:StartDate>2026-05-25</cbc:StartDate>
+    <cbc:EndDate>2026-05-25</cbc:EndDate>
     <cbc:DescriptionCode>35</cbc:DescriptionCode>
   </cac:InvoicePeriod>
   
@@ -793,6 +841,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 8. F
     <cac:Party>
       <cbc:EndpointID schemeID="9948">100000001</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>PRODAVAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -800,7 +849,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 8. F
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS100000001</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>PRODAVAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>PRODAVAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
   
@@ -808,6 +860,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 8. F
     <cac:Party>
       <cbc:EndpointID schemeID="9948">200000002</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>KUPAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -815,7 +868,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 8. F
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS200000002</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>KUPAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>KUPAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
   
@@ -874,7 +930,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
   
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>STR-N-POS</cbc:ID>
-  <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+  <cbc:IssueDate>2026-05-25</cbc:IssueDate>
   <cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
@@ -883,7 +939,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
   <cac:BillingReference>
     <cac:InvoiceDocumentReference>
       <cbc:ID>INV-1</cbc:ID>
-      <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+      <cbc:IssueDate>2026-05-25</cbc:IssueDate>
       <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
     </cac:InvoiceDocumentReference>
   </cac:BillingReference>
@@ -892,6 +948,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
     <cac:Party>
       <cbc:EndpointID schemeID="9948">100000001</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>PRODAVAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -899,7 +956,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS100000001</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>PRODAVAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>PRODAVAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
   
@@ -907,6 +967,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
     <cac:Party>
       <cbc:EndpointID schemeID="9948">100000002</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>KUPAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -914,7 +975,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS100000002</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>KUPAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>KUPAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
   
@@ -973,7 +1037,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
   
   <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1</cbc:CustomizationID>
   <cbc:ID>STR-N-NEG</cbc:ID>
-  <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+  <cbc:IssueDate>2026-05-25</cbc:IssueDate>
   <cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>
   <cbc:DocumentCurrencyCode>RSD</cbc:DocumentCurrencyCode>
   
@@ -982,7 +1046,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
   <cac:BillingReference>
     <cac:InvoiceDocumentReference>
       <cbc:ID>INV-1</cbc:ID>
-      <cbc:IssueDate>2026-05-24</cbc:IssueDate>
+      <cbc:IssueDate>2026-05-25</cbc:IssueDate>
       <cbc:DocumentTypeCode>380</cbc:DocumentTypeCode>
     </cac:InvoiceDocumentReference>
   </cac:BillingReference>
@@ -991,6 +1055,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
     <cac:Party>
       <cbc:EndpointID schemeID="9948">100000001</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>PRODAVAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -998,7 +1063,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS100000001</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>PRODAVAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>PRODAVAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
   
@@ -1006,6 +1074,7 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
     <cac:Party>
       <cbc:EndpointID schemeID="9948">100000002</cbc:EndpointID>
       
+      <cac:PartyName><cbc:Name>KUPAC</cbc:Name></cac:PartyName>
       <cac:PostalAddress>
         <cbc:StreetName>Ulica</cbc:StreetName>
         <cbc:CityName>Grad</cbc:CityName>
@@ -1013,7 +1082,10 @@ exports[`🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit > 📊
         <cac:Country><cbc:IdentificationCode>RS</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme><cbc:CompanyID>RS100000002</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>KUPAC</cbc:RegistrationName></cac:PartyLegalEntity>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>KUPAC</cbc:RegistrationName>
+        <cbc:CompanyID>00000000</cbc:CompanyID>
+      </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>
   
