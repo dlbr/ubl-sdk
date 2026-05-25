@@ -7,7 +7,7 @@
     "test": "pnpm run test:types && pnpm run test:builder && pnpm --filter @dlbr/ubl-sdk test",
     "test:integration": "vitest run --file-parallelism=false",
     "verify": "pnpm run test:types && pnpm run test:builder && pnpm run test:integration",
-    "dev": "nuxt dev --https",
+    "dev": "nuxt dev",
     "build": "nuxt build",
     "generate": "nuxt generate",
     "preview": "nuxt preview",

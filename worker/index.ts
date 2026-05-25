@@ -174,12 +174,71 @@ app.get('/api/dashboard/logs', auth(async (c: RouterContext<Env> & { klijentId?:
   return Response.json(await klijentDO.getLogs());
 }));
 
+app.get('/api/logistika/documents', auth(async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const url = new URL(c.req.url);
+  const type = url.searchParams.get('type') || 'OTPREMNICA';
+  const status = url.searchParams.get('status');
+  const pib = url.searchParams.get('pib');
+  const page = parseInt(url.searchParams.get('page') || '1');
+  const limit = 20;
+  const offset = (page - 1) * limit;
+
+  let query = `SELECT * FROM dokumenti WHERE tip = ?`;
+  const params: any[] = [type];
+
+  if (status) {
+    query += ` AND status = ?`;
+    params.push(status);
+  }
+  if (pib) {
+    query += ` AND (pib_prodavca = ? OR pib_kupca = ?)`;
+    params.push(pib, pib);
+  }
+
+  query += ` ORDER BY kreirano_u DESC LIMIT ? OFFSET ?`;
+  params.push(limit, offset);
+
+  const { results } = await c.env.REGISTAR_DB.prepare(query).bind(...params).all();
+  
+  // Mapping snake_case (D1) -> camelCase (UI)
+  const mapped = results.map((doc: any) => ({
+    id: doc.id,
+    sefId: doc.sef_id,
+    tip: doc.tip,
+    broj: doc.broj,
+    pibProdavca: doc.pib_prodavca,
+    pibKupca: doc.pib_kupca,
+    status: doc.status,
+    issueDate: doc.kreirano_u ? doc.kreirano_u.split(' ')[0] : '', // Fallback to date only
+    amount: doc.iznos_osnovica,
+    parentId: doc.parent_id,
+    xmlBlob: doc.xml_blob,
+    kreirano_u: doc.kreirano_u
+  }));
+
+  return Response.json(mapped);
+}));
+
 app.get('/api/dokumenti/chain/:id', auth(async (c: RouterContext<Env> & { result?: any }) => {
   const bridge = new D1SyncBridge(c.env.REGISTAR_DB);
   const id = c.result?.pathname?.groups?.id;
   if (!id) return new Response('Missing ID', { status: 400 });
   const chain = await bridge.getDocumentChain(id);
-  return Response.json({ success: true, chain: chain.results });
+  const mappedChain = chain.results.map((doc: any) => ({
+    id: doc.id,
+    sefId: doc.sef_id,
+    tip: doc.tip,
+    broj: doc.broj,
+    pibProdavca: doc.pib_prodavca,
+    pibKupca: doc.pib_kupca,
+    status: doc.status,
+    issueDate: doc.kreirano_u ? doc.kreirano_u.split(' ')[0] : '',
+    parentId: doc.parent_id,
+    xmlBlob: doc.xml_blob,
+    kreirano_u: doc.kreirano_u
+  }));
+
+  return Response.json({ success: true, chain: mappedChain });
 }));
 
 app.get('/api/otpremnice/reconciliation/:id', auth(async (c: RouterContext<Env> & { result?: any }) => {
@@ -603,8 +662,50 @@ app.get('/stats', async ({ req, env }: RouterContext<Env>) => {
   return await env.KLIJENT_BAZA_OBJECT.get(doId).fetch('http://do/stats');
 });
 
-// @ts-ignore
-import nuxtHandler from '../.output/server/index.mjs';
+app.post('/api/otpremnice/reconcile-credit-note/:id', auth(async (c: RouterContext<Env> & { klijentId?: string, result?: any }) => {
+  const otpremnicaId = c.result?.pathname?.groups?.id;
+  if (!otpremnicaId) return new Response('Missing ID', { status: 400 });
+
+  const bridge = new D1SyncBridge(c.env.REGISTAR_DB);
+  
+  // 1. Forenzika
+  const analysis = await bridge.analyzeReconciliation(otpremnicaId);
+  const discrepancies = (analysis.results as any[]).filter(r => r.kvantitativni_manjak > 0 || Math.abs(r.devijacija_gustine) > 0.0001);
+  
+  if (discrepancies.length === 0) return Response.json({ success: false, message: 'Nema anomalija' });
+
+  // 2. Pronađi fakturu
+  const faktura = await c.env.REGISTAR_DB.prepare("SELECT id, sef_id, broj, pib_prodavca, pib_kupca, kreirano_u FROM dokumenti WHERE parent_id = ? AND tip = '380'").bind(otpremnicaId).first() as any;
+  if (!faktura) return Response.json({ error: 'Originalna faktura nije nađena' }, { status: 404 });
+
+  // 3. Generiši 381
+  const creditNoteId = `CN-${Date.now()}`;
+  const xmlPayload = SefUblBuilder.buildCreditNote({
+    broj: `ODOBRENJE-${faktura.broj}`,
+    pibProdavca: faktura.pib_prodavca,
+    pibKupca: faktura.pib_kupca,
+    originalnaFakturaBroj: faktura.broj,
+    originalnaFakturaSefId: faktura.sef_id,
+    originalniDatum: faktura.kreirano_u.split(' ')[0],
+    stavke: discrepancies.map((d, i) => ({
+      id: (i + 1).toString(),
+      naziv: d.artikal_naziv,
+      manjakKolicina: d.kvantitativni_manjak,
+      jedinicaMere: 'TNE', // default
+      cena: 120, // default
+      porezStopa: 20,
+      porezKategorija: 'S'
+    }))
+  });
+
+  await bridge.upsertDocument({
+    id: creditNoteId, tip: '381', broj: `ODOBRENJE-${faktura.broj}`, pibProdavca: faktura.pib_prodavca, pibKupca: faktura.pib_kupca,
+    status: 'SENT', parentId: faktura.id, xmlBlob: xmlPayload
+  });
+
+  await bridge.logEvent(creditNoteId, 'SENT', 'Automatsko knjižno odobrenje');
+  return Response.json({ success: true, brojDokumenta: `ODOBRENJE-${faktura.broj}` });
+}));
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext) {
