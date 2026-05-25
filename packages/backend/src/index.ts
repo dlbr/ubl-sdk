@@ -197,8 +197,15 @@ app.get('/api/dashboard/logs', internalOnly, async (c: RouterContext<Env> & { kl
 app.get('/api/fakture', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
   const page = parseInt(url.searchParams.get('page') || '1');
-  const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
-  return Response.json(await kDO.getFakture(page));
+  const limit = 20;
+  const offset = (page - 1) * limit;
+  const cistiPib = c.klijentId!.replace('klijent_', '');
+
+  const { results } = await c.env.REGISTAR_DB.prepare(
+    "SELECT * FROM dokumenti WHERE pib_prodavca = ? OR pib_kupca = ? ORDER BY kreirano_u DESC LIMIT ? OFFSET ?"
+  ).bind(cistiPib, cistiPib, limit, offset).all();
+
+  return Response.json({ success: true, fakture: results });
 });
 
 app.get('/api/webhook-setup', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
