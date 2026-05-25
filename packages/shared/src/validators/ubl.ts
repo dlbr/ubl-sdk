@@ -26,12 +26,26 @@ export const SefBuyerReferenceSchema = v.pipe(
 );
 
 // 3. Poreske stavke (Tax Subtotal)
-export const TaxSubtotalSchema = v.object({
-  taxableAmount: v.number([v.minValue(0, '[FATAL] Osnovica ne sme biti negativna.')]),
-  taxAmount: v.number([v.minValue(0, '[FATAL] Iznos poreza ne sme biti negativan.')]),
-  taxCategoryCode: v.picklist(['S', 'AE', 'Z', 'E'], '[FATAL] Poreska kategorija mora biti S, AE, Z ili E.'),
-  taxExemptionReason: v.optional(v.string())
-});
+export const SefTaxCategoryPicklist = v.picklist(
+  ['S', 'AE', 'Z', 'E', 'R', 'O', 'OE', 'SS', 'N'],
+  '[FATAL] Nevalidna poreska kategorija. Vertex dopušta isključivo oznake: S, AE, Z, E, R, O, OE, SS, N.'
+);
+
+export const TaxSubtotalSchema = v.pipe(
+  v.object({
+    taxableAmount: v.number([v.minValue(0, '[FATAL] Osnovica ne sme biti negativna.')]),
+    taxAmount: v.number([v.minValue(0, '[FATAL] Iznos poreza ne sme biti negativan.')]),
+    taxCategoryCode: SefTaxCategoryPicklist,
+    exemptionReasonCode: v.optional(v.string()),
+    taxExemptionReason: v.optional(v.string())
+  }),
+  v.check((input) => {
+    if (input.taxCategoryCode !== 'S') {
+      return !!input.exemptionReasonCode && input.exemptionReasonCode.trim() !== '';
+    }
+    return true;
+  }, '[FATAL] Za sve poreske kategorije osim standardne (S), obavezno je uneti šifru zakonskog osnova (exemptionReasonCode).')
+);
 
 export const TaxTotalSchema = v.object({
   currencyCode: v.string([v.length(3)]),
