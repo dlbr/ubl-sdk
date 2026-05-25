@@ -129,9 +129,19 @@ export const SefAdvancePaymentReferenceSchema = v.object({
   value: v.pipe(v.string(), v.minLength(1, '[FATAL] Broj avansnog računa ne sme biti prazan.'), v.maxLength(50, '[FATAL] Broj avansnog računa ne sme biti duži od 50 karaktera.'))
 });
 
+// 15. Šema za univerzalni Vertex rutirajući omotač prema pravilu [VRBL-CORE-3]
+export const SefVrblRoutingDetailsSchema = v.object({
+  sender: v.pipe(v.string(), v.regex(/^RS\d{9}$/, '[FATAL] Vertex VRBL-CORE-3: Sender u rutiranju mora biti PIB prodavca sa prefiksom "RS" (npr. RS113398540).')),
+  receiver: v.literal('GENERIC_RS_EINVOICE_1p0p0', '[FATAL] Vertex VRBL-CORE-3: Receiver string mora biti striktno postavljen na "GENERIC_RS_EINVOICE_1p0p0".')
+});
+
 // 🛡️ KROVNI TITANIJUMSKI VALIDATOR (Srbija Profile)
 export const SefInvoiceSchema = v.pipe(
   v.object({
+    customizationId: v.literal('urn:vertexinc:vrbl:billing:1', '[FATAL] VRBL-CORE-4: CustomizationID mora biti "urn:vertexinc:vrbl:billing:1".'),
+    profileId: v.literal('urn:vertexinc:vrbl:billing:1', '[FATAL] VRBL-CORE-5: ProfileID mora biti "urn:vertexinc:vrbl:billing:1".'),
+    routingDetails: SefVrblRoutingDetailsSchema,
+
     invoiceTypeCode: v.picklist(['380', '381', '383', '386'], '[FATAL] Nevalidan InvoiceTypeCode (Dozvoljeni: 380, 381, 383, 386).'),
     issueDate: v.string([v.isoDate('[FATAL] Nevalidan format datuma izdavanja.')]),
     paymentDueDate: v.string([v.isoDate('[FATAL] Nevalidan format roka plaćanja.')]),
@@ -154,19 +164,10 @@ export const SefInvoiceSchema = v.pipe(
     customerElectronicAddress: SefCustomerEndpointSchema,
     customerPartyTaxScheme: SefCustomerPartyTaxSchemeSchema,
     customerPartyLegalEntity: SefCustomerPartyLegalEntitySchema,
-    // 🟢 Novi opcioni niz za prebijanje avansa prema Vertex specifikaciji
     advancePaymentReferences: v.optional(v.array(SefAdvancePaymentReferenceSchema))
   }),
 
   v.check((input) => new Date(input.issueDate) <= new Date(input.paymentDueDate), '[FATAL] Rok plaćanja ne može biti pre datuma izdavanja fakture.'),
-
-  // 🎯 VERTEX [VRBL-RS-1p0p0-16] USLOVNA VALIDACIJA ZA AVANSE:
-  v.check((input) => {
-    if (input.advancePaymentReferences && input.advancePaymentReferences.length > 0) {
-      return input.invoiceTypeCode === '380';
-    }
-    return true;
-  }, '[FATAL] Strukturalna greška: Reference prebijanja avansa (OriginatorDocumentReference) se mogu nalaziti isključivo unutar Konačne Fakture (tip 380).'),
 
   v.check((input) => {
     if (input.invoiceTypeCode === '386') {
@@ -238,7 +239,12 @@ export const SefInvoiceSchema = v.pipe(
       return false;
     }
     return true;
-  }, '[FATAL] Neslaganje poreskog osnova: Avansni računi (386) moraju koristiti kod 432, dok standardne fakture (380) koriste 35, 3 ili 0.')
+  }, '[FATAL] Neslaganje poreskog osnova: Avansni računi (386) moraju koristiti kod 432, dok standardne fakture (380) koriste 35, 3 ili 0.'),
+
+  v.check((input) => {
+    const cisceniSenderPib = input.routingDetails.sender.replace(/^RS/, '');
+    return cisceniSenderPib === input.supplierPib;
+  }, '[FATAL] Poreski nesklad: PIB unutar routingDetails.sender mora odgovarati biznis PIB-u prodavca (supplierPib).')
 );
 
 export type SefInvoiceInput = v.InferOutput<typeof SefInvoiceSchema>;
