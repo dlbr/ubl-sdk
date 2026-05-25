@@ -48,3 +48,7 @@ max_batch_timeout = 30
 queue = "eotpremnice-reconciliation-queue"
 max_batch_size = 10
 max_batch_timeout = 5
+
+# 🟢 Rešenje za esbuild monorepo rezoluciju eksternih SDK-ova
+[build]
+config = { external = ["@dlbr/ubl-sdk"] }
