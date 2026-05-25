@@ -162,6 +162,30 @@ export const SefInvoiceLineSchema = v.object({
   })
 });
 
+// 17. Šema za popuste i troškove (AllowanceCharge) prema Vertex specifikaciji
+export const SefAllowanceChargeSchema = v.pipe(
+  v.object({
+    chargeIndicator: v.boolean('[FATAL] chargeIndicator mora biti true (trošak) ili false (popust).'),
+    amount: v.number([v.minValue(0.01, '[FATAL] Iznos AllowanceCharge mora biti veći od nule.')]),
+    baseAmount: v.optional(v.number([v.minValue(0)])),
+    multiplierFactorNumeric: v.optional(v.number([v.minValue(0), v.maxValue(100)])),
+    allowanceChargeReasonCode: v.optional(v.string([v.maxLength(10)])),
+    allowanceChargeReason: v.optional(v.string([v.minLength(1)])),
+    taxCategory: v.object({
+      taxCategoryCode: SefTaxCategoryPicklist,
+      taxCategoryPercent: v.number([v.minValue(0), v.maxValue(100)]),
+      taxSchemeId: v.literal('VAT', '[FATAL] TaxScheme na nivou stavke mora biti "VAT".')
+    })
+  }),
+  v.check((input) => {
+    if (input.baseAmount !== undefined && input.multiplierFactorNumeric !== undefined) {
+      const ocekivaniIznos = Math.round((input.baseAmount * input.multiplierFactorNumeric / 100) * 100) / 100;
+      return Math.abs(input.amount - ocekivaniIznos) < 0.01;
+    }
+    return true;
+  }, '[FATAL] Aritmetička greška: Iznos (amount) unutar AllowanceCharge se ne poklapa sa proračunom na osnovu baze i procenta.')
+);
+
 // 🛡️ KROVNI TITANIJUMSKI VALIDATOR (Srbija Profile)
 export const SefInvoiceSchema = v.pipe(
   v.object({
@@ -176,6 +200,13 @@ export const SefInvoiceSchema = v.pipe(
     documentCurrencyCode: v.string([v.length(3)]),
     taxCurrencyCode: v.string([v.length(3)]),
     payableAmount: v.number([v.minValue(0)]),
+    lineExtensionAmount: v.number([v.minValue(0)]),
+    taxExclusiveAmount: v.number([v.minValue(0)]),
+    taxInclusiveAmount: v.number([v.minValue(0)]),
+    allowanceTotalAmount: v.number([v.minValue(0)]),
+    chargeTotalAmount: v.number([v.minValue(0)]),
+    prepaidAmount: v.optional(v.number([v.minValue(0)])),
+    
     supplierPib: PibSchema,
     customerPib: v.string([v.regex(/^\d{9,13}$/, '[FATAL] PIB ili JMBG kupca mora imati 9 ili 13 cifara.')]),
     customerJbkjs: v.optional(v.pipe(v.string(), JbkjsSchema)),
@@ -192,10 +223,7 @@ export const SefInvoiceSchema = v.pipe(
     customerPartyTaxScheme: SefCustomerPartyTaxSchemeSchema,
     customerPartyLegalEntity: SefCustomerPartyLegalEntitySchema,
     advancePaymentReferences: v.optional(v.array(SefAdvancePaymentReferenceSchema)),
-    lineExtensionAmount: v.number([v.minValue(0)]),
-    taxExclusiveAmount: v.number([v.minValue(0)]),
-    taxInclusiveAmount: v.number([v.minValue(0)]),
-    prepaidAmount: v.optional(v.number([v.minValue(0)])),
+    allowanceCharges: v.optional(v.array(SefAllowanceChargeSchema)),
     invoiceLines: v.array(SefInvoiceLineSchema, [v.minLength(1, '[FATAL] Faktura mora sadržati najmanje jednu stavku (InvoiceLine).')])
   }),
 
@@ -311,7 +339,17 @@ export const SefInvoiceSchema = v.pipe(
   v.check((input) => {
     const cisceniSenderPib = input.routingDetails.sender.replace(/^RS/, '');
     return cisceniSenderPib === input.supplierPib;
-  }, '[FATAL] Poreski nesklad: PIB unutar routingDetails.sender mora odgovarati biznis PIB-u prodavca (supplierPib).')
+  }, '[FATAL] Poreski nesklad: PIB unutar routingDetails.sender mora odgovarati biznis PIB-u prodavca (supplierPib).'),
+
+  v.check((input) => {
+    const sumaPopusta = input.allowanceCharges ? input.allowanceCharges.filter(ac => !ac.chargeIndicator).reduce((acc, ac) => acc + ac.amount, 0) : 0;
+    return Math.abs((input.allowanceTotalAmount || 0) - sumaPopusta) < 0.01;
+  }, '[FATAL] Nesklad u totalima: Krovno polje allowanceTotalAmount mora biti tačan zbir svih detaljnih stavki popusta.'),
+
+  v.check((input) => {
+    const sumaTroskova = input.allowanceCharges ? input.allowanceCharges.filter(ac => ac.chargeIndicator).reduce((acc, ac) => acc + ac.amount, 0) : 0;
+    return Math.abs((input.chargeTotalAmount || 0) - sumaTroskova) < 0.01;
+  }, '[FATAL] Nesklad u totalima: Krovno polje chargeTotalAmount mora biti tačan zbir svih detaljnih stavki dodatnih troškova.')
 );
 
 export type SefInvoiceInput = v.InferOutput<typeof SefInvoiceSchema>;
