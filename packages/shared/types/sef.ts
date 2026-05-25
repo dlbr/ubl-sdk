@@ -159,21 +159,31 @@ export const SefWebhookSchema = v.object({
 
 export type PretplatnickiPlan = 'Micro' | 'Standard' | 'Logistics_Pro';
 
-export const DOZVOLE_PLAN_OVA = {
+export interface PlanDozvole {
+  efakture: boolean;
+  eotpremnice: boolean;
+  limit_efakture: number;
+  limit_eotpremnice: number;
+}
+
+export const DOZVOLE_PLAN_OVA: Record<PretplatnickiPlan, PlanDozvole> = {
   Micro: {
     efakture: true,
     eotpremnice: false,
-    mesecni_limit: 50
+    limit_efakture: 50,
+    limit_eotpremnice: 0
   },
   Standard: {
     efakture: true,
     eotpremnice: true,
-    mesecni_limit: 500
+    limit_efakture: 500,
+    limit_eotpremnice: 300
   },
   Logistics_Pro: {
     efakture: true,
     eotpremnice: true,
-    mesecni_limit: 5000
+    limit_efakture: 5000,
+    limit_eotpremnice: 3000
   }
 };
 
