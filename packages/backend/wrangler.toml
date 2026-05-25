@@ -43,12 +43,41 @@ queue = "eotpremnice-reconciliation-queue"
 name = "sef-bridge-backend"
 workers_dev = false
 
-[[queues.consumers]]
+[env.production.durable_objects]
+bindings = [
+  { name = "KLIJENT_BAZA_OBJECT", class_name = "KlijentBaza" }
+]
+
+[[env.production.d1_databases]]
+binding = "REGISTAR_DB"
+database_name = "sef_centralni_registar"
+database_id = "189e8330-f1b4-4172-a9b0-27271acb7847"
+
+[[env.production.kv_namespaces]]
+binding = "PORESKI_KV"
+id = "b688022ffcc247d4843b97d70b76b719"
+
+[[env.production.r2_buckets]]
+binding = "SEF_UBL_ARHIVA"
+bucket_name = "prod-sef-ubl-arhiva-10godina"
+
+[env.production.ai]
+binding = "AI"
+
+[[env.production.queues.producers]]
+binding = "SEF_QUEUE"
+queue = "sef-compliance-queue"
+
+[[env.production.queues.producers]]
+binding = "OTPREMNICA_QUEUE"
+queue = "eotpremnice-reconciliation-queue"
+
+[[env.production.queues.consumers]]
 queue = "sef-compliance-queue"
 max_batch_size = 10
 max_batch_timeout = 30
 
-[[queues.consumers]]
+[[env.production.queues.consumers]]
 queue = "eotpremnice-reconciliation-queue"
 max_batch_size = 10
 max_batch_timeout = 5
