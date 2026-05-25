@@ -11,6 +11,47 @@
       </div>
     </div>
 
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+      <div class="bg-gray-850 p-5 rounded-xl border border-gray-750 flex items-center justify-between shadow-lg">
+        <div>
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Ukupno dokumenata</p>
+          <h3 class="text-2xl font-bold mt-2 font-mono text-gray-100">
+            {{ pending ? '...' : response?.stats?.ukupno_dokumenata }}
+          </h3>
+          <p class="text-xs text-gray-500 mt-1">Sinhronizovano u lokalni D1</p>
+        </div>
+        <div class="w-12 h-12 rounded-lg bg-gray-800 border border-gray-755 flex items-center justify-center text-xl shadow-inner">
+          🗂️
+        </div>
+      </div>
+
+      <div class="bg-gray-850 p-5 rounded-xl border border-gray-750 flex items-center justify-between shadow-lg">
+        <div>
+          <p class="text-xs font-semibold text-blue-400 uppercase tracking-wider">Potraživanja u najavi</p>
+          <h3 class="text-2xl font-bold mt-2 font-mono text-blue-400">
+            {{ pending ? '...' : formatirajIznos(response?.stats?.potrazivanja_u_najavi) }} <span class="text-xs font-sans">RSD</span>
+          </h3>
+          <p class="text-xs text-gray-500 mt-1">Dokumenti u statusu "Poslato"</p>
+        </div>
+        <div class="w-12 h-12 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-xl shadow-inner">
+          ⏳
+        </div>
+      </div>
+
+      <div class="bg-gray-850 p-5 rounded-xl border border-gray-750 flex items-center justify-between shadow-lg">
+        <div>
+          <p class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Realizovan prihod</p>
+          <h3 class="text-2xl font-bold mt-2 font-mono text-emerald-400">
+            {{ pending ? '...' : formatirajIznos(response?.stats?.realizovan_prihod) }} <span class="text-xs font-sans">RSD</span>
+          </h3>
+          <p class="text-xs text-gray-500 mt-1">Dokumenti uspešno odobreni</p>
+        </div>
+        <div class="w-12 h-12 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-xl shadow-inner">
+          💰
+        </div>
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
       <div class="relative">
         <input 

@@ -194,18 +194,47 @@ app.get('/api/dashboard/logs', internalOnly, async (c: RouterContext<Env> & { kl
   return Response.json(await kDO.getLogs());
 });
 
-app.get('/api/fakture', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
+app.get('/api/dokumenti/izlazni', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
   const url = new URL(c.req.url);
-  const page = parseInt(url.searchParams.get('page') || '1');
-  const limit = 20;
+  const page = parseInt(url.searchParams.get('page') || '1', 10);
+  const limit = parseInt(url.searchParams.get('limit') || '10', 10);
   const offset = (page - 1) * limit;
   const cistiPib = c.klijentId!.replace('klijent_', '');
 
-  const { results } = await c.env.REGISTAR_DB.prepare(
-    "SELECT * FROM dokumenti WHERE pib_prodavca = ? OR pib_kupca = ? ORDER BY kreirano_u DESC LIMIT ? OFFSET ?"
-  ).bind(cistiPib, cistiPib, limit, offset).all();
+  // 1. Paginirani podaci
+  const query = "SELECT * FROM sef_fakture WHERE klijent_pib = ? ORDER BY datum_slanja DESC LIMIT ? OFFSET ?";
+  const { results: fakture } = await c.env.REGISTAR_DB.prepare(query).bind(cistiPib, limit, offset).all();
 
-  return Response.json({ success: true, fakture: results });
+  // 2. KPI Statistika
+  const kpi = await c.env.REGISTAR_DB.prepare(`
+    SELECT 
+      COUNT(*) as ukupno_komada,
+      SUM(CASE WHEN status IN ('Sent', 'Poslato') THEN iznos_sa_pdv ELSE 0 END) as saldo_poslato,
+      SUM(CASE WHEN status IN ('Approved', 'CONFIRMED') THEN iznos_sa_pdv ELSE 0 END) as saldo_odobreno
+    FROM sef_fakture
+    WHERE klijent_pib = ?
+  `).bind(cistiPib).first<{ ukupno_komada: number; saldo_poslato: number; saldo_odobreno: number }>();
+
+  // 3. Ukupan broj za paginaciju
+  const countRes = await c.env.REGISTAR_DB.prepare("SELECT COUNT(*) as c FROM sef_fakture WHERE klijent_pib = ?").bind(cistiPib).first<{ c: number }>();
+  const totalCount = countRes?.c || 0;
+
+  return Response.json({
+    success: true,
+    data: fakture,
+    stats: {
+      ukupno_dokumenata: kpi?.ukupno_komada || 0,
+      potrazivanja_u_najavi: kpi?.saldo_poslato || 0,
+      realizovan_prihod: kpi?.saldo_odobreno || 0
+    },
+    meta: {
+      total_items: totalCount,
+      total_pages: Math.ceil(totalCount / limit),
+      current_page: page,
+      has_next: offset + limit < totalCount,
+      has_prev: page > 1
+    }
+  });
 });
 
 app.get('/api/debug/dump', internalOnly, async (c: RouterContext<Env>) => {
