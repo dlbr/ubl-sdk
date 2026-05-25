@@ -1,13 +1,14 @@
 import * as v from 'valibot';
 
 // 1. Mikro-šeme za identifikaciju (PIB i JBKJS)
-export const PibSchema = v.string([
-  v.regex(/^\d{9}$/, '[FATAL] PIB mora sadržati tačno 9 numeričkih karaktera.')
-]);
+export const PibSchema = v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] PIB mora sadržati tačno 9 numeričkih karaktera.'));
+export const JbkjsSchema = v.pipe(v.string(), v.regex(/^\d{5}$/, '[FATAL] JBKJS mora sadržati tačno 5 numeričkih karaktera za budžetske korisnike.'));
 
-export const JbkjsSchema = v.string([
-  v.regex(/^\d{5}$/, '[FATAL] JBKJS mora sadržati tačno 5 numeričkih karaktera za budžetske korisnike.')
-]);
+// 1. Definišemo 4 dozvoljene UNTDID 2005 šifre za Srbiju
+export const SefInvoicePeriodDescriptionCode = v.picklist(
+  ['35', '432', '3', '0'],
+  '[FATAL] Nevalidan Invoice Period Description Code. Dozvoljene vrednosti: 35, 432, 3, 0.'
+);
 
 // 2. Šema za pojedinačnu stavku poreza (Tax Subtotal)
 export const TaxSubtotalSchema = v.pipe(
@@ -25,18 +26,18 @@ export const TaxSubtotalSchema = v.pipe(
   }, '[FATAL] Za Reverse Charge (AE) obavezno je navesti zakonski osnov (TaxExemptionReason).')
 );
 
+// 2.1 Šema za pojedinačnu referencu na eOtpremnicu
+export const DespatchDocumentReferenceSchema = v.object({
+  id: v.pipe(v.string(), v.minLength(1, '[FATAL] Identifikator otpremnice (ID) ne sme biti prazan.'), v.maxLength(50, '[FATAL] ID otpremnice ne sme biti duži od 50 karaktera.')),
+  issueDate: v.optional(v.string([v.isoDate('[FATAL] Datum otpremnice mora biti u ispravnom ISO formatu.')]))
+});
+
 // 3. Glavna poreska šema (Tax Total)
 export const TaxTotalSchema = v.object({
   currencyCode: v.string([v.length(3, '[FATAL] Oznaka valute mora imati tačno 3 slova.')]),
   taxAmount: v.number([v.minValue(0)]),
   subtotals: v.array(TaxSubtotalSchema)
 });
-
-// 1. Definišemo 4 dozvoljene UNTDID 2005 šifre za Srbiju
-export const SefInvoicePeriodDescriptionCode = v.picklist(
-  ['35', '432', '3', '0'],
-  '[FATAL] Nevalidan Invoice Period Description Code. Dozvoljene vrednosti: 35, 432, 3, 0.'
-);
 
 // 4. 🛡️ TITANIJUMSKA ŠEMA ZA SEF INVOICE (Srbija Profile via Vertex)
 export const SefInvoiceSchema = v.pipe(
@@ -49,13 +50,12 @@ export const SefInvoiceSchema = v.pipe(
     taxCurrencyCode: v.string([v.length(3)]),
     payableAmount: v.number([v.minValue(0, '[FATAL] Krajnji iznos (PayableAmount) ne sme biti negativan.')]),
     billingReference: v.optional(v.string()), 
-    // 🟢 Novi element prema Vertexu: Buyer Reference (Referenca kupca)
     buyerReference: v.optional(v.pipe(v.string(), v.maxLength(50, '[FATAL] BuyerReference ne sme biti duži od 50 karaktera.'))),
-    supplierPib: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] PIB mora sadržati tačno 9 numeričkih karaktera.')),
-    customerPib: v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] PIB mora sadržati tačno 9 numeričkih karaktera.')),
-    customerJbkjs: v.optional(v.pipe(v.string(), v.regex(/^\d{5}$/, '[FATAL] JBKJS mora sadržati tačno 5 numeričkih karaktera za budžetske korisnike.'))),
-    // 🟢 Novi obavezni element prema Vertexu: Invoicing Period Description Code
+    supplierPib: v.pipe(v.string(), PibSchema),
+    customerPib: v.pipe(v.string(), PibSchema),
+    customerJbkjs: v.optional(v.pipe(v.string(), JbkjsSchema)),
     invoicingPeriodCode: SefInvoicePeriodDescriptionCode,
+    despatchDocumentReferences: v.optional(v.array(DespatchDocumentReferenceSchema)),
     taxTotals: v.array(TaxTotalSchema, [v.minLength(1, '[FATAL] Faktura mora imati bar jedan TaxTotal blok.')])
   }),
 
@@ -81,6 +81,14 @@ export const SefInvoiceSchema = v.pipe(
     }
     return true;
   }, '[FATAL] Za budžetske korisnike (kupce sa JBKJS brojem), obavezno je uneti BuyerReference (broj ugovora/narudžbenice) ili BillingReference.'),
+
+  // 🎯 VERTEX / SCHEMATRON PRAVILO: Logističko uvezivanje za fakture zasnovane na prometu (35)
+  v.check((input) => {
+    if (input.invoiceTypeCode === '380' && input.invoicingPeriodCode === '35') {
+      return !!input.despatchDocumentReferences && input.despatchDocumentReferences.length > 0;
+    }
+    return true;
+  }, '[FATAL] Komercijalna faktura (380) zasnovana na prometu (kod 35) mora sadržati bar jednu referencu na eOtpremnicu (DespatchDocumentReference).'),
 
   // 🎯 VERTEX / SCHEMATRON PRAVILO: Valutna konzistentnost za domaći promet
   v.check((input) => {
@@ -112,7 +120,5 @@ export const SefInvoiceSchema = v.pipe(
     return true;
   }, '[FATAL] Neslaganje poreskog osnova: Avansni računi (386) moraju koristiti kod 432, dok standardne fakture (380) koriste 35, 3 ili 0.')
 );
-
-
 
 export type SefInvoiceInput = v.InferOutput<typeof SefInvoiceSchema>;
