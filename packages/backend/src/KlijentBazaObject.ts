@@ -37,10 +37,15 @@ export class KlijentBaza extends DurableObject<Env> {
     });
 
     this.app.get('/stats', async () => {
-      const stats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM fakture GROUP BY status`).toArray();
-      const purchase_stats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM sef_purchase_invoices GROUP BY status`).toArray();
-      const config = this.sql.exec(`SELECT environment FROM konfiguracija WHERE id = 1`).one() as any;
-      return Response.json({ stats, purchase_stats, environment: config?.environment || 'sandbox', health: 1 });
+      try {
+        const stats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM fakture GROUP BY status`).toArray();
+        const purchase_stats = this.sql.exec(`SELECT status, COUNT(*) as broj FROM sef_purchase_invoices GROUP BY status`).toArray();
+        const config = this.sql.exec(`SELECT environment FROM konfiguracija WHERE id = 1`).one() as any;
+        return Response.json({ stats, purchase_stats, environment: config?.environment || 'sandbox', health: 1 });
+      } catch (e) {
+        console.error('[Stats Error]', e);
+        return Response.json({ error: 'DB_QUERY_FAILED', details: String(e) }, { status: 500 });
+      }
     });
 
     this.app.post('/config', async ({ req }: RouterContext<Env>) => {
