@@ -367,24 +367,37 @@ export class KlijentBaza extends DurableObject<Env> {
   }
 
   private async processStatusUpdate(sefId: string, noviStatus: string) {
+    const config = this.sql.exec(`SELECT sef_api_key, environment FROM konfiguracija WHERE id = 1`).one() as any;
+    const baseUrl = this.env.SEF_API_URL || (config.environment === 'production' ? 'https://efaktura.mfin.gov.rs' : 'https://demoefaktura.mfin.gov.rs');
+    const sefClient = new SefClient({ apiKey: new Redacted(config.sef_api_key).get(), environment: config.environment, baseUrl });
+
     let internalId: string | undefined;
+    
+    // 1. Ažuriraj lokalnu bazu
     this.ctx.storage.transactionSync(() => {
       const rows = this.sql.exec(`SELECT internal_id, broj_fakture, status FROM fakture WHERE sef_id = ?`, sefId).toArray();
       const f = rows[0] as any;
       if (f) {
         internalId = f.internal_id;
-        if (noviStatus === 'Rejected' || noviStatus === 'Canceled') {
-          const alreadyRefunded = this.sql.exec(`SELECT COUNT(*) as c FROM billing_ledger WHERE faktura_id = ? AND tip_transakcije = 'REFUNDACIJA'`, f.internal_id).one() as { c: number };
-          if (alreadyRefunded.c === 0) {
-            this.sql.exec(`INSERT INTO billing_ledger (id, faktura_id, broj_fakture, tip_transakcije, iznos_kredita, beleska) VALUES (?, ?, ?, 'REFUNDACIJA', 1, 'SEF Rejected')`, 
-              crypto.randomUUID(), f.internal_id, f.broj_fakture);
-          }
-        }
         this.sql.exec(`UPDATE fakture SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE internal_id = ?`, noviStatus, f.internal_id);
       }
     });
-    // UPDATE D1 (SSoT)
-    await this.env.REGISTAR_DB.prepare(`UPDATE dokumenti SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE id = ? OR sef_id = ?`).bind(noviStatus, internalId || sefId, sefId).run();
+
+    // 2. Proveri da li je u centralnoj bazi (REGISTAR_DB)
+    const existing = await this.env.REGISTAR_DB.prepare("SELECT id FROM dokumenti WHERE sef_id = ?").bind(sefId).first();
+    
+    if (existing) {
+      await this.env.REGISTAR_DB.prepare(`UPDATE dokumenti SET status = ?, azurirano_u = CURRENT_TIMESTAMP WHERE sef_id = ?`).bind(noviStatus, sefId).run();
+    } else {
+      // Povuci detalje ako je potpuno nov dokument
+      const details = await sefClient.getSalesInvoiceDetails(parseInt(sefId));
+      if (details) {
+        await this.env.REGISTAR_DB.prepare(`
+          INSERT INTO dokumenti (id, sef_id, tip, broj, pib_prodavca, pib_kupca, status, azurirano_u)
+          VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `).bind(crypto.randomUUID(), sefId, '380', details.InvoiceNumber, '000000000', '000000000', noviStatus).run();
+      }
+    }
   }
 
   private async checkLimit(noviBroj: number, invoiceData?: any, testNow?: string | null): Promise<{ moze: boolean, error?: any }> {
