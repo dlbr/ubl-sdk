@@ -13,20 +13,19 @@ jobs:
     name: 🛡️ Verify & Compliance
     runs-on: ubuntu-latest
     container:
-      image: alpine:3.19
+      image: alpine:3.21
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: ⛰️ Instalacija okruženja (Git, Node.js v22+, pnpm)
+      - name: ⛰️ Instalacija okruženja
         run: |
-          apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main/ \
-                           --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community/ \
-                           git nodejs npm
+          apk add --no-cache git nodejs npm
           node -v
           npm -v
           npm install -g pnpm
           pnpm -v
+          pnpm config set store-dir ~/.pnpm-store
 
       - name: 🗄️ Keširanje pnpm store
         uses: actions/cache@v4
@@ -37,9 +36,7 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: 📦 Instalacija i Build
-        run: |
-          pnpm config set store-dir ~/.pnpm-store
-          pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: 🧪 Pokretanje Testova
         env:
@@ -52,21 +49,20 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     container:
-      image: alpine:3.19
+      image: alpine:3.21
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: ⛰️ Instalacija okruženja (Git, Node.js v22+, pnpm)
+      - name: ⛰️ Instalacija okruženja
         run: |
-          apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main/ \
-                           --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community/ \
-                           git nodejs npm
+          apk add --no-cache git nodejs npm
           node -v
           npm -v
           npm install -g pnpm
           pnpm -v
+          pnpm config set store-dir ~/.pnpm-store
 
       - name: 🗄️ Keširanje pnpm store
         uses: actions/cache@v4
@@ -77,9 +73,7 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: 📦 Instalacija
-        run: |
-          pnpm config set store-dir ~/.pnpm-store
-          pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: 🌤️ Deploy Backend (Preview)
         if: github.event_name == 'pull_request'
@@ -102,21 +96,20 @@ jobs:
     needs: deploy-backend
     runs-on: ubuntu-latest
     container:
-      image: alpine:3.19
+      image: alpine:3.21
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: ⛰️ Instalacija okruženja (Git, Node.js v22+, pnpm)
+      - name: ⛰️ Instalacija okruženja
         run: |
-          apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main/ \
-                           --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community/ \
-                           git nodejs npm
+          apk add --no-cache git nodejs npm
           node -v
           npm -v
           npm install -g pnpm
           pnpm -v
+          pnpm config set store-dir ~/.pnpm-store
 
       - name: 🗄️ Keširanje pnpm store
         uses: actions/cache@v4
@@ -127,9 +120,7 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: 📦 Instalacija
-        run: |
-          pnpm config set store-dir ~/.pnpm-store
-          pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: 🏗️ Nuxt Production Build
         run: pnpm build:frontend
