@@ -76,6 +76,14 @@ export const SefPartyLegalEntitySchema = v.object({
   companySchemeId: v.literal('RS:MB', '[FATAL] schemeID za CompanyID unutar PartyLegalEntity mora biti "RS:MB".'),
   companyId: v.pipe(v.string(), v.regex(/^\d{8}$/, '[FATAL] Matični broj firme (CompanyID) unutar PartyLegalEntity mora imati tačno 8 numeričkih karaktera.'))
 });
+// 10. Šema za elektronsku adresu kupca (EndpointID) prema pravilu [VRBL-RS-1p0p0-10]
+export const SefCustomerEndpointSchema = v.object({
+  schemeId: v.literal('9948', '[FATAL] schemeID za elektronsku adresu kupca (Buyer Endpoint) mora biti "9948".'),
+  value: v.union([
+    v.pipe(v.string(), v.regex(/^\d{9}$/, '[FATAL] PIB kupca mora imati tačno 9 cifara.')),
+    v.pipe(v.string(), v.regex(/^\d{13}$/, '[FATAL] JMBG kupca mora imati tačno 13 cifara.'))
+  ], '[FATAL] Elektronska adresa kupca (EndpointID) mora biti ili 9-cifreni PIB ili 13-cifreni JMBG.')
+});
 
 // 🛡️ KROVNI TITANIJUMSKI VALIDATOR (Srbija Profile)
 export const SefInvoiceSchema = v.pipe(
@@ -88,7 +96,7 @@ export const SefInvoiceSchema = v.pipe(
     taxCurrencyCode: v.string([v.length(3)]),
     payableAmount: v.number([v.minValue(0)]),
     supplierPib: PibSchema,
-    customerPib: PibSchema,
+    customerPib: v.string([v.regex(/^\d{9,13}$/, '[FATAL] PIB ili JMBG kupca mora imati 9 ili 13 cifara.')]),
     customerJbkjs: v.optional(v.pipe(v.string(), JbkjsSchema)),
     invoicingPeriodCode: v.picklist(['35', '432', '3', '0'], '[FATAL] Nevalidan Invoicing Period Code.'),
     buyerReference: SefBuyerReferenceSchema,
@@ -98,8 +106,11 @@ export const SefInvoiceSchema = v.pipe(
     supplierElectronicAddress: SefEndpointIdSchema,
     supplierPartyIdentification: SefPartyIdentificationSchema,
     supplierPartyTaxScheme: SefPartyTaxSchemeSchema,
-    supplierPartyLegalEntity: SefPartyLegalEntitySchema
+    supplierPartyLegalEntity: SefPartyLegalEntitySchema,
+    // 🟢 Novi obavezni element za kupca prema Vertex pravilu
+    customerElectronicAddress: SefCustomerEndpointSchema
   }),
+
 
   v.check((input) => new Date(input.issueDate) <= new Date(input.paymentDueDate), '[FATAL] Rok plaćanja ne može biti pre datuma izdavanja fakture.'),
 
@@ -138,6 +149,11 @@ export const SefInvoiceSchema = v.pipe(
   v.check((input) => {
     return input.supplierPartyIdentification.value === input.supplierPib;
   }, '[FATAL] Poreski nesklad: Vrednost u supplierPartyIdentification (Supplier ID) mora biti identična glavnom PIB-u prodavca.'),
+
+  // 🎯 VERTEX / SCHEMATRON PRAVILO: ZAVISNA VALIDACIJA ZA CUSTOMER ENDPOINT
+  v.check((input) => {
+    return input.customerElectronicAddress.value === input.customerPib;
+  }, '[FATAL] Poreski nesklad: Vrednost u customerElectronicAddress mora biti identična PIB-u ili JMBG-u kupca.'),
 
   v.check((input) => {
     return input.supplierPartyTaxScheme.companyId === input.supplierPib;
