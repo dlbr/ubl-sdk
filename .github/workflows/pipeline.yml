@@ -1,4 +1,4 @@
-name: 🚀 Titanijumski Štit - Monorepo Deploy
+name: Monorepo Deploy
 
 on:
   push:
@@ -114,13 +114,13 @@ jobs:
       - name: 🏗️ Nuxt Production Build
         run: pnpm build:frontend
         env:
-          NITRO_PRESET: cloudflare-pages
+          NITRO_PRESET: cloudflare-worker
 
-      # Ovde ispaljuješ Nuxt na Cloudflare Pages
-      - name: 🚀 Deploy Frontend (Cloudflare Pages)
+      # Ovde ispaljuješ Nuxt na Cloudflare Worker
+      - name: 🚀 Deploy Frontend (Cloudflare Worker)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: 'packages/frontend'
-          command: pages deploy .output/public --project-name=sef-bridge-frontend
+          command: deploy
