@@ -57,8 +57,10 @@ export const TaxTotalSchema = v.pipe(
   v.object({
     currencyCode: v.string([v.length(3)]),
     taxAmount: v.number([v.minValue(0)]),
+    taxSchemeId: v.literal('VAT', '[FATAL] Krovna poreska shema (TaxScheme ID) mora biti postavljena na "VAT".'),
     subtotals: v.array(TaxSubtotalSchema)
   }),
+  v.check((input) => input.subtotals.length > 0, '[FATAL] Poreski blok mora sadržati najmanje jedan TaxSubtotal čvor.'),
   v.check((input) => {
     const sumaPodTotala = input.subtotals.reduce((acc, sub) => acc + sub.taxAmount, 0);
     return Math.abs(input.taxAmount - sumaPodTotala) < 0.01;
