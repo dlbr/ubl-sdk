@@ -7,13 +7,24 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      force_backend:
+        description: 'Force deploy backend (ignoriši path filter)'
+        type: boolean
+        default: true
+      force_frontend:
+        description: 'Force deploy frontend (ignoriši path filter)'
+        type: boolean
+        default: true
 
 jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
+      # Ako je workflow_dispatch sa force opcijom, uvek vrati 'true'
+      backend: ${{ github.event_name == 'workflow_dispatch' && inputs.force_backend == true && 'true' || steps.filter.outputs.backend }}
+      frontend: ${{ github.event_name == 'workflow_dispatch' && inputs.force_frontend == true && 'true' || steps.filter.outputs.frontend }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -30,7 +41,7 @@ jobs:
   validate:
     name: 🛡️ Verify & Compliance
     needs: changes
-    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
     # workerd binary je glibc-only — mora se koristiti ubuntu-latest, ne Alpine (musl)
     runs-on: ubuntu-latest
     steps:
