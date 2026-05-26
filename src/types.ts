@@ -1,12 +1,4 @@
-export type SefPoreskaKategorija = 
-  | 'S20'  // Standardno 20%
-  | 'S10'  // Standardno 10%
-  | 'AE20' // Obrnuti obračun 20%
-  | 'AE10' // Obrnuti obračun 10%
-  | 'E'    // Oslobođeno bez prava na odbitak
-  | 'Z'    // Nulta stopa (Sa pravom na odbitak)
-  | 'R'    // Oslobođeno sa pravom na odbitak / specifično
-  | 'N';   // Anuliranje / Specifični režimi
+import { SefPoreskaKategorija } from './models/Invoice.js';
 
 export interface BaseInvoiceData {
   broj: string;
