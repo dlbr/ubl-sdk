@@ -31,21 +31,22 @@ jobs:
     name: 🛡️ Verify & Compliance
     needs: changes
     if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
+    # workerd binary je glibc-only — mora se koristiti ubuntu-latest, ne Alpine (musl)
     runs-on: ubuntu-latest
-    container:
-      image: alpine:3.21
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: ⛰️ Instalacija okruženja
-        run: |
-          apk add --no-cache git nodejs npm tar
-          node -v
-          npm -v
-          npm install -g pnpm
-          pnpm -v
-          pnpm config set store-dir ~/.pnpm-store
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: ⚙️ Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+          run_install: false
 
       - name: 🗄️ Keširanje pnpm store
         uses: actions/cache@v4
@@ -56,7 +57,9 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: 📦 Instalacija i Build
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm config set store-dir ~/.pnpm-store
+          pnpm install --frozen-lockfile
 
       - name: 🧪 Pokretanje Testova
         env:
