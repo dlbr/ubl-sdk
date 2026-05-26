@@ -4,8 +4,8 @@ const toCent = (num: number) => Math.round(num * 100);
 
 export const SefInvoiceSchema = v.pipe(
   v.object({
-    customizationId: v.literal('urn:vertexinc:vrbl:billing:1', '[FATAL] VRBL-CORE-4: CustomizationID mora biti "urn:vertexinc:vrbl:billing:1".'),
-    profileId: v.literal('urn:vertexinc:vrbl:billing:1', '[FATAL] VRBL-CORE-5: ProfileID mora biti "urn:vertexinc:vrbl:billing:1".'),
+    customizationId: v.literal('urn:cen.eu:en16931:2017#compliant#pi-rs:2024', '[FATAL] Nevalidan CustomizationID. Mora biti zvanični srpski profil (pi-rs:2024).'),
+    profileId: v.literal('urn:fdc:peppol.eu:poacc:bis3:invoice:3', '[FATAL] Nevalidan ProfileID. Mora biti zvanični Peppol BIS3 profil.'),
     routingDetails: v.object({
       sender: v.string(),
       receiver: v.string()
