@@ -1,40 +1,48 @@
-import { defineEventHandler, readRawBody } from 'h3';
+import { defineEventHandler, readRawBody, createError } from 'h3';
 
 /**
- * Fallback proxy za sve rute koje nisu eksplicitno definisane u server/api.
- * Omogućava postepenu migraciju i podršku za sve backend rute.
+ * Catch-all proxy za sve /api/ rute koje nisu eksplicitno
+ * definisane u server/api/. Sve ide ka Backend Worker-u via Service Binding.
+ * 
+ * CONTRACT:
+ * - Nuxt server/api/ fajlovi: Nuxt-specifična logika (auth session, D1 direktno)
+ * - Sve ostalo: forwarduje ka Backend Worker via SEF_API service binding
  */
 export default defineEventHandler(async (event) => {
   const path = event.path;
-  const env = event.context.cloudflare.env;
+  const env = event.context.cloudflare?.env;
   const session = event.context.session;
 
-  if (!env.SEF_API) return; // Pustiti Nuxt da baci 404 ako nema bindinga
+  // Nema backend bindinga — vrati 503 umesto 500
+  if (!env?.SEF_API) {
+    throw createError({ statusCode: 503, statusMessage: 'Backend Worker binding nije dostupan.' });
+  }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json'
   };
 
-  if (session && session.klijentId) {
+  if (session?.klijentId) {
     headers['X-Klijent-ID'] = session.klijentId;
     headers['X-Operater'] = session.operater || 'Sistemski Operater';
   }
 
-  try {
-    const response = await env.SEF_API.fetch(`https://internal${path}`, {
-      method: event.method,
-      headers,
-      body: ['POST', 'PUT', 'PATCH'].includes(event.method) ? await readRawBody(event) : undefined
+  const response = await env.SEF_API.fetch(`https://internal${path}`, {
+    method: event.method,
+    headers,
+    body: ['POST', 'PUT', 'PATCH'].includes(event.method)
+      ? await readRawBody(event)
+      : undefined
+  });
+
+  // Propagiraj HTTP status direktno — ne konvertuj u 500
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({})) as any;
+    throw createError({
+      statusCode: response.status,
+      statusMessage: errorData?.error || errorData?.message || response.statusText
     });
-
-    // Ako backend vrati 404, možda Nuxt ima drugu rutu, ali pošto je ovo catch-all u server/api,
-    // verovatno želimo da vratimo ono što je backend rekao.
-    
-    const data = await response.json().catch(() => null);
-    return data || response.body;
-
-  } catch (err) {
-    // Ako fetch pukne (npr. nema rute na backendu), pustiti Nuxt dalje
-    return;
   }
+
+  return response.json().catch(() => null);
 });
