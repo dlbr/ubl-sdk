@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { data: nbsPodaci, error } = await useFetch('/api/public/v1/kursna-lista')
+const { data: nbsPodaci, error } = await useFetch('/api/public/kursna-lista')
 
 const danasnjiDatum = new Date().toISOString().split('T')[0]
 const eurKurs = computed(() => nbsPodaci.value?.tiker?.find((t: any) => t.valuta === 'EUR')?.kurs || 117.2)

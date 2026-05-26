@@ -1,33 +1,75 @@
 # SEF Bridge - Steel Fortress
 
-Infrastrukturna komponenta za determinističku sinhronizaciju i validaciju faktura prema UBL 2.1 MFIN profilu.
+[![Monorepo Deploy](https://github.com/dlbr/sef/actions/workflows/pipeline.yml/badge.svg)](https://github.com/dlbr/sef/actions/workflows/pipeline.yml)
 
-> **Core Library**: [sef-ubl-builder](https://github.com/dlbr/sef-ubl-builder) - Naš javni XML generator i validator.
+**Produkcija**: [sef.dlbr.cloud](https://sef.dlbr.cloud)
 
-## 🛡️ Steel Fortress Arhitektura
-SEF Bridge nije "samo" generator XML-a. To je sistem projektovan za **poreznu sigurnost i nultu toleranciju na greške**.
+Infrastrukturna platforma za automatizovanu obradu eFaktura, otpremnica i poreske usklađenosti prema srpskom zakonodavstvu (SEF/MFIN).
 
-### Ključni inženjerski bedemi:
-- **Read-Model (Local-First)**: D1 baze i R2 bucket-i osiguravaju brzu dostupnost podataka bez zavisnosti od SEF API latencije.
-- **MasterValidator (Digitalni Štit)**: Troslojna validacija (Sintaksna, Poslovna, Poreska) koja blokira neispravne dokumente pre nego što napuste vašu infrastrukturu.
-- **FSM (Finite State Machine)**: Determinističko upravljanje životnim ciklusom fakture (`DRAFT` → `ARCHIVED`).
-- **Matrix Testing**: `ultimate_gauntlet.test.ts` matrica pokriva 12+ varijanti poreskih scenarija, osiguravajući stabilnost pri svakom `push`-u.
-- **Edge-Native**: Sistem je izgrađen za Cloudflare Edge runtime bez Node.js zavisnosti (Zero-Dependency policy).
+---
 
-## 🚀 Compliance Matrix
-| Funkcionalnost | Status | Implementacija |
-| :--- | :--- | :--- |
-| **UBL 2.1 SrbDtExt** | Stable | `SefUblBuilder` |
-| **Audit-Ready Persistence** | Active | `R2` + `D1 Ledger` |
-| **Circuit Breaker** | Active | `EdgeGuard.ts` |
-| **MasterValidator** | Active | `validator.ts` |
-| **Matrix Compliance** | Active | `Ultimate Gauntlet` |
+## Arhitektura
 
-## 🛠️ Razvoj
-Sve promene prolaze kroz strogi CI/CD pipeline koji uključuje:
-1. **Linting & Types check**
-2. **Matrix testiranje** (9+ scenarija)
-3. **Schematron/XSD validacija** (kroz `xmllint` pipeline)
+```
+Browser
+  └─ Nuxt 4 Worker (sef-bridge-frontend)    ← sef.dlbr.cloud
+       ├─ Edge Auth (AES-256-GCM session)
+       ├─ Nuxt server/api/ handlers
+       └─ Catch-all proxy → Backend Worker (INTERNAL_API_KEY)
+            └─ Backend Worker (sef-bridge-backend)
+                 ├─ KlijentBazaObject (Durable Object / per-client SQLite)
+                 ├─ REGISTAR_DB (D1 / centralni registar + FTS5)
+                 ├─ PORESKI_KV (KV / kursna lista cache)
+                 ├─ SEF_UBL_ARHIVA (R2 / XML arhiva 10 godina)
+                 ├─ SEF_QUEUE (Queue / compliance pipeline)
+                 └─ OTPREMNICA_QUEUE (Queue / eOtpremnice reconciliation)
+```
 
-## 📜 Licenca
-MIT.
+## Paketi
+
+| Paket | Opis |
+|---|---|
+| `packages/backend` | Cloudflare Worker — API, Durable Objects, Queue consumers |
+| `packages/frontend` | Nuxt 4 app deployovana kao Cloudflare Worker |
+| `packages/shared` | Zajednički servisi, šeme, validatori |
+| `packages/ubl-sdk` | UBL 2.1 MFIN XML generator i validator |
+
+## CI/CD
+
+```
+push/PR → main
+  ├─ changes   (dorny/paths-filter)
+  ├─ validate  (ubuntu-latest / vitest / workerd)
+  ├─ deploy-backend  (needs: validate + changes.backend)
+  └─ deploy-frontend (needs: validate + changes.frontend)
+```
+
+`workflow_dispatch` podržava `force_backend` i `force_frontend` za ručni deploy bez path filtera.
+
+## Secrets (Cloudflare Workers)
+
+| Secret | Worker | Opis |
+|---|---|---|
+| `SESSION_SECRET` | frontend | AES-256-GCM ključ za session seal/unseal |
+| `INTERNAL_API_KEY` | frontend + backend | Shared Bearer token za service binding auth |
+| `CLOUDFLARE_API_TOKEN` | CI/CD | Wrangler deploy token |
+| `ADMIN_API_KEY` | backend | Admin endpoint zaštita |
+| `SEF_API_URL` | backend | `https://efaktura.mfin.gov.rs` |
+| `NBS_USERNAME/PASSWORD/LICENCE_ID` | backend | NBS SOAP kursna lista |
+
+## Lokalni razvoj
+
+```bash
+pnpm install
+pnpm dev           # Nuxt frontend na :3000
+pnpm test          # Vitest + workerd (svi paketi)
+```
+
+Backend lokalno:
+```bash
+cd packages/backend
+npx wrangler dev   # :8787
+```
+
+## Licenca
+MIT
