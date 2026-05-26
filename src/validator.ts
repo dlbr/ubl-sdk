@@ -21,8 +21,8 @@ if (!id || !issueDate || !pibS || !pibB) {
 }
 
 // 2. PIB validacija
-if (pibB && !/^\d{9}$/.test(pibB)) {
-  errors.push("PIB mora imati 9 cifara");
+if (pibB && !/^\d{8,13}$/.test(pibB)) {
+  errors.push("PIB mora imati 8, 9 ili 13 cifara");
 }
 
 // 3. Finansijska provera
