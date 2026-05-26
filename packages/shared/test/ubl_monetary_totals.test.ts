@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as v from 'valibot';
 import { SefInvoiceSchema } from '../src/validators/ubl';
 
-describe('🛡️ Vertex LegalMonetaryTotal Restrikcije [VRBL-CALC-5 do VRBL-CALC-8]', () => {
+describe('🛡️ Vertex LegalMonetaryTotal Restrikcije [SEF-CALC-5 do SEF-CALC-8]', () => {
 
   const baseValidPayload = {
     customizationId: 'urn:vertexinc:vrbl:billing:1',
@@ -35,33 +35,33 @@ describe('🛡️ Vertex LegalMonetaryTotal Restrikcije [VRBL-CALC-5 do VRBL-CAL
     expect(res.success).toBe(true);
   });
 
-  it('🛑 Odbij ako poreska osnovica krši pravilo VRBL-CALC-5', () => {
+  it('🛑 Odbij ako poreska osnovica krši pravilo SEF-CALC-5', () => {
     const nevalidnaOsnovica = {
       ...baseValidPayload,
       taxExclusiveAmount: 105000.00 // ❌ Pogrešno
     };
     const res = v.safeParse(SefInvoiceSchema, nevalidnaOsnovica);
     expect(res.success).toBe(false);
-    expect(res.issues[0].message).toContain('VRBL-CALC-1');
+    expect(res.issues[0].message).toContain('SEF-CALC-1');
   });
 
-  it('🛑 Odbij ako iznos za uplatu krši pravilo VRBL-CALC-6', () => {
+  it('🛑 Odbij ako iznos za uplatu krši pravilo SEF-CALC-6', () => {
     const nevalidanPayable = {
       ...baseValidPayload,
       payableAmount: 114000.00 // ❌ Ignorisao prepaidAmount
     };
     const res = v.safeParse(SefInvoiceSchema, nevalidanPayable);
     expect(res.success).toBe(false);
-    expect(res.issues[0].message).toContain('VRBL-CALC-6');
+    expect(res.issues[0].message).toContain('SEF-CALC-6');
   });
 
-  it('🛑 Odbij ako krovni neto iznos krši pravilo VRBL-CALC-8', () => {
+  it('🛑 Odbij ako krovni neto iznos krši pravilo SEF-CALC-8', () => {
     const nevalidanLineExtension = {
       ...baseValidPayload,
       lineExtensionAmount: 50000.00 // ❌ Ne odgovara sumi linija (100k)
     };
     const res = v.safeParse(SefInvoiceSchema, nevalidanLineExtension);
     expect(res.success).toBe(false);
-    expect(res.issues[0].message).toContain('VRBL-CALC-1');
+    expect(res.issues[0].message).toContain('SEF-CALC-1');
   });
 });

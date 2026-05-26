@@ -6,57 +6,85 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import fs from 'node:fs';
+
 const isCI = !!process.env.CI;
+
+// Load env variables from .dev.vars if it exists
+try {
+  const envPath = path.resolve(__dirname, './.dev.vars');
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf-8');
+    for (const line of envContent.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const index = trimmed.indexOf('=');
+        if (index !== -1) {
+          const key = trimmed.slice(0, index).trim();
+          const val = trimmed.slice(index + 1).trim();
+          if (key && val && !process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      }
+    }
+  }
+} catch (e) {
+  console.warn("Failed to load .dev.vars:", e);
+}
 
 export default defineConfig({
   resolve: {
     alias: {
       '@sef/shared': path.resolve(__dirname, './packages/shared'),
-      '@dlbr/ubl-sdk': path.resolve(__dirname, './packages/ubl-sdk/src')
+      '@dlbr/ubl-sdk': path.resolve(__dirname, './packages/ubl-sdk/src'),
+      'satori': path.resolve(__dirname, './test/mocks/satori-mock.ts'),
+      'yoga-layout': path.resolve(__dirname, './test/mocks/satori-mock.ts')
     }
   },
   test: {
-    // Top-level konfiguracija umesto poolOptions
+    env: {
+      STAGING_SEF_API_KEY: process.env.STAGING_SEF_API_KEY || "mock-local-key",
+      SESSION_SECRET: process.env.SESSION_SECRET || "mock-secret"
+    },
     isolate: true,
     threads: !isCI,
     fileParallelism: !isCI,
     maxWorkers: isCI ? 1 : undefined,
-    
+
     include: [
-      'worker/**/*.{test,spec}.ts', 
-      'server/**/*.{test,spec}.ts', 
-      'packages/**/*.{test,spec}.ts', 
+      'worker/**/*.{test,spec}.ts',
+      'server/**/*.{test,spec}.ts',
+      'packages/**/*.{test,spec}.ts',
       'test/**/*.{test,spec}.ts'
     ],
     setupFiles: ['./test/vitest-setup.ts'],
-    globalSetup: ['./test/global-setup.ts'],
     reporters: ['default', 'hanging-process'],
     testTimeout: 60000,
     hookTimeout: 30000,
     teardownTimeout: 20000,
-    },
-    plugins: [
+  },
+  plugins: [
     cloudflareTest({
       wrangler: { configPath: 'packages/backend/wrangler.toml' },
-      // Forsiramo lokalni mod za sve, posebno u CI
       remote: false,
-      // Cloudflare plugin i dalje koristi specifičnu strukturu za svoje pool-ove
       poolOptions: {
         workers: {
           isolatedStorage: true,
           singleWorker: true,
+          unsafeEvalBinding: true,
           miniflare: {
             compatibilityDate: '2026-05-21',
             compatibilityFlags: ['nodejs_compat'],
             remote: false,
-            // v4.38.0: Disable AI binding to avoid remote connection hang.
-            // Tests that need AI must mock it manually.
             bindings: {
-              AI: undefined
+              AI: undefined,
+              STAGING_SEF_API_KEY: process.env.STAGING_SEF_API_KEY || "mock-local-key",
+              SESSION_SECRET: process.env.SESSION_SECRET || "mock-secret"
             }
           },
         },
       },
     }),
-    ],
+  ],
 });

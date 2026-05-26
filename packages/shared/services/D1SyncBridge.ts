@@ -62,19 +62,19 @@ export class D1SyncBridge {
         json_metadata = COALESCE(excluded.json_metadata, json_metadata),
         azurirano_u = CURRENT_TIMESTAMP
     `).bind(
-      doc.id, 
-      doc.sefId || null,
-      doc.tip, 
-      doc.broj, 
-      doc.pibProdavca, 
-      doc.pibKupca, 
-      doc.status, 
-      doc.iznosOsnovica || 0,
-      doc.iznosPoreza || 0,
-      doc.datumPrometa || null,
-      doc.xmlBlob || null,
+      doc.id ?? null, 
+      doc.sefId ?? null,
+      doc.tip ?? null, 
+      doc.broj ?? null, 
+      doc.pibProdavca ?? null, 
+      doc.pibKupca ?? null, 
+      doc.status ?? null, 
+      doc.iznosOsnovica ?? 0,
+      doc.iznosPoreza ?? 0,
+      doc.datumPrometa ?? null,
+      doc.xmlBlob ?? null,
       doc.jsonMetadata ? JSON.stringify(doc.jsonMetadata) : null,
-      doc.parentId || null
+      doc.parentId ?? null
     ).run();
   }
 
@@ -99,21 +99,21 @@ export class D1SyncBridge {
           akcizna_gustina = COALESCE(excluded.akcizna_gustina, akcizna_gustina),
           izvorna_stavka_id = COALESCE(excluded.izvorna_stavka_id, izvorna_stavka_id)
       `).bind(
-        l.dokumentId, 
-        l.lineId || null, 
-        l.naziv, 
-        l.poslataKolicina || 0, 
-        l.primljenaKolicina || 0,
-        l.jedinicaMere || null,
-        l.cena || 0,
-        l.porezStopa || 0,
-        l.porezKategorija || null,
-        l.osnovica || 0,
-        l.iznosPoreza || 0,
-        l.razlika || 0,
-        l.akciznaKategorija || null,
-        l.akciznaGustina || null,
-        l.izvornaStavkaId || null
+        l.dokumentId ?? null, 
+        l.lineId ?? null, 
+        l.naziv ?? null, 
+        l.poslataKolicina ?? 0, 
+        l.primljenaKolicina ?? 0,
+        l.jedinicaMere ?? null,
+        l.cena ?? 0,
+        l.porezStopa ?? 0,
+        l.porezKategorija ?? null,
+        l.osnovica ?? 0,
+        l.iznosPoreza ?? 0,
+        l.razlika ?? 0,
+        l.akciznaKategorija ?? null,
+        l.akciznaGustina ?? null,
+        l.izvornaStavkaId ?? null
       )
     );
 
@@ -127,7 +127,7 @@ export class D1SyncBridge {
     return await this.db.prepare(`
       INSERT INTO dokumenti_log (dokument_id, prethodni_status, novi_status, poruka)
       VALUES (?, ?, ?, ?)
-    `).bind(dokumentId, stariStatus || null, noviStatus, message || null).run();
+    `).bind(dokumentId ?? null, stariStatus ?? null, noviStatus ?? null, message ?? null).run();
   }
 
   /**
@@ -135,7 +135,7 @@ export class D1SyncBridge {
    */
   async linkDocuments(childId: string, parentId: string) {
     return await this.db.prepare("UPDATE dokumenti SET parent_id = ?, azurirano_u = CURRENT_TIMESTAMP WHERE id = ?")
-      .bind(parentId, childId).run();
+      .bind(parentId ?? null, childId ?? null).run();
   }
 
   /**
@@ -152,7 +152,7 @@ export class D1SyncBridge {
       )
       SELECT DISTINCT d.* FROM dokumenti d JOIN chain c ON d.id = c.id
       ORDER BY d.kreirano_u ASC
-    `).bind(id).all();
+    `).bind(id ?? null).all();
   }
 
   /**
@@ -178,7 +178,7 @@ export class D1SyncBridge {
         SELECT id FROM dokumenti WHERE parent_id = o.dokument_id AND tip = 'PRIJEMNICA'
       )
       WHERE o.dokument_id = ?
-    `).bind(otpremnicaId).all();
+    `).bind(otpremnicaId ?? null).all();
   }
 
   /**
@@ -196,6 +196,6 @@ export class D1SyncBridge {
       WHERE pib_prodavca = ? OR pib_kupca = ?
       GROUP BY mesec, tip, status
       ORDER BY mesec DESC
-    `).bind(pib, pib).all();
+    `).bind(pib ?? null, pib ?? null).all();
   }
 }

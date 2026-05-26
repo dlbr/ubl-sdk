@@ -13,7 +13,7 @@ describe('🛡️ Vertex BuyerReference B2G Restrikcije', () => {
     taxCurrencyCode: 'RSD',
     payableAmount: 50000.00,
     supplierPib: '113398540',
-    customerPib: '223344556',
+    customerPib: '101134702',
     customerJbkjs: '03142', // 🏛️ Primalac je budžetski korisnik
     invoicingPeriodCode: '35',
     taxTotals: [{

@@ -9,8 +9,8 @@ const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe('eOtpremnica Reconciliation - Discrepancy Detection', () => {
 
   const klijentId = 'klijent_logistika_audit';
-  const pibProdavca = '111222333';
-  const pibKupca = '444555666';
+  const pibProdavca = '101134702';
+  const pibKupca = '113398540';
 
   beforeAll(async () => {
     // Inicijalizacija baze (SSoT)
@@ -117,7 +117,7 @@ describe('eOtpremnica Reconciliation - Discrepancy Detection', () => {
     await klijentDO.fetch(new Request('http://do/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sef_api_key: 'audit_key', limit: 1000 })
+      body: JSON.stringify({ sef_api_key: 'audit_key', limit: 1000, plan: 'Enterprise', otpremnice_api_key: 'audit_key' })
     }));
   });
 

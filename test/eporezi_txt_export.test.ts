@@ -21,7 +21,7 @@ describe('e-Porezi TXT Export v3.5.0 — Forensic Audit', () => {
       porezZaUplatuIliPovracaj: (200 + 50 + 60 + 80) - 300 // 90
     };
 
-    const pib = '102345678';
+    const pib = '101134702';
     const txt = SefPppdvExporter.generateTxt(pib, summary);
 
     // Heder

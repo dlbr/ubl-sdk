@@ -13,8 +13,7 @@
     "build:frontend": "pnpm --filter @sef/frontend build",
     "deploy:backend": "pnpm --filter @sef/backend deploy",
     "deploy:frontend": "pnpm --filter @sef/frontend",
-    "test": "pnpm -r test",
-    "verify": "pnpm -r verify"
+    "test": "vitest run"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.9",

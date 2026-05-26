@@ -80,7 +80,7 @@ describe('Billing Ledger v3.5.0 — Transactional Mathematics Audit', () => {
     await klijentDO.fetch(new Request('http://do/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sef_api_key: 'audit_key', klijent_id: '123456789', limit: 100 })
+      body: JSON.stringify({ sef_api_key: 'audit_key', klijent_id: '101134702', limit: 100 })
     }));
 
     await klijentDO.fetch(new Request('http://do/test/seed', {
@@ -98,11 +98,11 @@ describe('Billing Ledger v3.5.0 — Transactional Mathematics Audit', () => {
       InvoiceTypeCode: "380",
       DocumentCurrencyCode: "RSD",
       Supplier: { 
-        Pib: "123456789", Name: "Prodavac", 
+        Pib: "101134702", Name: "Prodavac", 
         Address: { City: "BG", CountryCode: "RS" } 
       },
       Customer: { 
-        Pib: "987654321", Name: "Kupac", 
+        Pib: "113398540", Name: "Kupac", 
         Address: { City: "NS", CountryCode: "RS" } 
       },
       LegalMonetaryTotal: { 
@@ -148,7 +148,7 @@ describe('Billing Ledger v3.5.0 — Transactional Mathematics Audit', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         action: 'SEED_DOCUMENT', 
-        doc: { id: 'FKT-REJ-01', tip: '380', broj: 'FKT-REJ-01', pibProdavca: '123456789', pibKupca: '999', status: 'SENT' } 
+        doc: { id: 'FKT-REJ-01', tip: '380', broj: 'FKT-REJ-01', pibProdavca: '101134702', pibKupca: '113398540', status: 'SENT' } 
       })
     }));
 
@@ -183,7 +183,7 @@ describe('Billing Ledger v3.5.0 — Transactional Mathematics Audit', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         action: 'SEED_DOCUMENT', 
-        doc: { id: 'FKT-DUP-01', tip: '380', broj: 'FKT-DUP-01', pibProdavca: '123456789', pibKupca: '999', status: 'SENT' } 
+        doc: { id: 'FKT-DUP-01', tip: '380', broj: 'FKT-DUP-01', pibProdavca: '101134702', pibKupca: '113398540', status: 'SENT' } 
       })
     }));
 

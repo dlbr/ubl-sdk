@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SefUblBuilder, MasterValidator } from '@dlbr/ubl-sdk';
+import { SefUblBuilder } from '@dlbr/ubl-sdk';
 
 describe('🛡️ Digitalni Štit — Stress Test Poligon', () => {
   
@@ -8,8 +8,8 @@ describe('🛡️ Digitalni Štit — Stress Test Poligon', () => {
         ID: 'TEST-NEG-1',
         broj: 'F-1',
         datumIzdavanja: '2026-05-23',
-        pibProdavca: '111111111',
-        pibKupca: '222222222',
+        pibProdavca: '101134702',
+        pibKupca: '113398540',
         InvoiceTypeCode: '380',
         osnovica: -100
     };
@@ -21,12 +21,12 @@ describe('🛡️ Digitalni Štit — Stress Test Poligon', () => {
         ID: 'TEST-PIB-1',
         broj: 'F-1',
         datumIzdavanja: '2026-05-23',
-        pibProdavca: '111111111',
+        pibProdavca: '101134702',
         pibKupca: 'ABCDEFGHI', // Invalid non-numeric
         InvoiceTypeCode: '380',
         osnovica: 100
     };
-    expect(() => SefUblBuilder.build(data as any)).toThrow('PIB mora imati 9 cifara');
+    expect(() => SefUblBuilder.build(data as any)).toThrow('PIB mora biti tačno 9 cifara i kriptografski ispravan (srpski mod-11 checksum)');
   });
 
   it('TREBA DA ODBIJE fakturu bez obaveznih polja', () => {
@@ -39,8 +39,8 @@ describe('🛡️ Digitalni Štit — Stress Test Poligon', () => {
         ID: 'AV-001',
         broj: 'AV-001',
         datumIzdavanja: '2026-05-23',
-        pibProdavca: '111111111',
-        pibKupca: '222222222',
+        pibProdavca: '101134702',
+        pibKupca: '113398540',
         InvoiceTypeCode: '386',
         osnovica: 100
     };

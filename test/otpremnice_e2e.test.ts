@@ -9,8 +9,8 @@ const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe('eOtpremnica E2E - Supply Chain State Machine', () => {
 
   const klijentId = 'klijent_otpremnice_test';
-  const pibProdavca = '123456789';
-  const pibKupca = '987654321';
+  const pibProdavca = '101134702';
+  const pibKupca = '113398540';
 
   beforeAll(async () => {
     // Inicijalizacija centralne baze (D1)
@@ -67,7 +67,7 @@ describe('eOtpremnica E2E - Supply Chain State Machine', () => {
     await klijentDO.fetch(new Request('http://do/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sef_api_key: 'test_key', klijent_id: pibProdavca, limit: 100 })
+      body: JSON.stringify({ sef_api_key: 'test_key', klijent_id: pibProdavca, limit: 100, plan: 'Enterprise', otpremnice_api_key: 'test_key' })
     }));
 
     await klijentDO.fetch(new Request('http://do/test/seed', {

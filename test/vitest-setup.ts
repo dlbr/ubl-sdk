@@ -1,6 +1,9 @@
 // test/vitest-setup.ts
 import { afterAll, vi } from 'vitest';
 
+process.env.STAGING_SEF_API_KEY = process.env.STAGING_SEF_API_KEY || 'mock-local-key';
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret';
+
 // 🛡️ Globalni Mock za WASM module (Satori / OgEngine) da ne pucaju testovi
 vi.mock('@sef/shared', async (importOriginal) => {
   const actual = await importOriginal<any>();

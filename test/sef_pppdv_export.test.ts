@@ -4,7 +4,7 @@ import { SefPppdvExporter } from '@sef/shared/services/pppdvExporter';
 describe('SEF Bridge v2 — PPPDV Export Engine Audit', () => {
 
   it('Export Provera: Generisani TXT fajl mora pratiti zvaničnu sintaksu Ministarstva finansija', () => {
-    const pib = '102345678';
+    const pib = '101134702';
     const summary = {
       period: '2026-05',
       pozicija001_osnovicaOpsta: 145001,
@@ -25,7 +25,7 @@ describe('SEF Bridge v2 — PPPDV Export Engine Audit', () => {
 
     // FORENZIČKA ZAKONSKA VERIFIKACIJA STRUKTURE
     // H|Verzija|Tip|PIB|DatumOd|DatumDo
-    expect(txt).toContain('H|1.0|PPPDV|102345678|2026-05-01|2026-05-31');
+    expect(txt).toContain('H|1.0|PPPDV|101134702|2026-05-01|2026-05-31');
     
     // D|Polje|Vrednost
     expect(txt).toContain('D|001|145001');

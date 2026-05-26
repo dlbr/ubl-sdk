@@ -10,6 +10,43 @@ import statsHandler from '../dashboard/stats.get';
 const mockEnv = {
   ADMIN_API_KEY: 'admin_secret',
   SEF_API_URL: 'https://demoefaktura.mfin.gov.rs',
+  SEF_API: {
+    fetch: async (url: string, options: any) => {
+      if (url.includes('/auth/login') || url.includes('/register')) {
+        const body = JSON.parse(options.body);
+        const configToSave = {
+          plan: body.plan,
+          billing_period: body.billing_period,
+          limit: body.plan === 'Plus' ? 500 : 50,
+          licenca_istice_timestamp: Date.now() + 365 * 24 * 60 * 60 * 1000
+        };
+        // Simuliramo poziv backend-a ka DO-u
+        const doMock = mockEnv.KLIJENT_BAZA_OBJECT.get();
+        await doMock.fetch('http://do/config', { method: 'POST', body: JSON.stringify(configToSave) });
+
+        return new Response(JSON.stringify({ success: true, klijentId: 'klijent_123456789', pib: '123456789', operater: 'Test Operater' }));
+      }
+      if (url.includes('/stats')) {
+        const config = (globalThis as any).__MOCK_DO_CONFIG || {};
+        return new Response(JSON.stringify({
+          success: true,
+          plan_name: config.plan || 'Micro',
+          billing_period: config.billing_period || 'monthly',
+          limit_faktura: config.limit || 50,
+          limit_faktura_godisnje: config.limit_faktura_godisnje || 600,
+          licenca_istice_timestamp: config.licenca_istice_timestamp,
+          status_pretplate: 'AKTIVAN',
+          usage: {
+            potroseno: 0,
+            limit: config.limit || 50,
+            procenat: 0,
+            prikazi_brojac: true
+          }
+        }));
+      }
+      return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
+    }
+  },
   REGISTAR_DB: {
     prepare: () => ({
       bind: () => ({

@@ -9,8 +9,17 @@ import logoutHandler from './logout.post';
  * Verno preslikano okruženje Cloudflare mreže za testiranje.
  */
 const mockEnv = {
+  SESSION_SECRET: 'ZAKUCANI_SECRET_ZA_PRODUKCIJU_MIN_32_CHAR',
   ADMIN_API_KEY: 'admin_secret',
   SEF_API_URL: 'https://demoefaktura.mfin.gov.rs',
+  SEF_API: {
+    fetch: async (url: string, options: any) => {
+      if (url.includes('/auth/login') || url.includes('/register')) {
+        return new Response(JSON.stringify({ success: true, klijentId: 'klijent_100000010', pib: '100000010', operater: 'Knjigovođa Nikola' }));
+      }
+      return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
+    }
+  },
   REGISTAR_DB: {
     prepare: () => ({
       bind: () => ({
@@ -98,7 +107,7 @@ describe('Edge Session Management - Integracioni Testovi', () => {
     });
     event.context.cloudflare = { env: mockEnv };
 
-    await expect(authMiddleware(event)).rejects.toThrowError(/Kompromitovana ili nevalidna sesija/);
+    await expect(authMiddleware(event)).rejects.toThrowError(/Sesija nevalidna/);
   });
 
   it('Scenario 4: Uspešan logout mora izbrisati kolačić i zabraniti keširanje stanja', async () => {

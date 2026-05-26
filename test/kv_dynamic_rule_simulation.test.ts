@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { describe, it, expect, beforeEach, beforeAll, vi, afterAll } from 'vitest';
 import { app } from '../packages/backend/src/index';
-import { SefLiveValidator } from '@sef/shared/compliance/validator';
+import { SefLiveValidator } from '@dlbr/ubl-sdk';
 
 describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
 
@@ -108,8 +108,8 @@ describe('Državni šok v3.6.0 — KV Dynamic Rule Simulation', () => {
       DueDate: "2026-05-15",
       InvoiceTypeCode: "380",
       DocumentCurrencyCode: "RSD",
-      Supplier: { Pib: "123456789", Name: "Prodavac", Address: { City: "BG", CountryCode: "RS" } },
-      Customer: { Pib: "987654321", Name: "Kupac", Address: { City: "NS", CountryCode: "RS" } },
+      Supplier: { Pib: "101134702", Name: "Prodavac", Address: { City: "BG", CountryCode: "RS" } },
+      Customer: { Pib: "113398540", Name: "Kupac", Address: { City: "NS", CountryCode: "RS" } },
       LegalMonetaryTotal: { LineExtensionAmount: 100, TaxExclusiveAmount: 100, TaxInclusiveAmount: 120, AllowanceTotalAmount: 0, PrepaidAmount: 0, PayableRoundingAmount: 0, PayableAmount: 120 },
       Lines: [{ ID: "1", Quantity: 1, UnitCode: "H87", LineExtensionAmount: 100, Price: 100, ItemName: "Usluga", VatCategory: "S", VatPercent: 20 }]
     };

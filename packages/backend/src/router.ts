@@ -29,9 +29,13 @@ export const Router = <Env = any>() => {
       const pathname = url.pathname.replace(/\/$/, '') || '/'
 
       for (const route of routes) {
-        if (route.method !== 'ALL' && route.method !== method) continue
-
+        const routeMethod = route.method.toUpperCase();
         const routePath = route.path.replace(/\/$/, '') || '/'
+        
+        if (routeMethod !== 'ALL' && routeMethod !== method) {
+          continue;
+        }
+
         let match = false
         let result: any = {}
 
@@ -64,8 +68,9 @@ export const Router = <Env = any>() => {
         }
       }
 
-      console.error(`[Router 404] No match for ${method} ${pathname}. Registered routes: ${routes.length}`);
-      return new Response('Not Found', { status: 404 })
+      const registered = routes.map(r => `${r.method} ${r.path}`).join(', ');
+      console.error(`[Router 404] ${method} ${pathname} not found. Registered: ${registered}`);
+      return new Response(`Not Found: ${method} ${pathname}`, { status: 404 })
     },
     request: async (path: string, options: any, env: Env, ctx?: any) => {
       const url = path.startsWith('http') ? path : `http://localhost${path}`
@@ -77,7 +82,11 @@ export const Router = <Env = any>() => {
   const receiverProxy = new Proxy(target, {
     get: (target, prop: string) => {
       if (prop === 'fetch' || prop === 'on' || prop === 'request') return (target as any)[prop].bind(target)
-      return (path: string, ...handlers: Handler<Env>[]) => target.on(prop, path, ...handlers)
+      const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
+      if (methods.includes(prop.toUpperCase())) {
+        return (path: string, ...handlers: Handler<Env>[]) => target.on(prop, path, ...handlers)
+      }
+      return (target as any)[prop];
     },
   })
 

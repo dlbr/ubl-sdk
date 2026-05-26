@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { safeParse } from 'valibot';
 import { TaxTotalSchema } from '../src/validators/ubl';
 
-describe('🛡️ Vertex Tax Root Restrikcije [VRBL-CALC-50 / 55]', () => {
+describe('🛡️ Vertex Tax Root Restrikcije [SEF-CALC-50 / 55]', () => {
 
   it('✅ 1. Prolaz za ispravno konfigurisan krovni TaxTotal blok sa VAT shemom', () => {
     const validanTaxRoot = {

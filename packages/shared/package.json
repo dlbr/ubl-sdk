@@ -4,6 +4,9 @@
   "private": true,
   "main": "./index.ts",
   "types": "./index.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
   "dependencies": {
     "@dlbr/ubl-sdk": "workspace:*",
     "@resvg/resvg-wasm": "^2.6.2",

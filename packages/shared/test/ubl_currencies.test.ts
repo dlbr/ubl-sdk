@@ -16,13 +16,13 @@ describe('🛡️ Vertex Universal Currencies Restrikcije [VRBL-CORE-70/75]', ()
     invoiceTypeCode: '380',
     issueTime: '10:00:00',
     supplierPib: '113398540',
-    customerPib: '223344556',
+    customerPib: '101134702',
     supplierElectronicAddress: { schemeId: '9948', value: '113398540' },
     supplierPartyIdentification: { schemeId: 'SRB:PIB', value: '113398540' },
     supplierPartyTaxScheme: { companySchemeId: 'RS', companyId: '113398540', taxSchemeId: 'VAT' },
     supplierPartyLegalEntity: { registrationName: 'FIRMA DOO', companySchemeId: 'RS:MB', companyId: '20123456' },
-    customerElectronicAddress: { schemeId: '9948', value: '223344556' },
-    customerPartyTaxScheme: { taxSchemeId: 'VAT', companyId: 'RS223344556' },
+    customerElectronicAddress: { schemeId: '9948', value: '101134702' },
+    customerPartyTaxScheme: { taxSchemeId: 'VAT', companyId: 'RS101134702' },
     customerPartyLegalEntity: { registrationName: 'KUPAC DOO', companySchemeId: 'RS:MB', companyId: '08123456' },
     issueDate: '2026-05-26',
     paymentDueDate: '2026-06-10',
@@ -59,11 +59,11 @@ describe('🛡️ Vertex Universal Currencies Restrikcije [VRBL-CORE-70/75]', ()
       documentCurrencyCode: 'EUR',
       taxCurrencyCode: 'RSD',
       taxExclusiveAmount: 5000.00,
-      taxInclusiveAmount: 7190.00,
-      payableAmount: 7190.00,
+      taxInclusiveAmount: 6000.00,
+      payableAmount: 6000.00,
       taxTotals: [
-        { currencyCode: 'EUR', taxAmount: 190.00, taxSchemeId: 'VAT', subtotals: [{ taxableAmount: 950.00, taxCategoryPercent: 20.00, taxAmount: 190.00, taxCategoryCode: 'S' }] },
-        { currencyCode: 'RSD', taxAmount: 2000.00, taxSchemeId: 'VAT', subtotals: [{ taxableAmount: 10000.00, taxCategoryPercent: 20.00, taxAmount: 2000.00, taxCategoryCode: 'S' }] }
+        { currencyCode: 'EUR', taxAmount: 1000.00, taxSchemeId: 'VAT', subtotals: [{ taxableAmount: 5000.00, taxCategoryPercent: 20.00, taxAmount: 1000.00, taxCategoryCode: 'S' }] },
+        { currencyCode: 'RSD', taxAmount: 117000.00, taxSchemeId: 'VAT', subtotals: [{ taxableAmount: 585000.00, taxCategoryPercent: 20.00, taxAmount: 117000.00, taxCategoryCode: 'S' }] }
       ]
     };
 

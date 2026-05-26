@@ -10,7 +10,7 @@ compatibility_flags = ["nodejs_compat"]
 # 🚀 PRAVILA ZA BINARNE FAJLOVE (WASM i Fontovi)
 [[rules]]
 type = "Data"
-globs = ["**/*.ttf"]
+globs = ["**/*.woff2"]
 fallthrough = true
 
 [[rules]]

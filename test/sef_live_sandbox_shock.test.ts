@@ -48,8 +48,8 @@ describe('🚀 SEF Live Sandbox Integration — Live Hotfix Testing', () => {
     
     const malformisaniXml = SefUblBuilder.buildStandardna({
       broj: 'FKT-SHOCK-001',
-      pibProdavca: '102345678',
-      pibKupca: '100000032',
+      pibProdavca: '101134702',
+      pibKupca: '113398540',
       osnovica: 1000,
       pdv: 200
     });

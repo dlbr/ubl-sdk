@@ -13,7 +13,7 @@ describe('🛡️ Vertex BillingReference Restrikcije [VRBL-RS-1p0p0-5]', () => 
     taxCurrencyCode: 'RSD',
     payableAmount: 50000.00,
     supplierPib: '113398540',
-    customerPib: '223344556',
+    customerPib: '101134702',
     invoicingPeriodCode: '35',
     buyerReference: { tip: 'NEMA', vrednost: 'N/A' },
     taxTotals: [{ currencyCode: 'RSD', taxAmount: 2500.00, subtotals: [{ taxableAmount: 12500.00, taxAmount: 2500.00, taxCategoryCode: 'S' }] }]

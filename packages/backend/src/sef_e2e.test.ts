@@ -85,8 +85,8 @@ describe('KlijentBaza: SEF E2E Integration', () => {
       IssueDate: "2026-05-20",
       DueDate: "2026-06-03",
       DocumentCurrencyCode: "RSD",
-      Supplier: { Pib: '123456789', Name: 'Supplier', Address: { City: 'Beograd', CountryCode: 'RS' } },
-      Customer: { Pib: '987654321', Name: 'Customer', Address: { City: 'Novi Sad', CountryCode: 'RS' } },
+      Supplier: { Pib: '101134702', Name: 'Supplier', Address: { City: 'Beograd', CountryCode: 'RS' } },
+      Customer: { Pib: '113398540', Name: 'Customer', Address: { City: 'Novi Sad', CountryCode: 'RS' } },
       TaxTotals: [{
         TaxAmount: 20,
         Subtotals: [{ TaxableAmount: 100, TaxAmount: 20, Category: 'S', Percent: 20 }]
@@ -114,8 +114,8 @@ describe('KlijentBaza: SEF E2E Integration', () => {
       IssueDate: "2026-05-20",
       DueDate: "2026-06-03",
       DocumentCurrencyCode: "RSD",
-      Supplier: { Pib: '123456789', Name: 'Supplier', Address: { City: 'Beograd', CountryCode: 'RS' } },
-      Customer: { Pib: '987654321', Name: 'Customer', Address: { City: 'Novi Sad', CountryCode: 'RS' } },
+      Supplier: { Pib: '101134702', Name: 'Supplier', Address: { City: 'Beograd', CountryCode: 'RS' } },
+      Customer: { Pib: '113398540', Name: 'Customer', Address: { City: 'Novi Sad', CountryCode: 'RS' } },
       TaxTotals: [{
         TaxAmount: 20,
         Subtotals: [{ TaxableAmount: 100, TaxAmount: 20, Category: 'S', Percent: 20 }]
@@ -141,6 +141,7 @@ describe('KlijentBaza: SEF E2E Integration', () => {
 
     const statsRes = await klijentDO.fetch(new Request('http://do/stats'));
     const stats = await statsRes.json() as any;
+    console.log('STATS:', stats);
     expect(stats.stats.find((s: any) => s.status === 'Sent')?.broj).toBeGreaterThan(0);
   });
 
@@ -157,8 +158,8 @@ describe('KlijentBaza: SEF E2E Integration', () => {
       IssueDate: "2026-05-24",
       DueDate: "2026-06-03",
       DocumentCurrencyCode: "RSD",
-      Supplier: { Pib: '123456789', Name: 'Supplier', Address: { City: 'BG', CountryCode: 'RS' } },
-      Customer: { Pib: '987654321', Name: 'Customer', Address: { City: 'NS', CountryCode: 'RS' } },
+      Supplier: { Pib: '101134702', Name: 'Supplier', Address: { City: 'BG', CountryCode: 'RS' } },
+      Customer: { Pib: '113398540', Name: 'Customer', Address: { City: 'NS', CountryCode: 'RS' } },
       TaxTotals: [{
         TaxAmount: 20,
         Subtotals: [{ TaxableAmount: 100, TaxAmount: 20, Category: 'S', Percent: 20 }]

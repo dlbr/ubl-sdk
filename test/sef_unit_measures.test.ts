@@ -5,8 +5,9 @@ import { SefClient } from '@sef/shared/services/sefClient';
 describe('📏 SEF Metadata — Live Unit Measures Testing', () => {
   const API_KEY = process.env.STAGING_SEF_API_KEY;
   const BASE_URL = process.env.SEF_API_URL || 'https://demoefaktura.mfin.gov.rs';
+  const itIfKey = (API_KEY && API_KEY !== 'mock-local-key') ? it : it.skip;
 
-  it('Treba uspešno povući šifrarnik jedinica mera sa državnog SEF-a', async () => {
+  itIfKey('Treba uspešno povući šifrarnik jedinica mera sa državnog SEF-a', async () => {
     if (!API_KEY) {
       console.warn("⚠️ Preskačem test: STAGING_SEF_API_KEY nije podešen.");
       return;

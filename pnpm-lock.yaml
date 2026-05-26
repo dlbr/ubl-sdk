@@ -82,6 +82,9 @@ importers:
       '@nuxtjs/tailwindcss':
         specifier: ^6.14.0
         version: 6.14.0(magicast@0.5.3)(yaml@2.9.0)
+      h3:
+        specifier: 2.0.1-rc.22
+        version: 2.0.1-rc.22(crossws@0.4.5(srvx@0.11.16))
       nuxt:
         specifier: ^4.4.5
         version: 4.4.6(@babel/plugin-syntax-jsx@7.28.6(@babel/core@7.29.0))(@babel/plugin-syntax-typescript@7.28.6(@babel/core@7.29.0))(@parcel/watcher@2.5.6)(@types/node@25.9.1)(@vue/compiler-sfc@3.5.34)(cac@6.7.14)(db0@0.3.4)(ioredis@5.10.1)(magicast@0.5.3)(rollup-plugin-visualizer@7.0.1(rollup@4.60.4))(rollup@4.60.4)(srvx@0.11.16)(terser@5.48.0)(typescript@6.0.3)(vite@7.3.3(@types/node@25.9.1)(jiti@1.21.7)(terser@5.48.0)(yaml@2.9.0))(yaml@2.9.0)
@@ -134,6 +137,10 @@ importers:
         version: 25.9.1
 
   packages/ubl-sdk:
+    dependencies:
+      valibot:
+        specifier: ^1.4.0
+        version: 1.4.0(typescript@5.9.3)
     devDependencies:
       esbuild:
         specifier: ^0.21.0
@@ -3210,6 +3217,16 @@ packages:
 
   h3@1.15.11:
     resolution: {integrity: sha512-L3THSe2MPeBwgIZVSH5zLdBBU90TOxarvhK9d04IDY2AmVS8j2Jz2LIWtwsGOU3lu2I5jCN7FNvVfY2+XyF+mg==}
+
+  h3@2.0.1-rc.22:
+    resolution: {integrity: sha512-Esv0DMIuPkCTSWCA0vO73vcTqwzH1wjSrAO1TXNu/K3up1sZHa9EKMapbmxCDYBeymC3fVTk4qxp7ogQWQ+KgA==}
+    engines: {node: '>=20.11.1'}
+    hasBin: true
+    peerDependencies:
+      crossws: ^0.4.1
+    peerDependenciesMeta:
+      crossws:
+        optional: true
 
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
@@ -7950,6 +7967,13 @@ snapshots:
       ufo: 1.6.4
       uncrypto: 0.1.3
 
+  h3@2.0.1-rc.22(crossws@0.4.5(srvx@0.11.16)):
+    dependencies:
+      rou3: 0.8.1
+      srvx: 0.11.16
+    optionalDependencies:
+      crossws: 0.4.5(srvx@0.11.16)
+
   has-flag@4.0.0: {}
 
   has-symbols@1.1.0: {}
@@ -9787,6 +9811,10 @@ snapshots:
   uqr@0.1.3: {}
 
   util-deprecate@1.0.2: {}
+
+  valibot@1.4.0(typescript@5.9.3):
+    optionalDependencies:
+      typescript: 5.9.3
 
   valibot@1.4.0(typescript@6.0.3):
     optionalDependencies:

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { safeParse } from 'valibot';
 import { SefInvoiceSchema } from '../src/validators/ubl';
 
-describe('🛡️ Vertex Tax Breakdown Restrikcije [VRBL-CALC-24]', () => {
+describe('🛡️ Vertex Tax Breakdown Restrikcije [SEF-CALC-24]', () => {
 
   const baseTemplate = {
     customizationId: 'urn:vertexinc:vrbl:billing:1',
@@ -10,13 +10,13 @@ describe('🛡️ Vertex Tax Breakdown Restrikcije [VRBL-CALC-24]', () => {
     routingDetails: { sender: 'RS113398540', receiver: 'GENERIC_RS_EINVOICE_1p0p0' },
     invoiceTypeCode: '380',
     supplierPib: '113398540',
-    customerPib: '223344556',
+    customerPib: '101134702',
     supplierElectronicAddress: { schemeId: '9948', value: '113398540' },
     supplierPartyIdentification: { schemeId: 'SRB:PIB', value: '113398540' },
     supplierPartyTaxScheme: { companySchemeId: 'RS', companyId: '113398540', taxSchemeId: 'VAT' },
     supplierPartyLegalEntity: { registrationName: 'FIRMA DOO', companySchemeId: 'RS:MB', companyId: '20123456' },
-    customerElectronicAddress: { schemeId: '9948', value: '223344556' },
-    customerPartyTaxScheme: { taxSchemeId: 'VAT', companyId: 'RS223344556' },
+    customerElectronicAddress: { schemeId: '9948', value: '101134702' },
+    customerPartyTaxScheme: { taxSchemeId: 'VAT', companyId: 'RS101134702' },
     customerPartyLegalEntity: { registrationName: 'KUPAC DOO', companySchemeId: 'RS:MB', companyId: '08123456' },
     issueDate: '2026-05-26',
     paymentDueDate: '2026-06-10',
@@ -74,6 +74,6 @@ describe('🛡️ Vertex Tax Breakdown Restrikcije [VRBL-CALC-24]', () => {
 
     const res = safeParse(SefInvoiceSchema, losBreakdown);
     expect(res.success).toBe(false);
-    expect(res.issues![0].message).toContain('Aritmetička greška [VRBL-CALC-10]');
+    expect(res.issues![0].message).toContain('Aritmetička greška [SEF-CALC-10]');
   });
 });

@@ -7,7 +7,7 @@ describe('🛡️ Vertex Supplier Tax Scheme Restrikcije [VRBL-RS-1p0p0-8]', () 
   const baseTemplate = {
     invoiceTypeCode: '380',
     supplierPib: '113398540',
-    customerPib: '223344556',
+    customerPib: '101134702',
     supplierElectronicAddress: { schemeId: '9948', value: '113398540' },
     supplierPartyIdentification: { schemeId: 'SRB:PIB', value: '113398540' },
     supplierPartyLegalEntity: { registrationName: 'Firma', companySchemeId: 'RS:MB', companyId: '20123456' },
@@ -20,7 +20,7 @@ describe('🛡️ Vertex Supplier Tax Scheme Restrikcije [VRBL-RS-1p0p0-8]', () 
     invoicingPeriodCode: '35',
     buyerReference: { tip: 'NEMA', vrednost: 'N/A' },
     despatchDocumentReferences: [{ id: 'OTP-1', issueDate: '2026-05-25' }],
-    customerElectronicAddress: { schemeId: '9948', value: '223344556' },
+    customerElectronicAddress: { schemeId: '9948', value: '101134702' },
     taxTotals: [{ currencyCode: 'RSD', taxAmount: 1000.00, subtotals: [{ taxableAmount: 5000.00, taxAmount: 1000.00, taxCategoryCode: 'S' }] }]
   };
 

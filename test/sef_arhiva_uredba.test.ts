@@ -5,7 +5,7 @@ import { app } from '../packages/backend/src/index';
 describe('v3.7.0 Arhivski Bedem — Uredba o čuvanju e-faktura Audit', () => {
 
   const klijentId = 'klijent_arhiva_test';
-  const pib = '102345678';
+  const pib = '101134702';
 
   beforeAll(async () => {
     // Inicijalizacija šeme
@@ -33,10 +33,29 @@ describe('v3.7.0 Arhivski Bedem — Uredba o čuvanju e-faktura Audit', () => {
         datum_prometa DATETIME,
         xml_blob TEXT,
         json_metadata TEXT,
-        parent_id TEXT,
         kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP,
         azurirano_u DATETIME DEFAULT CURRENT_TIMESTAMP
       )
+    `).run();
+
+    await (env as any).REGISTAR_DB.prepare(`
+      CREATE TABLE IF NOT EXISTS dokument_stavke (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, dokument_id TEXT NOT NULL, line_id TEXT,
+        naziv TEXT NOT NULL, poslata_kolicina REAL, primljena_kolicina REAL,
+        jedinica_mere TEXT, cena REAL, porez_stopa REAL, porez_kategorija TEXT,
+        osnovica REAL, iznos_poreza REAL, razlika REAL,
+        akcizna_kategorija TEXT, akcizna_gustina REAL, izvorna_stavka_id TEXT,
+        UNIQUE(dokument_id, line_id)
+      )
+    `).run();
+
+    await (env as any).REGISTAR_DB.prepare(`
+      CREATE TABLE IF NOT EXISTS dokumenti_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, dokument_id TEXT NOT NULL,
+        prethodni_status TEXT, novi_status TEXT NOT NULL, poruka TEXT,
+        kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(dokument_id) REFERENCES dokumenti(id)
+      );
     `).run();
   });
 
@@ -87,7 +106,7 @@ describe('v3.7.0 Arhivski Bedem — Uredba o čuvanju e-faktura Audit', () => {
       ID: "FKT-ARCH-01", IssueDate: "2026-05-25", DueDate: "2026-05-30",
       InvoiceTypeCode: "380", DocumentCurrencyCode: "RSD",
       Supplier: { Pib: pib, Name: "Test", Address: { City: "BG", CountryCode: "RS" } },
-      Customer: { Pib: "987654321", Name: "Kupac", Address: { City: "NS", CountryCode: "RS" } },
+      Customer: { Pib: "113398540", Name: "Kupac", Address: { City: "NS", CountryCode: "RS" } },
       LegalMonetaryTotal: { LineExtensionAmount: 100, TaxExclusiveAmount: 100, TaxInclusiveAmount: 120, AllowanceTotalAmount: 0, PrepaidAmount: 0, PayableRoundingAmount: 0, PayableAmount: 120 },
       Lines: [{ ID: "1", Quantity: 1, UnitCode: "H87", LineExtensionAmount: 100, Price: 100, ItemName: "Test", VatCategory: "S", VatPercent: 20 }]
     };
@@ -97,6 +116,10 @@ describe('v3.7.0 Arhivski Bedem — Uredba o čuvanju e-faktura Audit', () => {
       headers: { 'Content-Type': 'application/json', 'X-Klijent-ID': klijentId },
       body: JSON.stringify(invoiceData)
     }, env, mockCtx as any);
+
+    if (res.status === 400) {
+      console.log('ARHIVA ERROR:', await res.clone().text());
+    }
 
     expect(res.status).toBe(202);
 
@@ -140,7 +163,7 @@ describe('v3.7.0 Arhivski Bedem — Uredba o čuvanju e-faktura Audit', () => {
       ID: "FKT-C5-01", IssueDate: "2026-05-25", DueDate: "2026-05-30",
       InvoiceTypeCode: "380", DocumentCurrencyCode: "RSD",
       Supplier: { Pib: pib, Name: "Test", Address: { City: "BG", CountryCode: "RS" } },
-      Customer: { Pib: "987654321", Name: "Kupac", Address: { City: "NS", CountryCode: "RS" } },
+      Customer: { Pib: "113398540", Name: "Kupac", Address: { City: "NS", CountryCode: "RS" } },
       LegalMonetaryTotal: { LineExtensionAmount: 100, TaxExclusiveAmount: 100, TaxInclusiveAmount: 120, AllowanceTotalAmount: 0, PrepaidAmount: 0, PayableRoundingAmount: 0, PayableAmount: 120 },
       Lines: [{ ID: "1", Quantity: 1, UnitCode: "H87", LineExtensionAmount: 100, Price: 100, ItemName: "Test", VatCategory: "S", VatPercent: 20 }]
     };

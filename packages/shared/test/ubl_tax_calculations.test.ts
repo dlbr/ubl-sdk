@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as v from 'valibot';
 import { SefInvoiceSchema } from '../src/validators/ubl';
 
-describe('🛡️ Vertex Tax Calculations Forenzika [VRBL-CALC-1 do VRBL-CALC-4]', () => {
+describe('🛡️ Vertex Tax Calculations Forenzika [SEF-CALC-1 do SEF-CALC-4]', () => {
 
   const baseValidPayload = {
     customizationId: 'urn:vertexinc:vrbl:billing:1',
@@ -35,45 +35,50 @@ describe('🛡️ Vertex Tax Calculations Forenzika [VRBL-CALC-1 do VRBL-CALC-4]
     expect(res.success).toBe(true);
   });
 
-  it('🛑 Odbij ako krovna osnovica krši pravilo VRBL-CALC-1', () => {
+  it('🛑 Odbij ako krovna osnovica krši pravilo SEF-CALC-1', () => {
     const nevalidnaOsnovica = {
       ...baseValidPayload,
       taxExclusiveAmount: 999999.00 // Skroz pogrešna osnovica
     };
     const res = v.safeParse(SefInvoiceSchema, nevalidnaOsnovica);
     expect(res.success).toBe(false);
-    expect(res.issues[0].message).toContain('VRBL-CALC-1');
+    expect(res.issues[0].message).toContain('SEF-CALC-1');
   });
 
-  it('🛑 Odbij ako se krovni porez ne slaže sa sumom poreskih grupa (VRBL-CALC-2)', () => {
+  it('🛑 Odbij ako se krovni porez ne slaže sa sumom poreskih grupa (SEF-CALC-2)', () => {
     const nevalidanPorez = {
       ...baseValidPayload,
       taxAmount: 50000.00 // Krovni porez se ne slaže sa 19k iz subtotala
     };
     const res = v.safeParse(SefInvoiceSchema, nevalidanPorez);
     expect(res.success).toBe(false);
-    expect(res.issues[0].message).toContain('VRBL-CALC-2');
+    expect(res.issues[0].message).toContain('SEF-CALC-2');
   });
 
-  it('🛑 Odbij ako bruto iznos krši pravilo VRBL-CALC-3', () => {
+  it('🛑 Odbij ako bruto iznos krši pravilo SEF-CALC-3', () => {
     const nevalidanBruto = {
       ...baseValidPayload,
       taxInclusiveAmount: 120000.00 // Treba da bude 114000
     };
     const res = v.safeParse(SefInvoiceSchema, nevalidanBruto);
     expect(res.success).toBe(false);
-    expect(res.issues[0].message).toContain('VRBL-CALC-3');
+    expect(res.issues[0].message).toContain('SEF-CALC-3');
   });
 
-  it('🛑 Odbij ako granularna osnovica unutar grupe krši pravilo VRBL-CALC-4', () => {
+  it('🛑 Odbij ako granularna osnovica unutar grupe krši pravilo SEF-CALC-4', () => {
     const nevalidanSubtotalTaxable = {
       ...baseValidPayload,
+      invoiceLines: [
+        { id: '1', lineExtensionAmount: 60000.00, taxCategoryCode: 'S', taxCategoryPercent: 20 },
+        { id: '2', lineExtensionAmount: 40000.00, taxCategoryCode: 'AE', taxCategoryPercent: 0 }
+      ],
       taxSubtotals: [
-        { taxableAmount: 100000.00, taxAmount: 19000.00, taxCategoryCode: 'S', taxCategoryPercent: 20 } // Osnovica grupe ignorisala popust/trošak
+        { taxableAmount: 50000.00, taxAmount: 19000.00, taxCategoryCode: 'S', taxCategoryPercent: 20 },
+        { taxableAmount: 45000.00, taxAmount: 0.00, taxCategoryCode: 'AE', taxCategoryPercent: 0, taxExemptionReason: 'PDV-RS-10' }
       ]
     };
     const res = v.safeParse(SefInvoiceSchema, nevalidanSubtotalTaxable);
     expect(res.success).toBe(false);
-    expect(res.issues[0].message).toContain('VRBL-CALC-4');
+    expect(res.issues[0].message).toContain('SEF-CALC-4');
   });
 });

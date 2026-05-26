@@ -5,7 +5,7 @@ import worker from '../packages/backend/src/index';
 
 describe('🚀 Asinhroni Štit — Izlazne Prijemnice Queue Consumer Audit', () => {
   const klijentId = '113398540'; // PIB sa tvog screenshot-a
-  const pibDobavljaca = '987654321';
+  const pibDobavljaca = '101134702';
 
   beforeEach(async () => {
     vi.useRealTimers();
@@ -123,7 +123,10 @@ describe('🚀 Asinhroni Štit — Izlazne Prijemnice Queue Consumer Audit', () 
     console.log("📥 [Queue Test] Isporučujem Prijemnicu iz OTPREMNICA_QUEUE u handleLogisticsQueue...");
 
     // 5. Pokrećemo direktno krovni queue handler
-    await worker.queue(mockMessageBatch, env as any, {} as any);
+    await worker.queue(mockMessageBatch, env as any);
+
+    // 🚀 Sačekaj da asinhroni Consumer završi upis u D1
+await new Promise((resolve) => setTimeout(resolve, 50));
 
     // 6. Verifikacija: Proveravamo da li je status prebačen u ACCEPTED i upisan sef_id
     const doc = await (env as any).REGISTAR_DB.prepare("SELECT status, sef_id FROM dokumenti WHERE id = ?").bind(internaPrijemnicaId).first() as any;

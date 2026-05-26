@@ -7,7 +7,7 @@ describe('🛡️ Vertex Supplier ID Restrikcije [VRBL-RS-1p0p0-7]', () => {
   const baseTemplate = {
     invoiceTypeCode: '380',
     supplierPib: '113398540',
-    customerPib: '223344556',
+    customerPib: '101134702',
     supplierElectronicAddress: { schemeId: '9948', value: '113398540' },
     issueDate: '2026-05-26',
     paymentDueDate: '2026-06-10',

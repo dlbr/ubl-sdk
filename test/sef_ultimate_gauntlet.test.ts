@@ -22,7 +22,7 @@ describe('⛓️ SEF Master Gauntlet — Sve Opcije, Poreski Režimi i Edge Odbr
     console.log("🧼 [Gauntlet Teardown] Čišćenje resursa završeno.");
   });
 
-  const itIfKey = API_KEY ? it : it.skip;
+  const itIfKey = (API_KEY && API_KEY !== 'mock-local-key') ? it : it.skip;
 
   const getCleanMetadata = (broj: string) => ({
     broj,
@@ -30,8 +30,8 @@ describe('⛓️ SEF Master Gauntlet — Sve Opcije, Poreski Režimi i Edge Odbr
     pibKupca: STAGING_KUPAC_PIB,
     nazivProdavca: 'PRODAVAC ENTERPRISE DOO',
     nazivKupca: 'KUPAC ENTERPRISE DOO',
-    maticniBrojProdavca: '20456789',
-    maticniBrojKupca: '20987654',
+    maticniBrojProdavca: '17162543',
+    maticniBrojKupca: '12345674',
     valuta: 'RSD',
     note: 'Forenzički Audit v4.5.5',
     datumIzdavanja: new Date().toISOString().split('T')[0],
@@ -59,7 +59,6 @@ describe('⛓️ SEF Master Gauntlet — Sve Opcije, Poreski Režimi i Edge Odbr
       payload: () => SefUblBuilder.buildAvansni({
         ...getCleanMetadata(`FKT-386-AV-${Date.now()}`),
         datumUplate: new Date().toISOString().split('T')[0],
-        referentniRacun: 'PONUDA-100',
         osnovica: 5000.00, pdv: 500.00, poreskaKategorija: 'S', pdvStopa: 10.00
       }),
       assertions: (xml: string) => {
