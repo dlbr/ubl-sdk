@@ -576,10 +576,11 @@ export class XmlTransformer {
       <cbc:Name>${l.description}</cbc:Name>
       <cac:ClassifiedTaxCategory>
         <cbc:ID>${l.taxCategory}</cbc:ID>
-        <cbc:Percent>${(l.taxCategory === 'N' ? 0 : l.taxRate).toFixed(2)}</cbc:Percent>
+        <cbc:Percent>${['S', 'R'].includes(l.taxCategory) ? l.taxRate.toFixed(2) : '0.00'}</cbc:Percent>
         ${exemption}
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:ClassifiedTaxCategory>
+
     </cac:Item>
     <cac:Price>
       <cbc:PriceAmount currencyID="${currency}">${l.unitPrice.toFixed(2)}</cbc:PriceAmount>

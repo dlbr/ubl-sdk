@@ -58,9 +58,10 @@ export class SefUblBuilder {
       <cbc:Name>${s.naziv}</cbc:Name>
       <cac:ClassifiedTaxCategory>
         <cbc:ID>${s.porezKategorija}</cbc:ID>
-        <cbc:Percent>${percent}</cbc:Percent>
+        <cbc:Percent>${['S', 'R'].includes(s.porezKategorija) ? s.porezStopa.toFixed(2) : '0.00'}</cbc:Percent>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:ClassifiedTaxCategory>
+
     </cac:Item>
     <cac:Price>
       <cbc:PriceAmount currencyID="RSD">${Math.abs(s.cena).toFixed(2)}</cbc:PriceAmount>
