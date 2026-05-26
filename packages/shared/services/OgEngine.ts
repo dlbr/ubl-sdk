@@ -58,7 +58,7 @@ export class OgEngine {
             props: {
               style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
               children: [
-                { type: 'span', props: { style: { color: '#64748b', fontSize: '28px' }, children: 'Generisano preko sef.rs platforme' } },
+                { type: 'span', props: { style: { color: '#64748b', fontSize: '28px' }, children: 'Generisano preko dlbr.cloud platforme' } },
                 { 
                   type: 'span', 
                   props: { 

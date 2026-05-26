@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "predeploy": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:@dlbr/ubl-sdk --external:cloudflare:workers",
+    "predeploy": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:@dlbr/ubl-sdk --external:cloudflare:workers \"--external:*.woff2\" \"--external:*.ttf\" \"--external:*.wasm\"",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev"
   },

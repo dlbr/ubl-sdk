@@ -6,6 +6,8 @@ interface TikerStavka {
   smer: 'GORE' | 'DOLE' | 'ISTO';
 }
 
+import { ref, computed } from 'vue'
+
 const props = defineProps<{
   tikerPodaci: TikerStavka[]
 }>()
@@ -14,6 +16,22 @@ const props = defineProps<{
 const renderLista = computed(() => {
   return [...props.tikerPodaci, ...props.tikerPodaci, ...props.tikerPodaci]
 })
+
+const activeIndex = ref<number | null>(null)
+
+const copyToClipboard = async (kurs: number, index: number) => {
+  try {
+    await navigator.clipboard.writeText(kurs.toFixed(4))
+    activeIndex.value = index
+    setTimeout(() => {
+      if (activeIndex.value === index) {
+        activeIndex.value = null
+      }
+    }, 1500)
+  } catch (err) {
+    console.error('Failed to copy rate:', err)
+  }
+}
 </script>
 
 <template>
@@ -22,10 +40,19 @@ const renderLista = computed(() => {
       <div 
         v-for="(stavka, indeks) in renderLista" 
         :key="indeks" 
-        class="flex items-center mx-10 font-medium tracking-wide text-slate-300"
+        @click="copyToClipboard(stavka.kurs, indeks)"
+        class="flex items-center mx-10 font-medium tracking-wide text-slate-300 hover:text-white transition-colors duration-200"
+        title="Klikni da kopiraš srednji kurs"
       >
-        <span class="bg-slate-900 text-slate-400 px-2 py-0.5 rounded text-xs mr-2.5 border border-slate-800 font-mono">
-          {{ stavka.valuta }}
+        <span 
+          class="px-2 py-0.5 rounded text-xs mr-2.5 border font-mono transition-all duration-300 flex items-center justify-center min-w-[50px] text-center"
+          :class="[
+            activeIndex === indeks 
+              ? 'bg-emerald-600 text-white border-emerald-500 scale-105 font-bold' 
+              : 'bg-slate-900 text-slate-400 border-slate-800'
+          ]"
+        >
+          {{ activeIndex === indeks ? 'KOPIRANO' : stavka.valuta }}
         </span>
         
         <span class="text-white mr-2.5 font-mono tabular-nums">

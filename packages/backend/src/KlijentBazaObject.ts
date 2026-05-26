@@ -5,6 +5,7 @@ import { SefClient } from "@sef/shared/services/sefClient";
 import { Router, type RouterContext } from './router';
 import { Redacted } from "@sef/shared/services/redacted";
 import { D1SyncBridge } from "@sef/shared/services/D1SyncBridge";
+import { handleSefErrorWithEdgeAi } from "./edge-ai-interceptor";
 
 export class KlijentBaza extends DurableObject<Env> {
   private sql: SqlStorage;
@@ -276,7 +277,7 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ success: true }, { status: 202 });
     });
 
-    this.app.post('/fakture/send', async ({ req }: RouterContext<Env>) => {
+    this.app.post('/fakture/send', async ({ req, env, ctx }: RouterContext<Env>) => {
       const invoiceData = await req.json() as any;
       const testNow = req.headers.get('X-Test-Now');
       const { moze, error } = await this.checkLimit(1, invoiceData, testNow);
@@ -294,7 +295,37 @@ export class KlijentBaza extends DurableObject<Env> {
         this.sql.exec(`INSERT INTO fakture (internal_id, sef_id, broj_fakture, status, iznos) VALUES (?, ?, ?, ?, ?)`, internalId, 'SEF-ID', invoiceData.invoiceId || invoiceData.ID || invoiceData.broj || 'MOCK', 'Sent', 100);
         this.sql.exec(`INSERT INTO billing_ledger (id, tip_transakcije, iznos_kredita) VALUES (?, 'POTROŠNJA', -1)`, crypto.randomUUID());
         return Response.json({ success: true, internalId, sefId: 'SEF-ID', xml }, { status: 202 });
-      } catch (e: any) { return Response.json({ error: 'COMPLIANCE_ERROR', message: e.message }, { status: 400 }); }
+      } catch (e: any) {
+        const mockSefResponse = new Response(e.message, { status: 400 });
+        const internalId = `INV-${Date.now()}`;
+        const brojDok = invoiceData.invoiceId || invoiceData.ID || invoiceData.broj || 'MOCK';
+        
+        if (ctx && ctx.waitUntil) {
+          ctx.waitUntil(
+            handleSefErrorWithEdgeAi(
+              mockSefResponse,
+              internalId,
+              brojDok,
+              "",
+              env,
+              ctx,
+              this.getPib()
+            )
+          );
+        } else {
+          handleSefErrorWithEdgeAi(
+            mockSefResponse,
+            internalId,
+            brojDok,
+            "",
+            env,
+            ctx,
+            this.getPib()
+          ).catch(console.error);
+        }
+
+        return Response.json({ error: 'COMPLIANCE_ERROR', message: e.message }, { status: 400 });
+      }
     });
 
     this.app.post('/otpremnice/reconcile-credit-note/:id', async (c: RouterContext<Env>) => {

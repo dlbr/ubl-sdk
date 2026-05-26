@@ -13,19 +13,42 @@ export async function handleSefErrorWithEdgeAi(
   env: any,
   ctx: any,
   klijentId?: string
-): Promise<Response> {
+): Promise<void> {
   
   const sirovaGreska = await sefResponse.text();
   console.warn(`[Edge Alert] SEF odbio dokument ${brojDokumenta}. Pokrećem Llama-3 analizu...`);
 
-  try {
-    // 🛡️ HERMETIČKI ŠTIT: Ako AI podsistem nije dostupan (npr. lokalni Miniflare bez AI bindinga),
-    // ne dozvoljavamo krahiranje workerd-a.
-    if (!env.AI) {
-      throw new Error("AI subsystem not bound to environment.");
+  // 1. Provera Circuit Breaker-a pre nego što išta uradimo
+  if (env.PORESKI_KV) {
+    try {
+      const state = await env.PORESKI_KV.get("CF_AI_CIRCUIT_STATE");
+      if (state === "OPEN") {
+        const suspendedUntilRaw = await env.PORESKI_KV.get("CF_AI_SUSPENDED_UNTIL");
+        if (suspendedUntilRaw) {
+          const suspendedUntil = parseInt(suspendedUntilRaw, 10);
+          if (Date.now() < suspendedUntil) {
+            console.warn(`[Edge AI Circuit Breaker] Circuit is OPEN (suspended). Bypassing AI analysis until ${new Date(suspendedUntil).toISOString()}.`);
+            return;
+          } else {
+            console.log("[Edge AI Circuit Breaker] Suspension expired. Transitioning to HALF-OPEN.");
+            await env.PORESKI_KV.put("CF_AI_CIRCUIT_STATE", "HALF-OPEN");
+          }
+        }
+      }
+    } catch (kvErr) {
+      console.error("[Edge AI Circuit Breaker] Greška prilikom čitanja statusa iz KV-a:", kvErr);
     }
+  }
 
-    const aiOdlukaRaw = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+  // 2. Provera AI binding-a
+  if (!env.AI) {
+    console.warn("⚠️ [Edge AI Interceptor] AI subsystem not bound to environment. Bypassing.");
+    return;
+  }
+
+  try {
+    // 3. Pokretanje AI poziva sa 800ms limitom (Promise.race)
+    const runAiPromise = env.AI.run('@cf/meta/llama-3-8b-instruct', {
       messages: [
         {
           role: "system",
@@ -38,6 +61,19 @@ export async function handleSefErrorWithEdgeAi(
       ],
       response_format: { type: "json_object" }
     });
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("AI_TIMEOUT")), 800)
+    );
+
+    const aiOdlukaRaw = await Promise.race([runAiPromise, timeoutPromise]) as any;
+
+    // 4. Uspeh AI poziva -> Zatvaranje/Resetovanje Circuit Breakera
+    if (env.PORESKI_KV) {
+      await env.PORESKI_KV.put("CF_AI_CIRCUIT_STATE", "CLOSED");
+      await env.PORESKI_KV.put("CF_AI_FAILURE_COUNT", "0");
+      await env.PORESKI_KV.delete("CF_AI_SUSPENDED_UNTIL");
+    }
 
     const odluka = JSON.parse(aiOdlukaRaw.response);
 
@@ -67,19 +103,26 @@ export async function handleSefErrorWithEdgeAi(
       } else {
         await posaljiHotfixTelegramAlarm(sirovaGreska, brojDokumenta, env);
       }
-
-      return new Response(JSON.stringify({
-        success: true,
-        status: "QUEUED_FOR_COMPLIANCE",
-        message: "Državni SEF portal prolazi kroz vanredne tehničke izmene. Dokument je u asinhronom štitu."
-      }), { status: 202, headers: { "Content-Type": "application/json" } });
     }
 
   } catch (err: any) {
-    // 🛡️ FAIL-SAFE: AI je pao, vraćamo originalnu grešku bez rušenja procesa
-    console.error("⚠️ [Edge AI Fail-Safe] AI podsistem nedostupan usled mrežnog prekida. Vraćam sirovu grešku.");
-    return new Response(sirovaGreska, { status: 400 });
-  }
+    // 5. Greška ili Timeout -> Evidentiranje u Circuit Breaker
+    console.error(`⚠️ [Edge AI Fail-Safe] AI poziv neuspešan: ${err.message}`);
+    
+    if (env.PORESKI_KV) {
+      try {
+        const currentFailuresRaw = await env.PORESKI_KV.get("CF_AI_FAILURE_COUNT") || "0";
+        const newFailures = parseInt(currentFailuresRaw, 10) + 1;
+        await env.PORESKI_KV.put("CF_AI_FAILURE_COUNT", newFailures.toString());
 
-  return new Response(sirovaGreska, { status: 400 });
+        if (newFailures >= 3) {
+          console.error(`🚨 [Edge AI Circuit Breaker] Detektovano ${newFailures} uzastopnih grešaka. OTVARAM OSIGURAČ na 30 minuta!`);
+          await env.PORESKI_KV.put("CF_AI_CIRCUIT_STATE", "OPEN");
+          await env.PORESKI_KV.put("CF_AI_SUSPENDED_UNTIL", (Date.now() + 30 * 60 * 1000).toString());
+        }
+      } catch (kvErr) {
+        console.error("[Edge AI Circuit Breaker] Greška prilikom ažuriranja osigurača u KV-u:", kvErr);
+      }
+    }
+  }
 }

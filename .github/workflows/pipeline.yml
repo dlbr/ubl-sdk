@@ -76,7 +76,7 @@ jobs:
         env:
           ADMIN_API_KEY: "admin_secret"
           SESSION_SECRET: "test_secret_32_chars_long_ver_2026"
-        run: pnpm test
+        run: pnpm test:clean
 
   deploy-backend:
     name: ⚡ Deploy Backend Worker

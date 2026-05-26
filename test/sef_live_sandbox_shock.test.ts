@@ -19,6 +19,7 @@ describe('🚀 SEF Live Sandbox Integration — Live Hotfix Testing', () => {
       PORESKI_KV: {
         put: async (key: string, value: string) => { kvStore.set(key, value); },
         get: async (key: string) => kvStore.get(key) || null,
+        delete: async (key: string) => { kvStore.delete(key); },
       },
       SEF_QUEUE: {
         send: async (payload: any) => { upisanePorukeUQueue.push(payload); }
@@ -42,7 +43,7 @@ describe('🚀 SEF Live Sandbox Integration — Live Hotfix Testing', () => {
     mockCtx = { waitUntil: (promise: Promise<any>) => promise };
   });
 
-  it('1. SIMULACIJA ŠOKA: Obrada Schematron greške preko Edge AI presretača', async () => {
+  it('1. SIMULACIJA ŠOKA: Obrada Schematron greške preko Edge AI presretača u pozadini', async () => {
     // v4.3.8: Zbog anomalije na Demo SEF-u (koji nekada vraća 200 za nevalidne podatke),
     // ovde eksplicitno mokujemo 400 rejection da bismo testirali AI logiku presretanja.
     
@@ -69,7 +70,7 @@ describe('🚀 SEF Live Sandbox Integration — Live Hotfix Testing', () => {
     console.log("📡 Simuliram KRITIČNU GREŠKU sa SEF-a (400 Bad Request)...");
 
     // 2. Propuštamo ovaj (simulirani) sirovi odgovor države kroz naš Edge AI presretač
-    const odgovorKlijentskomErpU = await handleSefErrorWithEdgeAi(
+    await handleSefErrorWithEdgeAi(
       mockSefResponse,
       "db_id_shock",
       "FKT-SHOCK-001",
@@ -81,11 +82,6 @@ describe('🚀 SEF Live Sandbox Integration — Live Hotfix Testing', () => {
     // =========================================================================
     // VERIFIKACIJA AUTONOMNE ODBRANE
     // =========================================================================
-
-    // Klijentski ERP dobija stabilan 202 štit (Izbegli smo pucanje integracije!)
-    expect(odgovorKlijentskomErpU.status).toBe(202);
-    const jsonOdgovora = await odgovorKlijentskomErpU.json();
-    expect(jsonOdgovora.status).toBe("QUEUED_FOR_COMPLIANCE");
 
     // Proveravamo da li je dokument bezbedno zaključan u Queue štitu
     expect(upisanePorukeUQueue).toHaveLength(1);

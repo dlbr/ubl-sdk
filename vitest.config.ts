@@ -69,6 +69,13 @@ export default defineConfig({
     threads: !isCI,
     fileParallelism: !isCI,
     maxWorkers: isCI ? 1 : undefined,
+    pool: 'threads',
+    poolOptions: {
+      threads: {
+        isolate: true,
+        execArgv: ['--max-old-space-size=4096'],
+      },
+    },
 
     include: [
       'worker/**/*.{test,spec}.ts',

@@ -8,7 +8,7 @@ if (!global.crypto) {
   global.crypto = { randomUUID: () => 'test-uuid-1234-5678' };
 }
 
-describe('🛡️ SEF Bridge v4.2.1 — Live Hotfix Shock Simulation (Vitest)', () => {
+describe('🛡️ SEF Bridge v4.2.1 — Live Hotfix Shock & Circuit Breaker Simulation (Vitest)', () => {
   let mockEnv: any;
   let mockCtx: any;
   let upisanePorukeUQueue: any[];
@@ -25,6 +25,7 @@ describe('🛡️ SEF Bridge v4.2.1 — Live Hotfix Shock Simulation (Vitest)', 
       PORESKI_KV: {
         put: async (key: string, value: string) => { kvStore.set(key, value); },
         get: async (key: string) => kvStore.get(key) || null,
+        delete: async (key: string) => { kvStore.delete(key); },
       },
 
       // 2. Mock-ujemo Cloudflare Queue (SEF_QUEUE) asinhroni štit
@@ -86,7 +87,7 @@ describe('🛡️ SEF Bridge v4.2.1 — Live Hotfix Shock Simulation (Vitest)', 
   // =========================================================================
   // 🔬 TEST SCENARIO 1: DRŽAVNI HOTFIX (CRNI LABUD)
   // =========================================================================
-  it('SIMULACIJA: Država pušta iznenadni Hotfix 3.17.1 -> Sistem aktivira asinhroni štit', async () => {
+  it('SIMULACIJA: Država pušta iznenadni Hotfix 3.17.1 -> Sistem aktivira asinhroni štit bez blokiranja ERP odgovora', async () => {
     const lokalniId = "faktura_internal_999";
     const brojDokumenta = "FKT-STAGE-HOTFIX-ANOMALIJA";
     const xmlSadrzaj = "<?xml version=\"1.0\"?><Invoice>...</Invoice>";
@@ -97,8 +98,8 @@ describe('🛡️ SEF Bridge v4.2.1 — Live Hotfix Shock Simulation (Vitest)', 
       { status: 400 }
     );
 
-    // Pokrećemo naš Edge AI interceptor
-    const odgovorKlijentskomErpU = await handleSefErrorWithEdgeAi(
+    // Pokrećemo naš Edge AI interceptor (asinhroni savetnik)
+    await handleSefErrorWithEdgeAi(
       simuliraniSefOdgovor,
       lokalniId,
       brojDokumenta,
@@ -109,25 +110,19 @@ describe('🛡️ SEF Bridge v4.2.1 — Live Hotfix Shock Simulation (Vitest)', 
 
     // ─── VERIFIKACIJA ISPUNJENOSTI OBAVEZA (ASSERTIONS) ───
 
-    // 1. Klijentov ERP dobija stabilan 202 Accepted umesto pucanja integracije
-    expect(odgovorKlijentskomErpU.status).toBe(202);
-    const jsonOdgovora = await odgovorKlijentskomErpU.json();
-    expect(jsonOdgovora.status).toBe("QUEUED_FOR_COMPLIANCE");
-    expect(jsonOdgovora.message).toContain("Državni SEF portal prolazi kroz vanredne tehničke izmene");
-
-    // 2. Dokaz da je dokument bezbedno zaključan u asinhronom Queue štitu (Krediti na Ledgeru su osigurani)
+    // 1. Dokaz da je dokument bezbedno zaključen u asinhronom Queue štitu (Krediti na Ledgeru su osigurani)
     expect(upisanePorukeUQueue).toHaveLength(1);
     expect(upisanePorukeUQueue[0].broj).toBe(brojDokumenta);
     expect(upisanePorukeUQueue[0].id).toBe(lokalniId);
 
-    // 3. Dokaz da je Llama 3 spustila rampu unutar Cloudflare KV-a za taj tip dokumenta
+    // 2. Dokaz da je Llama 3 spustila rampu unutar Cloudflare KV-a za taj tip dokumenta
     const kvStatusRaw = kvStore.get("ALERT_SEF_HOTFIX_DETECTED");
     expect(kvStatusRaw).not.toBeUndefined();
     const kvStatus = JSON.parse(kvStatusRaw!);
     expect(kvStatus.status).toBe("POTREBNA_INSPEKCIJA");
     expect(kvStatus.uzrok).toContain("Element Note is mandatory");
 
-    // 4. Dokaz da je Telegram Bot uspešno i asinhrono ispalio interaktivni alarm u džep inženjera
+    // 3. Dokaz da je Telegram Bot uspešno i asinhrono ispalio interaktivni alarm u džep inženjera
     expect(poslateTelegramPoruke).toHaveLength(1);
     expect(poslateTelegramPoruke[0].chat_id).toBe("MOCK_CHAT_123");
     expect(poslateTelegramPoruke[0].text).toContain("Detektovan potencijalni državni Hotfix!");
@@ -142,14 +137,14 @@ describe('🛡️ SEF Bridge v4.2.1 — Live Hotfix Shock Simulation (Vitest)', 
   // =========================================================================
   // 🔬 TEST SCENARIO 2: LJUDSKA GREŠKA (ODBRANA OD LAŽNIH UZBUNA)
   // =========================================================================
-  it('FAIL-SAFE: Ako klijent pošalje standardno lošu fakturu, AI je odbija bez aktiviranja štita', async () => {
+  it('FAIL-SAFE: Ako klijent pošalje standardno lošu fakturu, AI ne aktivira štit', async () => {
     // Klijent je pogrešio dužinu PIB-a, to nije državni hotfix već standardni loš unos
     const simuliraniSefOdgovor = new Response(
       "Receiver PIB '123' is invalid length", 
       { status: 400 }
     );
 
-    const odgovorKlijentskomErpU = await handleSefErrorWithEdgeAi(
+    await handleSefErrorWithEdgeAi(
       simuliraniSefOdgovor,
       "id_lokalni",
       "FKT-LJUDSKA-GRESKA",
@@ -158,14 +153,69 @@ describe('🛡️ SEF Bridge v4.2.1 — Live Hotfix Shock Simulation (Vitest)', 
       mockCtx
     );
 
-    // Sistem ne sme aktivirati štit, već klijentu odmah vraća regularni 400 Bad Request
-    expect(odgovorKlijentskomErpU.status).toBe(400);
-    const tekstGreske = await odgovorKlijentskomErpU.text();
-    expect(tekstGreske).toContain("Receiver PIB '123' is invalid length");
-
     // Queue i Telegram kanali moraju ostati netaknuti (Nema lažnih uzbuna na telefonima tima)
     expect(upisanePorukeUQueue).toHaveLength(0);
     expect(poslateTelegramPoruke).toHaveLength(0);
     expect(kvStore.has("ALERT_SEF_HOTFIX_DETECTED")).toBe(false);
+  });
+
+  // =========================================================================
+  // 🔬 TEST SCENARIO 3: CIRCUIT BREAKER OSIGURAČ (PAD AI SERVISA)
+  // =========================================================================
+  it('🚨 CIRCUIT BREAKER: Tri uzastopna pada AI servisa otvaraju osigurač i aktiviraju fast-path bypass', async () => {
+    const simuliraniSefOdgovor = new Response("Error payload", { status: 400 });
+
+    // 1. Simulišemo pad AI API servisa (npr. baca fatalnu 503 grešku)
+    mockEnv.AI.run = vi.fn().mockRejectedValue(new Error("Cloudflare AI is down (503 Service Unavailable)"));
+
+    // Prvi neuspeh
+    await handleSefErrorWithEdgeAi(simuliraniSefOdgovor.clone(), "id1", "FKT-1", "", mockEnv, mockCtx);
+    expect(kvStore.get("CF_AI_FAILURE_COUNT")).toBe("1");
+    expect(kvStore.get("CF_AI_CIRCUIT_STATE")).toBeUndefined(); // Još uvek je CLOSED (podrazumevano)
+
+    // Drugi neuspeh
+    await handleSefErrorWithEdgeAi(simuliraniSefOdgovor.clone(), "id2", "FKT-2", "", mockEnv, mockCtx);
+    expect(kvStore.get("CF_AI_FAILURE_COUNT")).toBe("2");
+
+    // Treći neuspeh -> Ovde osigurač MORA da se otvori!
+    await handleSefErrorWithEdgeAi(simuliraniSefOdgovor.clone(), "id3", "FKT-3", "", mockEnv, mockCtx);
+    expect(kvStore.get("CF_AI_FAILURE_COUNT")).toBe("3");
+    expect(kvStore.get("CF_AI_CIRCUIT_STATE")).toBe("OPEN");
+    
+    const suspendedUntilRaw = kvStore.get("CF_AI_SUSPENDED_UNTIL");
+    expect(suspendedUntilRaw).not.toBeUndefined();
+    const suspendedUntil = parseInt(suspendedUntilRaw!, 10);
+    expect(suspendedUntil).toBeGreaterThan(Date.now());
+
+    // 2. Kada je osigurač OTVOREN, pozivi se automatski zaobilaze (Fast-path bypass)
+    // Resetujemo brojač poziva Llama-3 modela
+    mockEnv.AI.run = vi.fn();
+    
+    await handleSefErrorWithEdgeAi(simuliraniSefOdgovor.clone(), "id4", "FKT-4", "", mockEnv, mockCtx);
+    
+    // Dokaz da Workers AI uopšte nije bio pozvan (Fast path zaštita resursa)
+    expect(mockEnv.AI.run).not.toHaveBeenCalled();
+  });
+
+  // =========================================================================
+  // 🔬 TEST SCENARIO 4: CIRCUIT BREAKER AUTOMATSKO ZATVARANJE (OPORAVAK)
+  // =========================================================================
+  it('🟢 CIRCUIT BREAKER: Uspešan AI poziv resetuje osigurač na CLOSED status', async () => {
+    // Postavljamo početno stanje: 2 greške
+    kvStore.set("CF_AI_FAILURE_COUNT", "2");
+
+    const simuliraniSefOdgovor = new Response("Error payload", { status: 400 });
+
+    // AI je uspešno proradio
+    mockEnv.AI.run = vi.fn().mockResolvedValue({
+      response: JSON.stringify({ tip: "STANDARD_REJECTION", akcija: "REJECT" })
+    });
+
+    await handleSefErrorWithEdgeAi(simuliraniSefOdgovor, "id_test", "FKT-TEST", "", mockEnv, mockCtx);
+
+    // Osigurač je zatvoren, a brojač grešaka je resetovan na 0
+    expect(kvStore.get("CF_AI_CIRCUIT_STATE")).toBe("CLOSED");
+    expect(kvStore.get("CF_AI_FAILURE_COUNT")).toBe("0");
+    expect(kvStore.get("CF_AI_SUSPENDED_UNTIL")).toBeUndefined();
   });
 });

@@ -10,7 +10,7 @@ workers_dev = false
 
 [[rules]]
 type = "Data"
-globs = ["**/*.woff2"]
+globs = ["**/*.woff2", "**/*.ttf"]
 fallthrough = true
 
 [[rules]]
