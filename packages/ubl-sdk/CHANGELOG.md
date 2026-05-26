@@ -1,0 +1,8 @@
+# @dlbr/ubl-sdk
+
+## 1.0.6
+
+### Patch Changes
+
+- 38fd00f: docs(sdk): add SECURITY.md policy for vulnerability reporting
+- a0631de: chore(sdk): transition to Changesets automated release pipeline
