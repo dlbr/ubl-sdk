@@ -202,11 +202,19 @@ export const IsoCurrencySchema = v.pipe(
   v.transform((val) => val.toUpperCase())
 );
 
+// 20. Šema za obračunski period (InvoicePeriod) prema [VRBL-CORE-80/85]
+export const SefInvoicePeriodSchema = v.object({
+  startDate: v.string([v.isoDate('[FATAL] Datum početka perioda (startDate) mora biti u ISO formatu YYYY-MM-DD.')]),
+  endDate: v.string([v.isoDate('[FATAL] Datum završetka perioda (endDate) mora biti u ISO formatu YYYY-MM-DD.')])
+});
+
 // 🛡️ KROVNI TITANIJUMSKI VALIDATOR (Srbija Profile)
 export const SefInvoiceSchema = v.pipe(
   v.object({
     customizationId: v.literal('urn:vertexinc:vrbl:billing:1', '[FATAL] VRBL-CORE-4: CustomizationID mora biti "urn:vertexinc:vrbl:billing:1".'),
     profileId: v.literal('urn:vertexinc:vrbl:billing:1', '[FATAL] VRBL-CORE-5: ProfileID mora biti "urn:vertexinc:vrbl:billing:1".'),
+    specificationId: v.literal('urn:vertexinc:vrbl:spec:core:1', '[FATAL] VRBL-CORE-10: SpecificationID mora biti "urn:vertexinc:vrbl:spec:core:1".'),
+    localProfileSpecificationId: v.literal('urn:vertexinc:vrbl:spec:rs:1p0p0', '[FATAL] VRBL-CORE-15: LocalProfileSpecificationID za Srbiju mora biti "urn:vertexinc:vrbl:spec:rs:1p0p0".'),
     routingDetails: SefVrblRoutingDetailsSchema,
     businessProcessType: v.literal('COMMERCIAL_INVOICING', '[FATAL] VRBL-CONTEXT: businessProcessType mora biti striktno postavljen na "COMMERCIAL_INVOICING".'),
     businessContextId: v.literal('urn:vertexinc:vrbl:context:rs:proc:1', '[FATAL] VRBL-CONTEXT: businessContextId za profil Srbije mora biti striktno "urn:vertexinc:vrbl:context:rs:proc:1".'),
@@ -214,6 +222,7 @@ export const SefInvoiceSchema = v.pipe(
     // 🟢 Korenski identifikatori
     invoiceId: v.pipe(v.string(), v.minLength(1, '[FATAL] VRBL-CORE: Broj fakture (invoiceId) ne sme biti prazan.'), v.maxLength(50, '[FATAL] VRBL-CORE: Broj fakture ne sme biti duži od 50 karaktera.')),
     issueTime: v.pipe(v.string(), v.regex(/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/, '[FATAL] VRBL-CORE: Vreme izdavanja (issueTime) mora biti u ispravnom formatu hh:mm:ss.')),
+    invoicePeriod: SefInvoicePeriodSchema,
 
     invoiceTypeCode: v.picklist(['380', '381', '383', '386'], '[FATAL] Nevalidan InvoiceTypeCode (Dozvoljeni: 380, 381, 383, 386).'),
     issueDate: v.string([v.isoDate('[FATAL] Nevalidan format datuma izdavanja.')]),
@@ -256,10 +265,35 @@ export const SefInvoiceSchema = v.pipe(
     invoiceLines: v.array(SefInvoiceLineSchema, [v.minLength(1, '[FATAL] Faktura mora sadržati najmanje jednu stavku (InvoiceLine).')])
   }),
 
-  // Poreska valuta
-  v.check((input) => input.taxCurrencyCode === 'RSD', '[FATAL] Poreska anomalija: Prema Zakonu o eFakturisanju u Srbiji, poreska valuta (taxCurrencyCode) mora biti striktno postavljena na "RSD".'),
-
+  // Hronologija datuma
   v.check((input) => new Date(input.issueDate) <= new Date(input.paymentDueDate), '[FATAL] Rok plaćanja ne može biti pre datuma izdavanja fakture.'),
+
+  // 🎯 VERTEX [VRBL-CORE-82] HRONOLOŠKI KONTINUITET PERIODA
+  v.check((input) => {
+    const start = new Date(input.invoicePeriod.startDate).getTime();
+    const end = new Date(input.invoicePeriod.endDate).getTime();
+    return end >= start;
+  }, '[FATAL] Hronološka greška [VRBL-CORE-82]: Datum završetka perioda (endDate) ne može biti stariji od datuma početka perioda (startDate).'),
+
+  // 🎯 VERTEX [VRBL-CORE-83] ODNOS PERIODA I IZDAVANJA
+  v.check((input) => {
+    const end = new Date(input.invoicePeriod.endDate).getTime();
+    const issue = new Date(input.issueDate).getTime();
+    return end <= issue;
+  }, '[FATAL] Hronološka greška [VRBL-CORE-83]: Obračunski period se ne može završavati u budućnosti u odnosu na datum izdavanja fakture (issueDate).'),
+
+  // 🎯 VERTEX [VRBL-CORE-16] ZABRANA OTPREMNICA NA AVANSIMA
+  v.check((input) => {
+    if (input.invoiceTypeCode === '386') {
+      return !input.despatchDocumentReferences || input.despatchDocumentReferences.length === 0;
+    }
+    return true;
+  }, '[FATAL] Strukturalna greška [VRBL-CORE-16]: Avansni račun (tip 386) ne može sadržati reference na otpremnice.'),
+
+  // 🎯 VERTEX [VRBL-CORE-18] ZABRANA NEGATIVNIH TOTALA
+  v.check((input) => {
+    return input.lineExtensionAmount >= 0 && input.taxExclusiveAmount >= 0 && input.taxInclusiveAmount >= 0;
+  }, '[FATAL] Aritmetička greška [VRBL-CORE-18]: Finansijske vrednosti u totalima moraju biti izražene kao pozitivni brojevi.'),
 
   v.check((input) => {
     for (const line of input.invoiceLines) {
@@ -381,7 +415,17 @@ export const SefInvoiceSchema = v.pipe(
   v.check((input) => {
     const sumaTroskova = input.allowanceCharges ? input.allowanceCharges.filter(ac => ac.chargeIndicator).reduce((acc, ac) => acc + ac.amount, 0) : 0;
     return Math.abs((input.chargeTotalAmount || 0) - sumaTroskova) < 0.01;
-  }, '[FATAL] Nesklad u totalima: Krovno polje chargeTotalAmount mora biti tačan zbir svih detaljnih stavki dodatnih troškova.')
+  }, '[FATAL] Nesklad u totalima: Krovno polje chargeTotalAmount mora biti tačan zbir svih detaljnih stavki dodatnih troškova.'),
+
+  // Poreska valuta
+  v.check((input) => input.taxCurrencyCode === 'RSD', '[FATAL] Poreska anomalija: Prema Zakonu o eFakturisanju u Srbiji, poreska valuta (taxCurrencyCode) mora biti striktno postavljena na "RSD".'),
+
+  v.check((input) => {
+    const sumaPoreskihOsnovica = input.taxTotals.reduce((totalAcc, total) => {
+      return totalAcc + total.subtotals.reduce((subAcc, sub) => subAcc + sub.taxableAmount, 0);
+    }, 0);
+    return Math.abs(input.taxExclusiveAmount - sumaPoreskihOsnovica) < 0.01;
+  }, '[FATAL] Nesklad u totalima [VRBL-CALC-24]: Zbir svih osnovica unutar poreskih grupa (TaxSubtotal) se ne poklapa sa krajnjom osnovicom dokumenta (taxExclusiveAmount). Popusti ili troškovi nisu pravilno raspoređeni.')
 );
 
 export type SefInvoiceInput = v.InferOutput<typeof SefInvoiceSchema>;
