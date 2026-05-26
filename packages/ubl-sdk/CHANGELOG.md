@@ -1,5 +1,11 @@
 # @dlbr/ubl-sdk
 
+## 1.0.7
+
+### Patch Changes
+
+- 24f43b3: fix(ci): resolve authentication URL format for automated subtree sync
+
 ## 1.0.6
 
 ### Patch Changes
