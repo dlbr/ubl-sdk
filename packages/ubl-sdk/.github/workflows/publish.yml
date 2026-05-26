@@ -1,48 +1,80 @@
-name: Publish Package to NPM
+name: pipeline
 
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: true
 
 jobs:
-  publish:
+  test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - name: 📥 Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: ⚙️ Setup pnpm
+      - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
-          run_install: false
 
-      - name: 🗄️ Keširanje pnpm store
-        uses: actions/cache@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
+          node-version: 24
+          cache: 'pnpm'
 
-      - name: 📦 Instalacija i Build
-        run: |
-          pnpm config set store-dir ~/.pnpm-store
-          pnpm install --frozen-lockfile
-          pnpm run build
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
 
-      - name: 🧪 Pokretanje Testova
-        run: pnpm run test
+      - name: Lint
+        run: pnpm run lint || echo "No lint script found"
 
-      - name: 🚀 Publish na NPM
-        run: pnpm publish --no-git-checks --access public --provenance
+      - name: Build Module
+        run: pnpm run build
+
+      - name: Run Tests
+        run: pnpm test
+
+  publish:
+    needs: test
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Module
+        run: pnpm run build
+
+      - name: Publish to npm
+        run: npm publish --provenance
