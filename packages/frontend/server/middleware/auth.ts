@@ -1,4 +1,4 @@
-import { defineEventHandler, getCookie, createError, sendRedirect } from 'h3';
+import { defineEventHandler, getCookie, getHeader, createError, sendRedirect } from 'h3';
 import { SessionEngine } from '@sef/shared/services/session';
 
 /**
@@ -9,34 +9,26 @@ import { SessionEngine } from '@sef/shared/services/session';
 export default defineEventHandler(async (event) => {
   const path = event.path;
 
-  // Pomoćni bezbedni čitač zaglavlja otporan na verzije H3/Nitro biblioteke
-  const getSafeHeader = (ev: any, name: string): string | undefined => {
-    const req = ev.req || ev.node?.req;
-    if (!req || !req.headers) return undefined;
-    if (typeof req.headers.get === 'function') {
-      return req.headers.get(name) || undefined;
-    }
-    return req.headers[name.toLowerCase()] as string | undefined;
-  };
-
   // 1. JAVNE RUTE: Dozvoljavamo pristup bez aktivne sesije
   const isPublic = 
     path === '/' || 
     path === '/onboarding' ||
     path === '/docs' ||
+    path === '/kursna-lista' ||
     path.startsWith('/_nuxt/') ||
     path.startsWith('/__nuxt_error') ||
     path.startsWith('/api/auth/login') ||
     path.startsWith('/api/onboarding/') ||
     path.startsWith('/api/webhook-setup') ||
-    path.startsWith('/api/webhooks/');
+    path.startsWith('/api/webhooks/') ||
+    path.startsWith('/api/public/');
 
   if (isPublic) {
     return;
   }
 
   // 2. INTEGRACIONI OKLOP: Dozvoljavamo direktan ID preko zaglavlja za ERP i testove
-  const headerKlijentId = getSafeHeader(event, 'x-klijent-id');
+  const headerKlijentId = getHeader(event, 'x-klijent-id');
   if (headerKlijentId) {
     event.context.session = {
       klijentId: headerKlijentId,
@@ -50,7 +42,7 @@ export default defineEventHandler(async (event) => {
   let sessionCookie = getCookie(event, '__Host-sef_bridge_session');
   
   if (!sessionCookie) {
-    const rawCookie = getSafeHeader(event, 'cookie');
+    const rawCookie = getHeader(event, 'cookie');
     if (rawCookie) {
       const match = rawCookie.match(/__Host-sef_bridge_session=([^;]+)/);
       if (match) sessionCookie = decodeURIComponent(match[1]!);
@@ -60,7 +52,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!sessionCookie) {
-    const isPageRequest = !path.startsWith('/api/') && getSafeHeader(event, 'accept')?.includes('text/html');
+    const isPageRequest = !path.startsWith('/api/') && getHeader(event, 'accept')?.includes('text/html');
     if (isPageRequest) {
       return sendRedirect(event, '/onboarding', 302);
     }

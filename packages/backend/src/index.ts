@@ -77,6 +77,7 @@ app.get('/api/public/v1/kursna-lista', async ({ env }: any) => {
   const eur = await NbsSoapService.getMiddleRate('EUR', danas, env);
   return Response.json({
     status: 'success',
+    datum: danas,
     valute: { 
       EUR: { kurs: eur || 117.2, trend: { smer: 'GORE' } }, 
       USD: { kurs: 108.5, trend: { smer: 'DOLE' } }, 
@@ -228,6 +229,7 @@ export class SEFBackendRPC extends WorkerEntrypoint<Env> {
     const eur = await NbsSoapService.getMiddleRate('EUR', danas, this.env).catch(() => null);
     return {
       status: 'success',
+      datum: danas,
       tiker: [
         { valuta: 'EUR', kurs: eur || 117.2, smer: 'GORE', promenaProcenat: 0 },
         { valuta: 'USD', kurs: 108.5, smer: 'DOLE', promenaProcenat: 0 },
