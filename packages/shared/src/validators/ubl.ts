@@ -195,6 +195,13 @@ export const SefInvoiceNoteSchema = v.pipe(
   v.check((text) => !(/<|>|&(?![a-zA-Z0-9#]+;)/.test(text)), '[FATAL] VRBL-NOTE: Tekst napomene sadrži zabranjene sirove XML karaktere (<, >, &). Koristite ispravne XML entitete.')
 );
 
+// 19. Šema za valute (ISO 4217) prema [VRBL-CORE-71]
+export const IsoCurrencySchema = v.pipe(
+  v.string('[FATAL] Oznaka valute mora biti tekstualnog tipa.'),
+  v.length(3, '[FATAL] VRBL-CURRENCY: Oznaka valute mora imati tačno 3 karaktera (ISO 4217 standard).'),
+  v.transform((val) => val.toUpperCase())
+);
+
 // 🛡️ KROVNI TITANIJUMSKI VALIDATOR (Srbija Profile)
 export const SefInvoiceSchema = v.pipe(
   v.object({
@@ -212,8 +219,11 @@ export const SefInvoiceSchema = v.pipe(
     issueDate: v.string([v.isoDate('[FATAL] Nevalidan format datuma izdavanja.')]),
     paymentDueDate: v.string([v.isoDate('[FATAL] Nevalidan format roka plaćanja.')]),
     actualDeliveryDate: v.string([v.isoDate('[FATAL] Datum prometa je obavezan prema ZEF-u.')]),
-    documentCurrencyCode: v.string([v.length(3)]),
-    taxCurrencyCode: v.string([v.length(3)]),
+    
+    // 🟢 Valutne oznake
+    documentCurrencyCode: IsoCurrencySchema,
+    taxCurrencyCode: IsoCurrencySchema,
+
     payableAmount: v.number([v.minValue(0)]),
     lineExtensionAmount: v.number([v.minValue(0)]),
     taxExclusiveAmount: v.number([v.minValue(0)]),
@@ -245,6 +255,9 @@ export const SefInvoiceSchema = v.pipe(
     )),
     invoiceLines: v.array(SefInvoiceLineSchema, [v.minLength(1, '[FATAL] Faktura mora sadržati najmanje jednu stavku (InvoiceLine).')])
   }),
+
+  // Poreska valuta
+  v.check((input) => input.taxCurrencyCode === 'RSD', '[FATAL] Poreska anomalija: Prema Zakonu o eFakturisanju u Srbiji, poreska valuta (taxCurrencyCode) mora biti striktno postavljena na "RSD".'),
 
   v.check((input) => new Date(input.issueDate) <= new Date(input.paymentDueDate), '[FATAL] Rok plaćanja ne može biti pre datuma izdavanja fakture.'),
 
