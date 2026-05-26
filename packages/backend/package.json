@@ -18,7 +18,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.4",
     "@cloudflare/workers-types": "^4.20260523.1",
-    "esbuild": "^0.21.5",
+    "esbuild": "^0.25.0",
     "vitest": "^4.1.6",
     "wrangler": "^4.92.0"
   }
