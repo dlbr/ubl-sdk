@@ -39,5 +39,14 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  const contentType = response.headers.get('Content-Type') ?? '';
+  if (!contentType.includes('application/json')) {
+    // Binarni ili text odgovor — propagiraj direktno (PNG, TXT, CSV...)
+    return new Response(response.body, {
+      status: response.status,
+      headers: { 'Content-Type': contentType }
+    });
+  }
+
   return response.json().catch(() => null);
 });

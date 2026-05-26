@@ -1,3 +1,4 @@
+import { WorkerEntrypoint } from 'cloudflare:workers';
 import { Router, type RouterContext } from './router';
 import { validateJson } from './validator';
 import { 
@@ -212,6 +213,75 @@ app.post('/api/webhooks/otpremnice', async (c: RouterContext<Env>) => {
   await bridge.logEvent(body.id, body.status, 'Webhook status update', oldDoc?.status || null);
   return Response.json({ success: true });
 });
+
+/**
+ * RPC entrypoint — poziva se direktno iz Nuxt Worker-a via Service Binding.
+ * Bez HTTP overhead-a, bez auth headera — binding IS autentifikacija.
+ */
+export class SEFBackendRPC extends WorkerEntrypoint<Env> {
+  private kDO(klijentId: string) {
+    return this.env.KLIJENT_BAZA_OBJECT.get(this.env.KLIJENT_BAZA_OBJECT.idFromName(klijentId));
+  }
+
+  async getKursnaLista() {
+    const cached = await this.env.PORESKI_KV.get('kursna_lista', 'json');
+    return cached;
+  }
+
+  async getFakture(klijentId: string) {
+    return this.kDO(klijentId).fetch('http://do/api/internal/get-fakture').then(r => r.json());
+  }
+
+  async sendFaktura(klijentId: string, body: any) {
+    return this.kDO(klijentId).fetch('http://do/fakture/send', {
+      method: 'POST', body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' }
+    }).then(r => r.json());
+  }
+
+  async getDashboardStats(klijentId: string) {
+    return this.kDO(klijentId).fetch('http://do/api/stats').then(r => r.json());
+  }
+
+  async getDashboardLogs(klijentId: string) {
+    return this.kDO(klijentId).fetch('http://do/api/dashboard/logs').then(r => r.json());
+  }
+
+  async getAuditDownload(klijentId: string) {
+    return this.kDO(klijentId).fetch('http://do/api/audit/download').then(r => r.json());
+  }
+
+  async getAuditRetentionPolicy(klijentId: string) {
+    return this.kDO(klijentId).fetch('http://do/api/audit/retention-policy').then(r => r.json());
+  }
+
+  async getAnalyticsPotrosnja(klijentId: string) {
+    return this.kDO(klijentId).fetch('http://do/api/analytics/potrosnja').then(r => r.json());
+  }
+
+  async sendOtpremnica(klijentId: string, body: any) {
+    return this.kDO(klijentId).fetch('http://do/otpremnice/send', {
+      method: 'POST', body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' }
+    }).then(r => r.json());
+  }
+
+  async receivePrijemnica(klijentId: string, body: any) {
+    return this.kDO(klijentId).fetch('http://do/prijemnice/receive', {
+      method: 'POST', body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' }
+    }).then(r => r.json());
+  }
+
+  async cancelSubscription(klijentId: string) {
+    return this.kDO(klijentId).fetch('http://do/api/subscription/cancel', { method: 'POST' }).then(r => r.json());
+  }
+
+  // fetch() ostaje za webhooks, javne rute i backward compat
+  async fetch(req: Request) {
+    return app.fetch(req, this.env, this.ctx);
+  }
+}
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext) { return app.fetch(req, env, ctx); },
