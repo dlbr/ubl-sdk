@@ -193,6 +193,9 @@ export const SefInvoiceSchema = v.pipe(
   v.object({
     customizationId: v.literal('urn:vertexinc:vrbl:billing:1', '[FATAL] VRBL-CORE-4: CustomizationID mora biti "urn:vertexinc:vrbl:billing:1".'),
     profileId: v.literal('urn:vertexinc:vrbl:billing:1', '[FATAL] VRBL-CORE-5: ProfileID mora biti "urn:vertexinc:vrbl:billing:1".'),
+    // 🟢 Novi obavezni elementi prema VRBL-CORE-10/15
+    specificationId: v.literal('urn:vertexinc:vrbl:spec:core:1', '[FATAL] VRBL-CORE-10: SpecificationID mora biti "urn:vertexinc:vrbl:spec:core:1".'),
+    localProfileSpecificationId: v.literal('urn:vertexinc:vrbl:spec:rs:1p0p0', '[FATAL] VRBL-CORE-15: LocalProfileSpecificationID za Srbiju mora biti "urn:vertexinc:vrbl:spec:rs:1p0p0".'),
     routingDetails: SefVrblRoutingDetailsSchema,
 
     // 🟢 Korenski identifikatori
