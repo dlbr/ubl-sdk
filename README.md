@@ -1,6 +1,8 @@
 # @dlbr/ubl-sdk
 ![Builder CI](https://github.com/dlbr/ubl-sdk/actions/workflows/ci.yml/badge.svg)
 ![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![TypeScript](https://img.shields.io/badge/language-TypeScript-blue.svg)
 
 Biblioteka za programsko generisanje UBL 2.1 XML dokumenata za srpski Sistem za elektronske fakture (SEF). Ovaj paket nudi ultra-brzi, Edge-native JSON-to-UBL 2.1 XML generator.
 
@@ -54,10 +56,14 @@ try {
 }
 ```
 
+> [!TIP]
+> Kompletna TypeScript definicija (interface) za podatke fakture je izvezena i automatski dostupna. Vaš IDE će vam u realnom vremenu sugerisati sva obavezna i opciona polja tokom unosa.
+
 ## Zašto koristiti ovaj SDK?
 - **Zero-Dependency**: Nula nepotrebnih zavisnosti. Radi isključivo na čistim standardima (Web Crypto API, TextEncoder/Decoder).
 - **Edge-Native**: Dizajniran za maksimalne performanse na Cloudflare Edge runtime-u (Cloudflare Workers / Pages) bez glomaznih Node.js polifila.
 - **Forenzička preciznost**: Svaka greška u podacima baca jasan, deskriptivan Exception, eliminišući nejasne "400 Bad Request" greške sa državnog portala.
+- **SEF Reality Check**: Dok drugi alati koriste „Guess & Check“ metodu šaljući fakture na SEF i nadajući se da će proći, ovaj SDK emulira validaciju samog SEF-a lokalno pre nego što uopšte napišete prvi bajt XML-a, štedeći vam stotine sati debugovanja grešaka u produkciji.
 
 ## Razvoj i doprinosi
 Ovaj projekat je open-source referentna implementacija. Doprinosi i Pull Request-ovi za nova MFIN pravila su dobrodošli. Pogledajte [CONTRIBUTING.md](CONTRIBUTING.md) za detaljnije informacije.
