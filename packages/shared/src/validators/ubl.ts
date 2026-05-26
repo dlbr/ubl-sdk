@@ -208,6 +208,12 @@ export const SefInvoicePeriodSchema = v.object({
   endDate: v.string([v.isoDate('[FATAL] Datum završetka perioda (endDate) mora biti u ISO formatu YYYY-MM-DD.')])
 });
 
+// 21. Šema za tender i ugovor prema [VRBL-CORE-110/115]
+export const SefTenderDocumentReferenceSchema = v.object({
+  id: v.pipe(v.string(), v.minLength(1, '[FATAL] VRBL-TENDER: Broj javne nabavke (Tender ID) ne sme biti prazan string.')),
+  documentTypeCode: v.literal('50', '[FATAL] VRBL-TENDER: DocumentTypeCode unutar tenderske reference mora biti striktno postavljen na "50".')
+});
+
 // 🛡️ KROVNI TITANIJUMSKI VALIDATOR (Srbija Profile)
 export const SefInvoiceSchema = v.pipe(
   v.object({
@@ -223,6 +229,12 @@ export const SefInvoiceSchema = v.pipe(
     invoiceId: v.pipe(v.string(), v.minLength(1, '[FATAL] VRBL-CORE: Broj fakture (invoiceId) ne sme biti prazan.'), v.maxLength(50, '[FATAL] VRBL-CORE: Broj fakture ne sme biti duži od 50 karaktera.')),
     issueTime: v.pipe(v.string(), v.regex(/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/, '[FATAL] VRBL-CORE: Vreme izdavanja (issueTime) mora biti u ispravnom formatu hh:mm:ss.')),
     invoicePeriod: SefInvoicePeriodSchema,
+
+    // 🟢 Tenderske reference
+    tenderDocumentReference: v.optional(SefTenderDocumentReferenceSchema),
+    contractDocumentReference: v.optional(v.object({
+      id: v.pipe(v.string(), v.minLength(1, '[FATAL] ID ugovora/partije ne sme biti prazan.'))
+    })),
 
     invoiceTypeCode: v.picklist(['380', '381', '383', '386'], '[FATAL] Nevalidan InvoiceTypeCode (Dozvoljeni: 380, 381, 383, 386).'),
     issueDate: v.string([v.isoDate('[FATAL] Nevalidan format datuma izdavanja.')]),
