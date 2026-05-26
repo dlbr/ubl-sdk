@@ -5,8 +5,9 @@
   "main": "./index.ts",
   "types": "./index.ts",
   "dependencies": {
-    "valibot": "^1.4.0",
-    "@dlbr/ubl-sdk": "workspace:*"
+    "@dlbr/ubl-sdk": "workspace:*",
+    "fast-xml-parser": "^5.8.0",
+    "valibot": "^1.4.0"
   },
   "devDependencies": {
     "@types/node": "^25.8.0"

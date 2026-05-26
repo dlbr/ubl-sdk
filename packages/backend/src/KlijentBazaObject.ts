@@ -319,6 +319,10 @@ export class KlijentBaza extends DurableObject<Env> {
       if (!moze) return Response.json(error, { status: error.error === "LIMIT_EXCEEDED" ? 402 : 403 });
 
       try {
+        // 🎯 Opciono: Konverzija valute pre build-a
+        // const kurs = await NbsSoapService.getMiddleRate('EUR', invoiceData.IssueDate, this.env as unknown as NbsEnv);
+        // invoiceData.exchangeRate = kurs;
+
         const xml = SefUblBuilder.build(invoiceData);
         const internalId = `INV-${Date.now()}`;
         const config = this.sql.exec(`SELECT sef_api_key, environment, klijent_id FROM konfiguracija WHERE id = 1`).one() as any;
