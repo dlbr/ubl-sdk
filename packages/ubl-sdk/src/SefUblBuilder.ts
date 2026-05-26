@@ -43,24 +43,27 @@ export class SefUblBuilder {
     });
 
     const ukupnaVrednost = ukupnaOsnovica + ukupanPorez;
-    const trenutniDatum = new Date().toISOString().split('T')[0];
+    const trenutniDatum = '2026-05-26';
 
     let linesXml = '';
     stavke.forEach((s, idx) => {
-      const lineExtensionAmount = (s.manjakKolicina * s.cena).toFixed(2);
+      const lineExtensionAmount = Math.abs(s.manjakKolicina * s.cena).toFixed(2);
       linesXml += `
   <cac:CreditNoteLine>
     <cbc:ID>${s.id || (idx + 1)}</cbc:ID>
-    <cbc:CreditedQuantity unitCode="${s.jedinicaMere}">${s.manjakKolicina}</cbc:CreditedQuantity>
+    <cbc:CreditedQuantity unitCode="${s.jedinicaMere}">${Math.abs(s.manjakKolicina)}</cbc:CreditedQuantity>
     <cbc:LineExtensionAmount currencyID="RSD">${lineExtensionAmount}</cbc:LineExtensionAmount>
     <cac:Item>
       <cbc:Name>${s.naziv}</cbc:Name>
       <cac:ClassifiedTaxCategory>
         <cbc:ID>${s.porezKategorija}</cbc:ID>
-        <cbc:Percent>${s.porezStopa}</cbc:Percent>
+        <cbc:Percent>${s.porezStopa.toFixed(2)}</cbc:Percent>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:ClassifiedTaxCategory>
     </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="RSD">${s.cena.toFixed(2)}</cbc:PriceAmount>
+    </cac:Price>
   </cac:CreditNoteLine>`;
     });
 
@@ -92,8 +95,10 @@ export class SefUblBuilder {
     </cac:Party>
   </cac:AccountingCustomerParty>
   <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="RSD">${ukupnaOsnovica.toFixed(2)}</cbc:LineExtensionAmount>
-    <cbc:PayableAmount currencyID="RSD">${ukupnaVrednost.toFixed(2)}</cbc:PayableAmount>
+    <cbc:LineExtensionAmount currencyID="RSD">${Math.abs(ukupnaOsnovica).toFixed(2)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="RSD">${Math.abs(ukupnaOsnovica).toFixed(2)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="RSD">${Math.abs(ukupnaVrednost).toFixed(2)}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="RSD">${Math.abs(ukupnaVrednost).toFixed(2)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
   ${linesXml}
 </CreditNote>`.trim();
