@@ -1,25 +1,21 @@
 import { defineEventHandler, readRawBody, createError } from 'h3';
 
 /**
- * Catch-all proxy za sve /api/ rute koje nisu eksplicitno
- * definisane u server/api/. Sve ide ka Backend Worker-u via Service Binding.
- * 
- * CONTRACT:
- * - Nuxt server/api/ fajlovi: Nuxt-specifična logika (auth session, D1 direktno)
- * - Sve ostalo: forwarduje ka Backend Worker via SEF_API service binding
+ * Catch-all proxy: Nuxt /api/* → Backend Worker via Service Binding.
+ * Auth: INTERNAL_API_KEY Bearer token (shared secret).
  */
 export default defineEventHandler(async (event) => {
   const path = event.path;
   const env = event.context.cloudflare?.env;
   const session = event.context.session;
 
-  // Nema backend bindinga — vrati 503 umesto 500
   if (!env?.SEF_API) {
     throw createError({ statusCode: 503, statusMessage: 'Backend Worker binding nije dostupan.' });
   }
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${env.INTERNAL_API_KEY ?? ''}`,
   };
 
   if (session?.klijentId) {
@@ -35,12 +31,11 @@ export default defineEventHandler(async (event) => {
       : undefined
   });
 
-  // Propagiraj HTTP status direktno — ne konvertuj u 500
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({})) as any;
     throw createError({
       statusCode: response.status,
-      statusMessage: errorData?.error || errorData?.message || response.statusText
+      statusMessage: (errorData as any)?.error || (errorData as any)?.message || response.statusText
     });
   }
 

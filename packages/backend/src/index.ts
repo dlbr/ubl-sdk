@@ -47,10 +47,21 @@ const extractParamIdFromUrl = (urlStr: string): string | null => {
 };
 
 const internalOnly = (c: RouterContext<Env> & { klijentId?: string, operater?: string }) => {
+  // Bearer token check — INTERNAL_API_KEY shared secret između Nuxt i Backend Worker-a
+  const apiKey = (c.env as any).INTERNAL_API_KEY;
+  if (apiKey) {
+    const auth = c.req.headers.get('Authorization');
+    if (auth !== `Bearer ${apiKey}`) {
+      return new Response(JSON.stringify({ error: 'FORBIDDEN_BACKEND_ACCESS' }), { status: 403 });
+    }
+  }
+  // Nema INTERNAL_API_KEY → dev/test mode
+
   const klijentId = c.req.headers.get('X-Klijent-ID');
   if (!klijentId || klijentId.trim() === '') {
-    return new Response(JSON.stringify({ error: 'FORBIDDEN_BACKEND_ACCESS' }), { status: 403 });
+    return new Response(JSON.stringify({ error: 'MISSING_KLIJENT_ID' }), { status: 403 });
   }
+
   c.klijentId = klijentId;
 };
 
