@@ -206,6 +206,14 @@ export const SefInvoiceSchema = v.pipe(
     invoiceId: v.pipe(v.string(), v.minLength(1, '[FATAL] VRBL-CORE: Broj fakture (invoiceId) ne sme biti prazan.'), v.maxLength(50, '[FATAL] VRBL-CORE: Broj fakture ne sme biti duži od 50 karaktera.')),
     issueTime: v.pipe(v.string(), v.regex(/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/, '[FATAL] VRBL-CORE: Vreme izdavanja (issueTime) mora biti u ispravnom formatu hh:mm:ss.')),
 
+    // 🟢 Novi elementi prema VRBL-CORE-30/35
+    businessProcessType: v.literal('COMMERCIAL_INVOICING', '[FATAL] VRBL-CONTEXT: businessProcessType mora biti striktno postavljen na "COMMERCIAL_INVOICING".'),
+    businessContextId: v.literal('urn:vertexinc:vrbl:context:rs:proc:1', '[FATAL] VRBL-CONTEXT: businessContextId za profil Srbije mora biti striktno "urn:vertexinc:vrbl:context:rs:proc:1".'),
+
+    // 🟢 Korenski identifikatori
+    invoiceId: v.pipe(v.string(), v.minLength(1, '[FATAL] VRBL-CORE: Broj fakture (invoiceId) ne sme biti prazan.'), v.maxLength(50, '[FATAL] VRBL-CORE: Broj fakture ne sme biti duži od 50 karaktera.')),
+    issueTime: v.pipe(v.string(), v.regex(/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/, '[FATAL] VRBL-CORE: Vreme izdavanja (issueTime) mora biti u ispravnom formatu hh:mm:ss.')),
+
     invoiceTypeCode: v.picklist(['380', '381', '383', '386'], '[FATAL] Nevalidan InvoiceTypeCode (Dozvoljeni: 380, 381, 383, 386).'),
     issueDate: v.string([v.isoDate('[FATAL] Nevalidan format datuma izdavanja.')]),
     paymentDueDate: v.string([v.isoDate('[FATAL] Nevalidan format roka plaćanja.')]),
@@ -239,6 +247,22 @@ export const SefInvoiceSchema = v.pipe(
     allowanceCharges: v.optional(v.array(SefAllowanceChargeSchema)),
     invoiceLines: v.array(SefInvoiceLineSchema, [v.minLength(1, '[FATAL] Faktura mora sadržati najmanje jednu stavku (InvoiceLine).')])
   }),
+
+  // Hronologija datuma
+  v.check((input) => new Date(input.issueDate) <= new Date(input.paymentDueDate), '[FATAL] Rok plaćanja ne može biti pre datuma izdavanja fakture.'),
+
+  // 🎯 VERTEX [VRBL-CORE-16] ZABRANA OTPREMNICA NA AVANSIMA
+  v.check((input) => {
+    if (input.invoiceTypeCode === '386') {
+      return !input.despatchDocumentReferences || input.despatchDocumentReferences.length === 0;
+    }
+    return true;
+  }, '[FATAL] Strukturalna greška [VRBL-CORE-16]: Avansni račun (tip 386) ne može sadržati reference na otpremnice.'),
+
+  // 🎯 VERTEX [VRBL-CORE-18] ZABRANA NEGATIVNIH TOTALA
+  v.check((input) => {
+    return input.lineExtensionAmount >= 0 && input.taxExclusiveAmount >= 0 && input.taxInclusiveAmount >= 0;
+  }, '[FATAL] Aritmetička greška [VRBL-CORE-18]: Finansijske vrednosti u totalima moraju biti izražene kao pozitivni brojevi.'),
 
   v.check((input) => new Date(input.issueDate) <= new Date(input.paymentDueDate), '[FATAL] Rok plaćanja ne može biti pre datuma izdavanja fakture.'),
 
