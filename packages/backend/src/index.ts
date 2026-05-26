@@ -5,10 +5,85 @@ import {
   ReceiptSchema, 
   D1SyncBridge, 
   SefUblBuilder, 
+  NbsSoapService,
+  EmailService,
   posaljiHotfixTelegramAlarm, 
   handleLogisticsQueue 
 } from '@sef/shared';
 import ComplianceWatcher from "./compliance-watcher";
+
+export const app = Router<Env>();
+
+// --- PUBLIC SEO ROUTES ---
+
+app.get('/api/public/v1/kursna-lista', async (c) => {
+  const danas = new Date().toISOString().split('T')[0];
+  const juceDate = new Date();
+  juceDate.setDate(juceDate.getDate() - 1);
+  const juce = juceDate.toISOString().split('T')[0];
+
+  try {
+    const [eur, usd, chf, eurJuce, usdJuce, chfJuce] = await Promise.all([
+      NbsSoapService.getMiddleRate('EUR', danas, c.env as any),
+      NbsSoapService.getMiddleRate('USD', danas, c.env as any),
+      NbsSoapService.getMiddleRate('CHF', danas, c.env as any),
+      NbsSoapService.getMiddleRate('EUR', juce, c.env as any),
+      NbsSoapService.getMiddleRate('USD', juce, c.env as any),
+      NbsSoapService.getMiddleRate('CHF', juce, c.env as any)
+    ]);
+
+    const calcTrend = (now: number, prev: number) => {
+      if (!prev || prev === 0) return { procenat: 0, smer: 'ISTO' };
+      const diff = now - prev;
+      const proc = (diff / prev) * 100;
+      return {
+        procenat: Math.abs(proc),
+        smer: diff > 0 ? 'GORE' : diff < 0 ? 'DOLE' : 'ISTO'
+      };
+    };
+
+    const eurTrend = calcTrend(eur, eurJuce);
+    const usdTrend = calcTrend(usd, usdJuce);
+    const chfTrend = calcTrend(chf, chfJuce);
+
+    const data = {
+      status: 'success',
+      izvor: 'Narodna banka Srbije (NBS)',
+      datum: danas,
+      tiker: [
+        { valuta: 'EUR', kurs: eur, promenaProcenat: eurTrend.procenat, smer: eurTrend.smer },
+        { valuta: 'USD', kurs: usd, promenaProcenat: usdTrend.procenat, smer: usdTrend.smer },
+        { valuta: 'CHF', kurs: chf, promenaProcenat: chfTrend.procenat, smer: chfTrend.smer }
+      ],
+      valute: {
+        EUR: { kod: '978', jedinica: 1, kurs: eur, trend: eurTrend },
+        USD: { kod: '840', jedinica: 1, kurs: usd, trend: usdTrend },
+        CHF: { kod: '756', jedinica: 1, kurs: chf, trend: chfTrend }
+      },
+      schemaOrg: {
+        '@context': 'https://schema.org',
+        '@type': 'FinancialProduct',
+        'name': `Zvanični Srednji Kurs NBS na dan ${danas}`,
+        'description': `Trenutni srednji kurs evra (EUR), dolara (USD) i franka (CHF) preuzet sa Narodne banke Srbije.`,
+        'offers': {
+          '@type': 'Offer',
+          'price': eur,
+          'priceCurrency': 'RSD'
+        }
+      }
+    };
+
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=3600'
+      }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Trenutno nedostupni podaci' }), { status: 500 });
+  }
+});
 
 export interface Env {
   ADMIN_API_KEY: string;
@@ -23,11 +98,13 @@ export interface Env {
   PORESKI_KV: KVNamespace;
   SEF_QUEUE: Queue<any>;
   OTPREMNICA_QUEUE: Queue<any>;
+  EMAIL: { send: (msg: any) => Promise<void> };
   AI: any;
+  NBS_USERNAME?: string;
+  NBS_PASSWORD?: string;
+  NBS_LICENCE_ID?: string;
 }
 export { KlijentBaza } from './KlijentBazaObject';
-
-export const app = Router<Env>();
 
 // Pomagač za ekstrakciju URL ID parametara (Otporan na trailing slashes)
 const extractParamIdFromUrl = (urlStr: string): string | null => {
@@ -180,6 +257,18 @@ app.post('/api/fakture/sync', internalOnly, async (c: RouterContext<Env> & { kli
   const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
   const result = await kDO.syncWithSef();
   return Response.json({ success: true, result });
+});
+
+app.get('/api/fakture', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
+  const url = new URL(c.req.url);
+  const page = parseInt(url.searchParams.get('page') || '1', 10);
+  return await kDO.fetch(`http://do/api/internal/get-fakture?page=${page}`);
+});
+
+app.get('/api/webhook-setup', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
+  return await kDO.fetch('http://do/api/internal/webhook-instructions');
 });
 
 // --- CORE API ROUTES ---

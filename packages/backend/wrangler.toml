@@ -6,6 +6,10 @@ compatibility_flags = ["nodejs_compat"]
 [alias]
 "@dlbr/ubl-sdk" = "../ubl-sdk/src/index.ts"
 
+# 🚀 Zvanični Cloudflare Email Sending binding
+[[send_email]]
+name = "EMAIL"
+
 [[d1_databases]]
 binding = "REGISTAR_DB"
 database_name = "sef_centralni_registar"
@@ -47,6 +51,9 @@ workers_dev = false
 bindings = [
   { name = "KLIJENT_BAZA_OBJECT", class_name = "KlijentBaza" }
 ]
+
+[[env.production.send_email]]
+name = "EMAIL"
 
 [[env.production.d1_databases]]
 binding = "REGISTAR_DB"
