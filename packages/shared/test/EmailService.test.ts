@@ -25,10 +25,13 @@ describe('🛡️ EmailService — Cloudflare Native Sending Audit', () => {
   });
 
   it('treba da vrati grešku ako binding nedostaje', async () => {
+    // console.error je intentionalan ovde — suppresujemo noise u CI logovima
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
     const mockEnv = {};
     const message = {
-      to: 'test@test.com',
-      from: 'test@test.com',
+      to: 'zadivaniti@gmail.com',
+      from: 'no-reply@sef-bridge.rs',
       subject: 'Test',
       text: 'Test'
     };
@@ -37,6 +40,8 @@ describe('🛡️ EmailService — Cloudflare Native Sending Audit', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('binding nije konfigurisan');
+
+    consoleSpy.mockRestore();
   });
 
   it('treba uspešno da generiše i pošalje eFakturu sa prilogom', async () => {
