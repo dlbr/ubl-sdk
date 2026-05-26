@@ -1,11 +1,6 @@
 <script setup lang="ts">
-// 🚀 Nuxt useFetch automatski radi SSR (Server-Side Rendering)
-// Komunicira sa tvojom Cloudflare Worker SEO rutom
-const { data: nbsPodaci, error } = await useFetch('/api/public/v1/kursna-lista', {
-  baseURL: 'http://localhost:8787' // U produkciji bi ovo bio tvoj stvarni API URL
-})
+const { data: nbsPodaci, error } = await useFetch('/api/public/v1/kursna-lista')
 
-// 🔐 Dinamički SEO Meta tagovi na osnovu današnjih podataka sa servera
 const danasnjiDatum = new Date().toISOString().split('T')[0]
 const eurKurs = computed(() => nbsPodaci.value?.tiker?.find((t: any) => t.valuta === 'EUR')?.kurs || 117.2)
 
@@ -16,9 +11,9 @@ useSeoMeta({
   ogTitle: `Srednji Kurs Evra NBS Danas | Automatska Kursna Lista`,
   ogDescription: `Sinhronizovani podaci direktno iz NBS servisa za eFakture i knjigovodstvo. Proverite trendove valuta.`,
   ogType: 'website',
-  ogImage: 'http://localhost:8787/api/public/v1/kursna-lista/og.png',
+  ogImage: 'https://sef.dlbr.cloud/api/public/v1/kursna-lista/og.png',
   twitterCard: 'summary_large_image',
-  twitterImage: 'http://localhost:8787/api/public/v1/kursna-lista/og.png'
+  twitterImage: 'https://sef.dlbr.cloud/api/public/v1/kursna-lista/og.png'
 })
 
 // JSON-LD za Google Rich Snippets
