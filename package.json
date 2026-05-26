@@ -14,9 +14,13 @@
     "deploy:backend": "pnpm --filter @sef/backend deploy",
     "deploy:frontend": "pnpm --filter @sef/frontend",
     "test": "vitest run",
-    "test:clean": "pnpm test && killall esbuild 2>/dev/null || true"
+    "test:clean": "pnpm test && killall esbuild 2>/dev/null || true",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release:sync": "bash scripts/sync-ubl-sdk.sh"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "@cloudflare/vitest-pool-workers": "^0.16.9",
     "@cloudflare/workers-types": "^4.20260523.1",
     "pdf-parse": "^2.4.5",
