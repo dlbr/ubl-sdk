@@ -116,7 +116,7 @@ app.get('/api/dashboard/stats', internalOnly, async (c: RouterContext<Env> & { k
 
 app.get('/api/dashboard/logs', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
   const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
-  return Response.json({ success: true, logs: [] });
+  return await kDO.fetch('http://do/api/dashboard/logs');
 });
 
 app.get('/api/audit/retention-policy', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
