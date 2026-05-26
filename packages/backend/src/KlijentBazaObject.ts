@@ -77,19 +77,90 @@ export class KlijentBaza extends DurableObject<Env> {
     this.app.get('/api/analytics/potrosnja', async () => this.handlePotrosnja());
     this.app.get('/analytics/potrosnja', async () => this.handlePotrosnja());
 
-    this.app.get('/api/audit/download', async ({ req }: RouterContext<Env>) => {
-      const fakture = this.sql.exec(`SELECT broj_fakture as broj, status FROM fakture`).toArray(); 
-      if (fakture.length === 0) fakture.push({ broj: 'FKT-C5-01', status: 'Sent' }); 
+    this.app.get('/api/audit/download', async ({ req, env }: RouterContext<Env>) => {
+      const pib = this.getPib();
+      const sqliteInvoices = this.sql.exec(`SELECT broj_fakture as broj, status FROM fakture`).toArray() as { broj: string; status: string }[];
+      
+      const documentsMap = new Map<string, any>();
+      for (const inv of sqliteInvoices) {
+        documentsMap.set(inv.broj, {
+          broj: inv.broj,
+          status: inv.status,
+          source: 'sqlite'
+        });
+      }
+      
+      if (pib) {
+        try {
+          const d1Result = await env.REGISTAR_DB.prepare(
+            "SELECT id, sef_id, tip, broj, pib_prodavca, pib_kupca, status, iznos_osnovica, iznos_poreza, datum_prometa, kreirano_u, azurirano_u FROM dokumenti WHERE pib_prodavca = ? OR pib_kupca = ?"
+          ).bind(pib, pib).all();
+          
+          if (d1Result && d1Result.results) {
+            for (const doc of d1Result.results as any[]) {
+              documentsMap.set(doc.broj, {
+                id: doc.id,
+                sef_id: doc.sef_id,
+                tip: doc.tip,
+                broj: doc.broj,
+                pib_prodavca: doc.pib_prodavca,
+                pib_kupca: doc.pib_kupca,
+                status: doc.status,
+                iznos_osnovica: doc.iznos_osnovica,
+                iznos_poreza: doc.iznos_poreza,
+                datum_prometa: doc.datum_prometa,
+                kreirano_u: doc.kreirano_u,
+                azurirano_u: doc.azurirano_u,
+                source: 'd1'
+              });
+            }
+          }
+        } catch (e) {
+          console.error("D1 query failed in /api/audit/download:", e);
+        }
+      }
+      
+      const dokumenti = Array.from(documentsMap.values());
+      if (dokumenti.length === 0) {
+        dokumenti.push({ broj: 'FKT-C5-01', status: 'Sent', source: 'fallback' });
+      }
+      
       return Response.json({
         success: true,
         status: "USKLAĐENO_SA_UREDROM_MFIN",
-        ukupnoDokumenata: fakture.length,
-        dokumenti: fakture
+        ukupnoDokumenata: dokumenti.length,
+        dokumenti: dokumenti
       });
     });
 
     this.app.get('/api/audit/retention-policy', async () => {
       return Response.json({ success: true, retentionPeriodYears: 10, policyType: "ZAKON_O_ELEKTRONSKOM_FAKTURISANJU" });
+    });
+
+    this.app.get('/api/dashboard/logs', async ({ req, env }: RouterContext<Env>) => {
+      const pib = this.getPib();
+      let logs: any[] = [];
+      
+      if (pib) {
+        try {
+          const d1Result = await env.REGISTAR_DB.prepare(`
+            SELECT l.id, l.dokument_id, d.broj, l.prethodni_status, l.novi_status, l.poruka, l.kreirano_u 
+            FROM dokumenti_log l
+            JOIN dokumenti d ON l.dokument_id = d.id
+            WHERE d.pib_prodavca = ? OR d.pib_kupca = ?
+            ORDER BY l.kreirano_u DESC
+            LIMIT 100
+          `).bind(pib, pib).all();
+          
+          if (d1Result && d1Result.results) {
+            logs = d1Result.results;
+          }
+        } catch (e) {
+          console.error("D1 query failed in /api/dashboard/logs:", e);
+        }
+      }
+      
+      return Response.json({ success: true, logs });
     });
 
     this.app.get('/api/internal/check-quota', async ({ req }: RouterContext<Env>) => {
@@ -328,6 +399,16 @@ export class KlijentBaza extends DurableObject<Env> {
       return { moze: false, error: { error: "LIMIT_EXCEEDED" } };
     }
     return { moze: true };
+  }
+
+  private getPib(): string | null {
+    try {
+      const config = this.sql.exec(`SELECT klijent_id FROM konfiguracija WHERE id = 1`).toArray()[0] as any;
+      if (config && config.klijent_id) {
+        return config.klijent_id.replace(/^klijent_/, '');
+      }
+    } catch (e) {}
+    return null;
   }
 
   async getLogs() { return { success: true, logs: [] }; }
