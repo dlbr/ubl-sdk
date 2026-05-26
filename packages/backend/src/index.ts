@@ -162,6 +162,11 @@ app.get('/api/audit/download', internalOnly, async (c: RouterContext<Env> & { kl
   return await kDO.fetch('http://do/api/audit/download');
 });
 
+app.get('/api/audit/verify-chain', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
+  return await kDO.fetch('http://do/api/audit/verify-chain');
+});
+
 app.get('/api/analytics/potrosnja', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
   const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
   return await kDO.fetch('http://do/api/analytics/potrosnja');

@@ -6,6 +6,7 @@ import { Router, type RouterContext } from './router';
 import { Redacted } from "@sef/shared/services/redacted";
 import { D1SyncBridge } from "@sef/shared/services/D1SyncBridge";
 import { handleSefErrorWithEdgeAi } from "./edge-ai-interceptor";
+import { CryptographicLedger } from "@sef/shared/services/CryptographicLedger";
 
 export class KlijentBaza extends DurableObject<Env> {
   private sql: SqlStorage;
@@ -51,6 +52,25 @@ export class KlijentBaza extends DurableObject<Env> {
         kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `).run();
+    await this.env.REGISTAR_DB.prepare(`
+      CREATE TABLE IF NOT EXISTS revizorski_trag (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        redosled INTEGER NOT NULL,
+        prethodni_hash TEXT NOT NULL,
+        trenutni_hash TEXT NOT NULL,
+        dokument_id TEXT NOT NULL,
+        xml_hash TEXT NOT NULL,
+        dogadjaj TEXT NOT NULL,
+        detalji TEXT,
+        kreirano_u TEXT NOT NULL
+      )
+    `).run();
+    await this.env.REGISTAR_DB.prepare(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_revizorski_red ON revizorski_trag(redosled)
+    `).run();
+    await this.env.REGISTAR_DB.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_revizorski_doc ON revizorski_trag(dokument_id)
+    `).run();
   }
 
   private setupRoutes() {
@@ -62,6 +82,15 @@ export class KlijentBaza extends DurableObject<Env> {
 
     this.app.get('/api/stats', async () => this.handleStats());
     this.app.get('/stats', async () => this.handleStats());
+
+    this.app.get('/api/audit/verify-chain', async ({ env }: RouterContext<Env>) => {
+      try {
+        const result = await CryptographicLedger.verifyChain(env.REGISTAR_DB);
+        return Response.json(result);
+      } catch (err: any) {
+        return Response.json({ success: false, message: err.message }, { status: 500 });
+      }
+    });
 
     this.app.post('/config', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
@@ -215,6 +244,13 @@ export class KlijentBaza extends DurableObject<Env> {
         status: 'SENT'
       });
       await bridge.logEvent(body.id, 'SENT', 'Otpremnica uspešno kreirana');
+
+      const details = { tip: 'OTPREMNICA', broj: body.id };
+      if (c.ctx && c.ctx.waitUntil) {
+        c.ctx.waitUntil(CryptographicLedger.appendEvent(c.env.REGISTAR_DB, body.id, JSON.stringify(body), "POSLAT", details).catch(console.error));
+      } else {
+        await CryptographicLedger.appendEvent(c.env.REGISTAR_DB, body.id, JSON.stringify(body), "POSLAT", details);
+      }
       if (body.lines && body.lines.length > 0) {
         const lines = body.lines.map((l: any) => ({
           dokumentId: body.id,
@@ -294,6 +330,14 @@ export class KlijentBaza extends DurableObject<Env> {
         const internalId = `INV-${Date.now()}`;
         this.sql.exec(`INSERT INTO fakture (internal_id, sef_id, broj_fakture, status, iznos) VALUES (?, ?, ?, ?, ?)`, internalId, 'SEF-ID', invoiceData.invoiceId || invoiceData.ID || invoiceData.broj || 'MOCK', 'Sent', 100);
         this.sql.exec(`INSERT INTO billing_ledger (id, tip_transakcije, iznos_kredita) VALUES (?, 'POTROŠNJA', -1)`, crypto.randomUUID());
+
+        const details = { broj: invoiceData.invoiceId || invoiceData.ID || invoiceData.broj || 'MOCK' };
+        if (ctx && ctx.waitUntil) {
+          ctx.waitUntil(CryptographicLedger.appendEvent(env.REGISTAR_DB, internalId, xml, "POSLAT", details).catch(console.error));
+        } else {
+          await CryptographicLedger.appendEvent(env.REGISTAR_DB, internalId, xml, "POSLAT", details);
+        }
+
         return Response.json({ success: true, internalId, sefId: 'SEF-ID', xml }, { status: 202 });
       } catch (e: any) {
         const mockSefResponse = new Response(e.message, { status: 400 });
