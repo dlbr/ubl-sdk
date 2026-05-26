@@ -33,6 +33,24 @@ try {
   console.warn("Failed to load .dev.vars:", e);
 }
 
+let wranglerConfigPath = 'packages/backend/wrangler.toml';
+try {
+  const fullPath = path.resolve(__dirname, './packages/backend/wrangler.toml');
+  if (fs.existsSync(fullPath)) {
+    let toml = fs.readFileSync(fullPath, 'utf-8');
+    // Strip [ai] binding blocks completely to prevent vitest-pool-workers from forcing remote proxy logins in local/CI runs
+    toml = toml.replace(/\[ai\][^]*?binding\s*=\s*"AI"/gi, '');
+    toml = toml.replace(/\[env\.production\.ai\][^]*?binding\s*=\s*"AI"/gi, '');
+    
+    const testTomlPath = path.resolve(__dirname, './packages/backend/wrangler.test.toml');
+    fs.writeFileSync(testTomlPath, toml, 'utf-8');
+    wranglerConfigPath = 'packages/backend/wrangler.test.toml';
+    console.log("🛠️ Generated wrangler.test.toml without remote AI bindings for local/CI test stability.");
+  }
+} catch (e) {
+  console.warn("Failed to generate wrangler.test.toml:", e);
+}
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -66,7 +84,7 @@ export default defineConfig({
   },
   plugins: [
     cloudflareTest({
-      wrangler: { configPath: 'packages/backend/wrangler.toml' },
+      wrangler: { configPath: wranglerConfigPath },
       remote: false,
       poolOptions: {
         workers: {
