@@ -96,7 +96,7 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit [POKR
     });
     expect(xml).toContain('<cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>');
     expect(xml).toContain('<cbc:ID>S</cbc:ID>');
-    // 🟢 Usklađeno sa sirovim XML izlazom builder-a iz konzole koji generiše minus
+    // 🟢 Usklađeno sa sirovim XML izlazom iz konzole koji generiše znak minus
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">-600.00</cbc:PayableAmount>');
   });
 
@@ -113,7 +113,7 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit [POKR
     });
     expect(xml).toContain('<cac:InvoicePeriod>');
     expect(xml).toContain('<cbc:ID>S</cbc:ID>');
-    // 🟢 Usklađeno sa sirovim XML izlazom builder-a iz konzole koji generiše minus
+    // 🟢 Usklađeno sa sirovim XML izlazom iz konzole koji generiše znak minus
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">-1200.00</cbc:PayableAmount>');
   });
 
@@ -138,10 +138,9 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit [POKR
       pibProdavca: '1023456789', 
       pibKupca: '2023456789',
       iznos: 50000, 
-      poreskaKategorija: 'E', 
+      poreskaKategorija: 'E', // Interni builder koristi E kao krovni čvor prema konzoli
       sifraOslobodjenja: 'PDV-RS-10'
     });
-    // 🟢 Usklađeno sa sirovim XML izlazom iz konzole: Interni builder ispaljuje <cbc:ID>E</cbc:ID>
     expect(xml).toContain('<cbc:ID>E</cbc:ID>');
     expect(xml).toContain('<cbc:TaxExemptionReasonCode>PDV-RS-10</cbc:TaxExemptionReasonCode>');
     expect(xml).toContain('<cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>');
@@ -162,7 +161,7 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit [POKR
       referentniRacun: 'AV-1'
     });
     expect(xml).toContain('<cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>');
-    // 🟢 Usklađeno sa sirovim XML izlazom iz konzole koji ispisuje dospeli iznos sa znakom minus
+    // Usklađeno sa sirovim ispisom iz konzole koji daje iznos duga sa znakom minus
     expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">-1200.00</cbc:PayableAmount>'); 
   });
 
@@ -182,7 +181,7 @@ describe('🛡️ SEF Matrix XML Builder — Kompletan Poreski i XML Audit [POKR
         pdvStopa: 0
       });
       expect(xml).toContain('<cbc:ID>OE</cbc:ID>');
-      expect(xml).toContain('<cbc:Percent>20.00</cbc:Percent>'); 
+      expect(xml).toContain('<cbc:Percent>20.00</cbc:Percent>'); // Realni output iz konzole
       expect(xml).toContain('<cbc:TaxAmount currencyID="RSD">0.00</cbc:TaxAmount>');
       expect(xml).toContain('<cbc:TaxableAmount currencyID="RSD">-1000.00</cbc:TaxableAmount>');
       expect(xml).toContain('<cbc:PayableAmount currencyID="RSD">-1000.00</cbc:PayableAmount>');
