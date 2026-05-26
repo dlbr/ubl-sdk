@@ -48,8 +48,9 @@ export class SefUblBuilder {
     let linesXml = '';
     stavke.forEach((s, idx) => {
       const lineExtensionAmount = Math.abs(s.manjakKolicina * s.cena).toFixed(2);
+      const percent = ['S', 'R'].includes(s.porezKategorija) ? s.porezStopa.toFixed(2) : '0.00';
       linesXml += `
-  <cac:CreditNoteLine>
+    <cac:CreditNoteLine>
     <cbc:ID>${s.id || (idx + 1)}</cbc:ID>
     <cbc:CreditedQuantity unitCode="${s.jedinicaMere}">${Math.abs(s.manjakKolicina)}</cbc:CreditedQuantity>
     <cbc:LineExtensionAmount currencyID="RSD">${lineExtensionAmount}</cbc:LineExtensionAmount>
@@ -57,14 +58,14 @@ export class SefUblBuilder {
       <cbc:Name>${s.naziv}</cbc:Name>
       <cac:ClassifiedTaxCategory>
         <cbc:ID>${s.porezKategorija}</cbc:ID>
-        <cbc:Percent>${s.porezStopa.toFixed(2)}</cbc:Percent>
+        <cbc:Percent>${percent}</cbc:Percent>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:ClassifiedTaxCategory>
     </cac:Item>
     <cac:Price>
-      <cbc:PriceAmount currencyID="RSD">${s.cena.toFixed(2)}</cbc:PriceAmount>
+      <cbc:PriceAmount currencyID="RSD">${Math.abs(s.cena).toFixed(2)}</cbc:PriceAmount>
     </cac:Price>
-  </cac:CreditNoteLine>`;
+    </cac:CreditNoteLine>`;
     });
 
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -100,6 +101,8 @@ export class SefUblBuilder {
     <cbc:TaxInclusiveAmount currencyID="RSD">${Math.abs(ukupnaVrednost).toFixed(2)}</cbc:TaxInclusiveAmount>
     <cbc:PayableAmount currencyID="RSD">${Math.abs(ukupnaVrednost).toFixed(2)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
+
+
   ${linesXml}
 </CreditNote>`.trim();
   }
@@ -114,13 +117,21 @@ export class SefUblBuilder {
     
     // 2. Map data to robust Model (Tolerant Hybrid)
     const invoice: Invoice = {
+      customizationId: 'urn:cen.eu:en16931:2017#compliant#urn:mfin.gov.rs:srbdt:2.1',
+      profileId: 'urn:fdc:peppol.eu:poacc:bis3:invoice:3',
+      specificationId: 'urn:vertexinc:vrbl:spec:core:1',
+      localProfileSpecificationId: 'urn:vertexinc:vrbl:spec:rs:1p0p0',
+      businessProcessType: 'COMMERCIAL_INVOICING',
+      businessContextId: 'urn:vertexinc:vrbl:context:rs:proc:1',
       id: data.ID || data.broj || data.id,
       issueDate: data.IssueDate || data.datumIzdavanja || data.datum || new Date().toISOString().split('T')[0],
+      issueTime: data.IssueTime || '12:00:00',
       dueDate: data.DueDate || data.datumDospeca || data.datumUplate || data.datumIzdavanja || new Date().toISOString().split('T')[0],
       paymentDate: data.datumUplate || data.avansDatum,
       deliveryDate: type === '386' ? undefined : (data.ActualDeliveryDate || data.datumPrometa),
       typeCode: type,
       currency: data.DocumentCurrencyCode || data.valuta || 'RSD',
+      taxCurrency: 'RSD',
       exchangeRate: parseFloat(data.PaymentExchangeRate || data.exchangeRate || 0),
       documentDirection: data.smerDokumenta,
       notes: [
