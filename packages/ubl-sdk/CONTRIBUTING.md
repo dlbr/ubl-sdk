@@ -1,44 +1,42 @@
-# Doprinos SEF Bridge projektu
+# Doprinos @dlbr/ubl-sdk projektu
 
-Hvala vam na interesovanju za SEF Bridge! Kako bismo održali integritet našeg "Steel Fortress" sistema, molimo vas da poštujete sledeća pravila prilikom doprinosa.
+Hvala vam na interesovanju za doprinos `@dlbr/ubl-sdk` biblioteci! Molimo vas da poštujete sledeća pravila prilikom otvaranja Pull Request-ova kako bismo održali maksimalnu stabilnost i pouzdanost generatora.
 
-## 🛡️ Filozofija "Steel Fortress"
-Naš sistem se oslanja na:
-1. **Determinizam**: Svaki XML mora biti 100% predvidljiv.
-2. **Nulta tolerancija na greške**: Svi doprinosi moraju proći kroz stroge validacione testove.
-3. **Poreska sigurnost**: Svaka izmena mora biti usklađena sa MFIN tehničkim uputstvima.
+## 🛡️ Filozofija "Čelične Validacije"
+Naša biblioteka se oslanja na:
+1. **Determinizam**: Svaki XML mora biti 100% predvidljiv i ponovljiv.
+2. **Nulta tolerancija na greške**: Svi doprinosi moraju proći kroz stroge validacione testove pre nego što uđu u produkciju.
+3. **Poreska usklađenost**: Svaka izmena šeme i validacije mora biti strogo usklađena sa zvaničnim tehničkim uputstvima Ministarstva finansija Republike Srbije.
 
 ## 🚀 Proces doprinosa
 
 ### 1. Radni tok (Workflow)
 - **Nikada ne vršite push direktno na `main` granu.**
-- Kreirajte novu granu (`feature/...` ili `fix/...`) iz `main`-a.
-- Radite promene, testirajte ih lokalno, a zatim otvorite **Pull Request (PR)**.
+- Kreirajte novu granu (`feature/...` ili `fix/...`) iz `main` grane.
+- Implementirajte promene, testirajte ih lokalno, a zatim otvorite **Pull Request (PR)**.
 
 ### 2. Obavezni testovi
-Vaš doprinos **neće biti prihvaćen** ako ne prolazi kroz "Ultimate Gauntlet":
+Vaš Pull Request neće biti spojen ukoliko svi testovi ne prolaze uspešno:
 - Pokrenite lokalne testove pre slanja:
   ```bash
   npm test
   ```
-- Ukoliko dodajete novu funkcionalnost (npr. novi tip fakture), obavezno dodajte novi slučaj u `ultimate_gauntlet.test.ts` koristeći matrični pristup (`test.each`).
+- Ukoliko dodajete novu funkcionalnost (npr. podršku za novi element u UBL-u ili specifično poresko izuzeće), obavezno dodajte prateće test scenarije u `test/` folderu.
 
 ### 3. Arhitektura koda
-- **SDK vs Core**: 
-  - `packages/sef-ubl-builder` je javni SDK. Ovde držimo samo `SefUblBuilder` i osnovne tipove.
-  - Vlasnička logika validacije (`MasterValidator`, `sbs_rules.sch`) se nalazi u `shared/compliance/` i nije predmet direktnih izmena od strane spoljnih doprinosilaca.
-- **Node.js**: Koristimo Node 22+.
-- **Zero-Dependency**: Težimo ka minimalnom broju zavisnosti.
+- **Zero-Dependency**: Težimo ka tome da biblioteka nema eksterne zavisnosti (osim `valibot` za JSON validaciju). Nemojte dodavati nove pakete u `dependencies` bez prethodne rasprave u Issues.
+- **MasterValidator**: Izmene u validacionoj logici (`validator.ts`) moraju pratiti zvanične specifikacije e-faktura i biti potkrepljene primerima iz prakse.
+- **Edge-Native**: Kod mora ostati kompatibilan sa V8 / Cloudflare Workers runtime-om. Izbegavajte korišćenje Node.js specifičnih biblioteka (poput `fs` ili `path`) unutar `src/`.
 
 ## 📝 Konvencije commit-a
-Pratite standarde:
+Pratite standardne konvencije za naslove commit poruka:
 - `feat:` za nove funkcionalnosti.
 - `fix:` za ispravke bagova.
 - `docs:` za ažuriranje dokumentacije.
-- `chore:` za održavanje CI/CD pipeline-a.
+- `chore:` za izmene build alata, TS konfiguracija ili test runner-a.
 
 ## 🛡️ Bezbednost
-- Nikada ne commit-ujte API ključeve ili bilo kakve osetljive podatke.
-- Sve tajne (secrets) moraju biti konfigurisane u GitHub Actions.
+- Nikada ne commit-ujte API ključeve, lozinke ili osetljive lične podatke (npr. stvarne ugovore ili fakture iz produkcije). Koristite isključivo lažne generisane podatke u testovima.
+- Ako uočite bezbednosni propust, molimo vas da ga prijavite direktno održavaocima projekta umesto otvaranja javnog issue-a.
 
-Vaš doprinos čini SEF Bridge sigurnijim i efikasnijim za sve. Hvala vam!
+Vaš doprinos čini e-fakturisanje u Srbiji bržim i sigurnijim za sve nas. Hvala vam na trudu!
