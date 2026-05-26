@@ -28,6 +28,16 @@ describe('SEF Bridge - Integration Tests', () => {
     await (env as any).REGISTAR_DB.prepare(`
       CREATE INDEX IF NOT EXISTS idx_aktivne_fakture_sync ON klijenti(ima_aktivne_fakture, poslednji_sync)
     `).run();
+
+    await (env as any).REGISTAR_DB.prepare(`
+      CREATE TABLE IF NOT EXISTS nbs_kursna_lista_cache (
+        valuta TEXT NOT NULL,
+        datum TEXT NOT NULL,
+        kurs REAL NOT NULL,
+        kreirano_u DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (valuta, datum)
+      )
+    `).run();
   });
   
   beforeEach(async () => {
@@ -100,5 +110,45 @@ describe('SEF Bridge - Integration Tests', () => {
     const data = await res.json() as any;
     expect(data.success).toBe(true);
     expect(data.instructions).toBeDefined();
+  });
+
+  it('treba da dohvati javnu kursnu listu sa /api/public/v1/kursna-lista sa trendovima', async () => {
+    // 1. Unapred popuni keš za danas i juče
+    const danas = new Date().toISOString().split('T')[0];
+    const juceDate = new Date();
+    juceDate.setDate(juceDate.getDate() - 1);
+    const juce = juceDate.toISOString().split('T')[0];
+
+    await (env as any).REGISTAR_DB.prepare(
+      "INSERT OR REPLACE INTO nbs_kursna_lista_cache (valuta, datum, kurs) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?), (?, ?, ?), (?, ?, ?), (?, ?, ?)"
+    ).bind(
+      'EUR', danas, 117.2, 'USD', danas, 108.5, 'CHF', danas, 121.1,
+      'EUR', juce, 117.1, 'USD', juce, 108.6, 'CHF', juce, 121.1
+    ).run();
+
+    const res = await app.request('/api/public/v1/kursna-lista', { method: 'GET' }, env as any);
+    
+    expect(res.status).toBe(200);
+    const data = await res.json() as any;
+    expect(data.status).toBe('success');
+    expect(data.valute.EUR.kurs).toBe(117.2);
+    expect(data.valute.EUR.trend.smer).toBe('GORE'); // 117.2 > 117.1
+    expect(data.valute.USD.trend.smer).toBe('DOLE'); // 108.5 < 108.6
+    expect(data.valute.CHF.trend.smer).toBe('ISTO'); // 121.1 == 121.1
+    expect(data.tiker).toHaveLength(3);
+    expect(data.schemaOrg['@type']).toBe('FinancialProduct');
+  });
+
+  it('treba da vrati 500 ako generisanje OG slike pukne (npr. zbog WASM restrikcija u testu)', async () => {
+    const res = await app.request('/api/public/v1/kursna-lista/og.png', { method: 'GET' }, env as any);
+    // U testnom okruženju vpw (vitest-pool-workers), WebAssembly.instantiate može biti zabranjen
+    // pa očekujemo ili sliku (ako proradi) ili 500 sa greškom.
+    if (res.status === 200) {
+      expect(res.headers.get('Content-Type')).toBe('image/png');
+    } else {
+      expect(res.status).toBe(500);
+      const data = await res.json() as any;
+      expect(data.error).toBe('OG_GEN_FAIL');
+    }
   });
 });

@@ -7,6 +7,7 @@ import {
   SefUblBuilder, 
   NbsSoapService,
   EmailService,
+  OgEngine,
   posaljiHotfixTelegramAlarm, 
   handleLogisticsQueue 
 } from '@sef/shared';
@@ -15,6 +16,42 @@ import ComplianceWatcher from "./compliance-watcher";
 export const app = Router<Env>();
 
 // --- PUBLIC SEO ROUTES ---
+
+app.get('/api/public/v1/kursna-lista/og.png', async (c) => {
+  const danas = new Date().toISOString().split('T')[0];
+  const juceDate = new Date();
+  juceDate.setDate(juceDate.getDate() - 1);
+  const juce = juceDate.toISOString().split('T')[0];
+
+  try {
+    const [eur, eurJuce] = await Promise.all([
+      NbsSoapService.getMiddleRate('EUR', danas, c.env as any),
+      NbsSoapService.getMiddleRate('EUR', juce, c.env as any)
+    ]);
+
+    const proc = eurJuce !== 0 ? ((eur - eurJuce) / eurJuce) * 100 : 0;
+    
+    // @ts-ignore
+    const fontBuffer = await import('@sef/shared/assets/Inter-Bold.ttf').then(m => m.default);
+
+    const png = await OgEngine.generatePng({
+      valuta: 'EUR',
+      kurs: eur.toFixed(4),
+      promena: Math.abs(proc).toFixed(4),
+      raste: eur >= eurJuce
+    }, fontBuffer);
+
+    return new Response(png, {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=3600'
+      }
+    });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: 'OG_GEN_FAIL', message: err.message }), { status: 500 });
+  }
+});
 
 app.get('/api/public/v1/kursna-lista', async (c) => {
   const danas = new Date().toISOString().split('T')[0];
