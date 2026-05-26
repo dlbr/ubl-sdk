@@ -2,82 +2,107 @@ import * as v from 'valibot';
 
 const toCent = (num: number) => Math.round(num * 100);
 
+// Zvanični SEF poreski kodovi za Republiku Srbiju
+export const SefTaxCategoryPicklist = v.picklist(
+  ['S', 'AE', 'Z', 'E', 'R', 'O', 'OE'],
+  '[FATAL] SEF-TAX: Nevalidna poreska kategorija. Dozvoljene oznake su S, AE, Z, E, R, O ili OE.'
+);
+
+// Standardizovane logističke jedinice mera (UN/ECE Rec 20)
+export const SefUnitOfMeasurePicklist = v.picklist(
+  ['LTR', 'KGM', 'HUR', 'H87', 'NAR'],
+  '[FATAL] SEF-LOG: Nevalidna jedinica mere. Koristite standardne UN/ECE kodove (npr. LTR za litar, HUR za sat).'
+);
+
 export const SefInvoiceSchema = v.pipe(
   v.object({
     customizationId: v.literal('urn:cen.eu:en16931:2017#compliant#pi-rs:2024', '[FATAL] Nevalidan CustomizationID. Mora biti zvanični srpski profil (pi-rs:2024).'),
     profileId: v.literal('urn:fdc:peppol.eu:poacc:bis3:invoice:3', '[FATAL] Nevalidan ProfileID. Mora biti zvanični Peppol BIS3 profil.'),
     routingDetails: v.object({
       sender: v.string(),
-      receiver: v.string()
+      receiver: v.string(),
+      documentScheme: v.literal('RS_E_INVOICING'),
+      routingChannel: v.picklist(['PRODUCTION', 'SANDBOX'])
     }),
-    invoiceId: v.string(),
-    invoiceTypeCode: v.string(),
-    issueDate: v.string([v.isoDate()]),
+    businessProcessType: v.literal('COMMERCIAL_INVOICING', '[FATAL] VRBL-CONTEXT: businessProcessType mora biti striktno postavljen na "COMMERCIAL_INVOICING".'),
+    businessContextId: v.literal('urn:vertexinc:vrbl:context:rs:proc:1', '[FATAL] VRBL-CONTEXT: businessContextId za profil Srbije mora biti striktno "urn:vertexinc:vrbl:context:rs:proc:1".'),
+
+    // 🟢 Korenski identifikatori
+    invoiceId: v.pipe(v.string(), v.minLength(1, '[FATAL] VRBL-CORE: Broj fakture (invoiceId) ne sme biti prazan.'), v.maxLength(50, '[FATAL] VRBL-CORE: Broj fakture ne sme biti duži od 50 karaktera.')),
+    issueTime: v.pipe(v.string(), v.regex(/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/, '[FATAL] VRBL-CORE: Vreme izdavanja (issueTime) mora biti u ispravnom formatu hh:mm:ss.')),
+    invoicePeriod: SefInvoicePeriodSchema,
+
+    // 🟢 Tenderske reference
+    tenderDocumentReference: v.optional(SefTenderDocumentReferenceSchema),
+    contractDocumentReference: v.optional(v.object({
+      id: v.pipe(v.string(), v.minLength(1, '[FATAL] ID ugovora/partije ne sme biti prazan.'))
+    })),
+
+    // 🟢 Logistika i prevoz
+    carrierParty: v.optional(SefCarrierPartySchema),
+
+    invoiceTypeCode: v.picklist(['380', '381', '383', '386'], '[FATAL] Nevalidan InvoiceTypeCode (Dozvoljeni: 380, 381, 383, 386).'),
+    issueDate: v.string([v.isoDate('[FATAL] Nevalidan format datuma izdavanja.')]),
+    paymentDueDate: v.string([v.isoDate('[FATAL] Nevalidan format roka plaćanja.')]),
+    actualDeliveryDate: v.string([v.isoDate('[FATAL] Datum prometa je obavezan prema ZEF-u.')]),
     
-    lineExtensionAmount: v.number(),
-    allowanceTotalAmount: v.number(),
-    chargeTotalAmount: v.number(),
-    taxExclusiveAmount: v.number(),
-    taxInclusiveAmount: v.number(),
-    payableAmount: v.number(),
-    prepaidAmount: v.optional(v.number(), 0),
+    // 🟢 Valutne oznake
+    documentCurrencyCode: IsoCurrencySchema,
+    taxCurrencyCode: IsoCurrencySchema,
 
-    taxAmount: v.number(),
-
+    payableAmount: v.number([v.minValue(0)]),
+    lineExtensionAmount: v.number([v.minValue(0)]),
+    taxExclusiveAmount: v.number([v.minValue(0)]),
+    taxInclusiveAmount: v.number([v.minValue(0)]),
+    allowanceTotalAmount: v.number([v.minValue(0)]),
+    chargeTotalAmount: v.number([v.minValue(0)]),
+    prepaidAmount: v.optional(v.number([v.minValue(0)])),
+    
+    supplierPib: PibSchema,
+    customerPib: v.string([v.regex(/^\d{9,13}$/, '[FATAL] PIB ili JMBG kupca mora imati 9 ili 13 cifara.')]),
+    customerJbkjs: v.optional(v.pipe(v.string(), JbkjsSchema)),
+    invoicingPeriodCode: v.picklist(['35', '432', '3', '0'], '[FATAL] Nevalidan Invoicing Period Code.'),
+    buyerReference: SefBuyerReferenceSchema,
+    despatchDocumentReferences: v.optional(v.array(DespatchDocumentReferenceSchema)),
+    billingReference: v.optional(SefInvoiceDocumentReferenceSchema),
+    taxTotals: v.array(TaxTotalSchema),
+    supplierElectronicAddress: SefEndpointIdSchema,
+    supplierPartyIdentification: SefPartyIdentificationSchema,
+    supplierPartyTaxScheme: SefPartyTaxSchemeSchema,
+    supplierPartyLegalEntity: SefPartyLegalEntitySchema,
+    customerElectronicAddress: SefCustomerEndpointSchema,
+    customerPartyTaxScheme: SefCustomerPartyTaxSchemeSchema,
+    customerPartyLegalEntity: SefCustomerPartyLegalEntitySchema,
+    advancePaymentReferences: v.optional(v.array(SefAdvancePaymentReferenceSchema)),
+    allowanceCharges: v.optional(v.array(SefAllowanceChargeSchema)),
+    notes: v.optional(v.pipe(
+      v.array(SefInvoiceNoteSchema),
+      v.transform((arr) => arr.filter(note => note.trim().length > 0))
+    )),
     invoiceLines: v.array(v.object({
-      id: v.string(),
+      id: v.pipe(v.string(), v.minLength(1)),
+      name: v.string(),
+      invoicedQuantity: v.number(),
+      unitCode: SefUnitOfMeasurePicklist,
+      priceAmount: v.number(),
       lineExtensionAmount: v.number(),
-      taxCategoryCode: v.string(),
-      taxCategoryPercent: v.number()
-    })),
-
-    taxSubtotals: v.array(v.object({
-      taxableAmount: v.number(),
-      taxAmount: v.number(),
-      taxCategoryCode: v.string(),
-      taxCategoryPercent: v.number()
-    })),
-
-    allowanceCharges: v.optional(v.array(v.object({
-      chargeIndicator: v.boolean(),
-      amount: v.number(),
-      taxCategoryCode: v.string(),
-      taxCategoryPercent: v.number()
-    })), [])
+      classifiedTaxCategory: v.object({
+        taxCategoryCode: SefTaxCategoryPicklist,
+        taxCategoryPercent: v.number()
+      })
+    }), [v.minLength(1, '[FATAL] Faktura mora sadržati najmanje jednu stavku (InvoiceLine).')])
   }),
 
-  v.check((input) => {
-    const expectedCents = toCent(input.lineExtensionAmount) 
-                          - toCent(input.allowanceTotalAmount) 
-                          + toCent(input.chargeTotalAmount);
-    return toCent(input.taxExclusiveAmount) === expectedCents;
-  }, '[FATAL] [VRBL-CALC-1]: Krovna osnovica (taxExclusiveAmount) mora biti jednaka sumi stavki (lineExtensionAmount) minus popusti (allowanceTotalAmount) plus troškovi (chargeTotalAmount).'),
+  // Hronologija datuma
+  v.check((input) => new Date(input.issueDate) <= new Date(input.paymentDueDate), '[FATAL] Rok plaćanja ne može biti pre datuma izdavanja fakture.'),
 
+  // Mandatory Exemption Reason for 0% tax
   v.check((input) => {
-    const sumSubtotalTaxCents = input.taxSubtotals.reduce((acc, sub) => acc + toCent(sub.taxAmount), 0);
-    return toCent(input.taxAmount) === sumSubtotalTaxCents;
-  }, '[FATAL] [VRBL-CALC-2]: Krovni porez (taxAmount) mora biti jednak zbiru svih iznosa poreza unutar poreskih grupa (taxSubtotals).'),
-
-  v.check((input) => {
-    const expectedBrutoCents = toCent(input.taxExclusiveAmount) + toCent(input.taxAmount);
-    return toCent(input.taxInclusiveAmount) === expectedBrutoCents;
-  }, '[FATAL] [VRBL-CALC-3]: Krovni bruto iznos (taxInclusiveAmount) mora biti jednak zbiru krovne osnovice (taxExclusiveAmount) i krovnog poreza (taxAmount).'),
-
-  // 🎯 VRBL-CALC-5: TaxExclusiveAmount = LineExtensionAmount + ChargeTotalAmount - AllowanceTotalAmount
-  v.check((input) => {
-    const expected = toCent(input.lineExtensionAmount) + toCent(input.chargeTotalAmount) - toCent(input.allowanceTotalAmount);
-    return toCent(input.taxExclusiveAmount) === expected;
-  }, '[FATAL] [VRBL-CALC-5]: Poreska osnovica (taxExclusiveAmount) mora biti jednaka zbiru stavki plus troškovi minus popusti.'),
-
-  // 🎯 VRBL-CALC-6: PayableAmount = TaxInclusiveAmount - PrepaidAmount + RoundingAmount
-  v.check((input) => {
-    const expected = toCent(input.taxInclusiveAmount) - toCent(input.prepaidAmount || 0); // Assuming RoundingAmount is 0 for now
-    return toCent(input.payableAmount) === expected;
-  }, '[FATAL] [VRBL-CALC-6]: Iznos za uplatu (payableAmount) mora biti jednak bruto iznosu (taxInclusiveAmount) minus avans (prepaidAmount).'),
-
-  // 🎯 VRBL-CALC-8: LineExtensionAmount = sum(InvoiceLineExtensionAmount)
-  v.check((input) => {
-    const sumLines = input.invoiceLines.reduce((acc, line) => acc + toCent(line.lineExtensionAmount), 0);
-    return toCent(input.lineExtensionAmount) === sumLines;
-  }, '[FATAL] [VRBL-CALC-8]: Krovni neto iznos (lineExtensionAmount) mora biti jednak zbiru neto iznosa svih linija fakture.')
+    for (const sub of input.taxTotals.flatMap(t => t.subtotals)) {
+      if (sub.taxCategoryPercent === 0 && !sub.exemptionReasonCode && !sub.taxExemptionReason) {
+        return false;
+      }
+    }
+    return true;
+  }, '[FATAL] Zakonska greška: Za sve poreske grupe sa stopom 0% (AE, Z, E, O, OE) morate uneti šifru (exemptionReasonCode) ili tekstualni opis razloga za oslobođenje od PDV-a.')
 );
