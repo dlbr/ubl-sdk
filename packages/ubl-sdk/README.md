@@ -1,6 +1,6 @@
 # @dlbr/ubl-sdk
 ![Pipeline CI](https://github.com/dlbr/ubl-sdk/actions/workflows/publish.yml/badge.svg)
-![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)
+![Version](https://img.shields.io/npm/v/@dlbr/ubl-sdk?label=version)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![TypeScript](https://img.shields.io/badge/language-TypeScript-blue.svg)
 
