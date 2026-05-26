@@ -8,6 +8,7 @@ import {
   NbsSoapService,
   EmailService,
   OgEngine,
+  WebhookRelay,
   posaljiHotfixTelegramAlarm, 
   handleLogisticsQueue 
 } from '@sef/shared';
@@ -306,6 +307,31 @@ app.get('/api/fakture', internalOnly, async (c: RouterContext<Env> & { klijentId
 app.get('/api/webhook-setup', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
   const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
   return await kDO.fetch('http://do/api/internal/webhook-instructions');
+});
+
+app.post('/api/fakture/send', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
+  const payload = await c.req.json();
+  return await kDO.fetch('http://do/api/fakture/send', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' }
+  });
+});
+
+app.get('/api/audit/retention-policy', internalOnly, async (c: RouterContext<Env> & { klijentId?: string }) => {
+  const kDO = c.env.KLIJENT_BAZA_OBJECT.get(c.env.KLIJENT_BAZA_OBJECT.idFromName(c.klijentId!));
+  return await kDO.fetch('http://do/api/audit/retention-policy');
+});
+
+app.post('/api/webhooks/sef-update', async (c: RouterContext<Env>) => {
+  // Mock webhook for tests
+  return Response.json({ success: true });
+});
+
+app.post('/api/webhooks/otpremnice', async (c: RouterContext<Env>) => {
+  // Mock webhook for tests
+  return Response.json({ success: true });
 });
 
 // --- CORE API ROUTES ---
@@ -652,6 +678,39 @@ export default {
   async queue(batch: MessageBatch<any>, env: Env, ctx: ExecutionContext): Promise<void> {
     if (batch.queue === "eotpremnice-reconciliation-queue") {
       return await handleLogisticsQueue(batch, env);
+    }
+
+    if (batch.queue === "sef-webhook-delivery") {
+      for (const msg of batch.messages) {
+        const payload = msg.body;
+        try {
+          // 1. Dohvatanje podešavanja klijenta
+          const config = await env.REGISTAR_DB.prepare(
+            "SELECT webhook_url, webhook_secret FROM klijentska_podesavanja WHERE pib = ?"
+          ).bind(payload.pibKupca).first<{ webhook_url: string; webhook_secret: string }>();
+
+          if (!config || !config.webhook_url) {
+            console.log(`⚠️ [WEBHOOK-SKIP] Klijent ${payload.pibKupca} nema webhook.`);
+            msg.ack();
+            continue;
+          }
+
+          // 2. Isporuka
+          const response = await WebhookRelay.deliver(payload, config.webhook_url, config.webhook_secret);
+
+          if (response.ok) {
+            console.log(`✅ [WEBHOOK-SUCCESS] Isporučeno na ${config.webhook_url}`);
+            msg.ack();
+          } else {
+            console.error(`🔴 [WEBHOOK-FAIL] Status ${response.status}. Retry.`);
+            msg.retry();
+          }
+        } catch (e) {
+          console.error(`🚨 [WEBHOOK-CRASH] Greška:`, e);
+          msg.retry();
+        }
+      }
+      return;
     }
 
     for (const msg of batch.messages) {

@@ -43,6 +43,10 @@ queue = "sef-compliance-queue"
 binding = "OTPREMNICA_QUEUE"
 queue = "eotpremnice-reconciliation-queue"
 
+[[queues.producers]]
+binding = "WEBHOOK_QUEUE"
+queue = "sef-webhook-delivery"
+
 [env.production]
 name = "sef-bridge-backend"
 workers_dev = false
@@ -79,6 +83,10 @@ queue = "sef-compliance-queue"
 binding = "OTPREMNICA_QUEUE"
 queue = "eotpremnice-reconciliation-queue"
 
+[[env.production.queues.producers]]
+binding = "WEBHOOK_QUEUE"
+queue = "sef-webhook-delivery"
+
 [[queues.consumers]]
 queue = "sef-compliance-queue"
 max_batch_size = 10
@@ -86,5 +94,10 @@ max_batch_timeout = 30
 
 [[queues.consumers]]
 queue = "eotpremnice-reconciliation-queue"
+max_batch_size = 10
+max_batch_timeout = 5
+
+[[queues.consumers]]
+queue = "sef-webhook-delivery"
 max_batch_size = 10
 max_batch_timeout = 5

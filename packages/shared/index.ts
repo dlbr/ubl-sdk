@@ -16,5 +16,6 @@ export * from './services/queueConsumer';
 export * from './services/nbsSoapService';
 export * from './services/EmailService';
 export * from './services/OgEngine';
+export * from './services/WebhookRelay';
 export * from './constants/sefTaxonomy';
 export { SefUblBuilder } from '@dlbr/ubl-sdk';
