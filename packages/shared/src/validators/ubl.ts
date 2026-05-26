@@ -198,6 +198,10 @@ export const SefInvoiceSchema = v.pipe(
     localProfileSpecificationId: v.literal('urn:vertexinc:vrbl:spec:rs:1p0p0', '[FATAL] VRBL-CORE-15: LocalProfileSpecificationID za Srbiju mora biti "urn:vertexinc:vrbl:spec:rs:1p0p0".'),
     routingDetails: SefVrblRoutingDetailsSchema,
 
+    // 🟢 Novi elementi prema VRBL-CORE-30/35
+    businessProcessType: v.literal('COMMERCIAL_INVOICING', '[FATAL] VRBL-CONTEXT: businessProcessType mora biti striktno postavljen na "COMMERCIAL_INVOICING".'),
+    businessContextId: v.literal('urn:vertexinc:vrbl:context:rs:proc:1', '[FATAL] VRBL-CONTEXT: businessContextId za profil Srbije mora biti striktno "urn:vertexinc:vrbl:context:rs:proc:1".'),
+
     // 🟢 Korenski identifikatori
     invoiceId: v.pipe(v.string(), v.minLength(1, '[FATAL] VRBL-CORE: Broj fakture (invoiceId) ne sme biti prazan.'), v.maxLength(50, '[FATAL] VRBL-CORE: Broj fakture ne sme biti duži od 50 karaktera.')),
     issueTime: v.pipe(v.string(), v.regex(/^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/, '[FATAL] VRBL-CORE: Vreme izdavanja (issueTime) mora biti u ispravnom formatu hh:mm:ss.')),
