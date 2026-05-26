@@ -10,3 +10,4 @@ export * from './transformer/XmlTransformer.js';
 export * from './constants.js';
 export * from './SefUblBuilder.js';
 export { SefInvoiceSchema, TaxTotalSchema, SefInvoicePeriodSchema, IsoCurrencySchema, SefLiveValidator, MasterValidator, validanPIB, validanMB } from './validator.js';
+export * from './types.js';

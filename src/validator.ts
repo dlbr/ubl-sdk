@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { ValidationOptions } from './types.js';
 
 export const IsoCurrencySchema = v.pipe(
   v.string(),
@@ -614,7 +615,7 @@ export const SefInvoiceSchema = v.pipe(
 // This is the ONLY place where normalizeInput (full math) is called.
 // ─────────────────────────────────────────────────────────────────────────────
 export class MasterValidator {
-  static validate(data: any) {
+  static validate(data: any, options: ValidationOptions = { mode: 'B2B' }) {
     if (!data) {
       throw new Error(`🛡️ [MasterValidator] FATAL: Nedostaju obavezna polja`);
     }
@@ -625,6 +626,17 @@ export class MasterValidator {
     // Step 2: Require core fields after normalization
     if (!normalized.id || !normalized.issueDate || !normalized.pibS || !normalized.pibB) {
       throw new Error(`🛡️ [MasterValidator] FATAL: Nedostaju obavezna polja`);
+    }
+
+    // Step 2.5: Enforce strict B2G rules if mode is B2G
+    if (options.mode === 'B2G') {
+      const jbkjsVal = normalized.jbkjsB || normalized.customerJbkjs || normalized.jbkjs;
+      if (!jbkjsVal) {
+        throw new Error(`🛡️ [MasterValidator] B2G_VALIDATION_ERROR: JBKJS (Jedinstveni broj korisnika javnih sredstava) je obavezan za B2G (javni sektor) režim.`);
+      }
+      if (!normalized.buyerReference) {
+        throw new Error(`🛡️ [MasterValidator] B2G_VALIDATION_ERROR: BuyerReference (Broj ugovora/porudžbine) je obavezan za B2G (javni sektor) režim.`);
+      }
     }
 
     // Step 3: Validate against the pure schema
