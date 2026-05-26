@@ -156,8 +156,6 @@ jobs:
 
       - name: 🏗️ Nuxt Production Build
         run: pnpm build:frontend
-        env:
-          NITRO_PRESET: cloudflare-worker
 
       - name: 🚀 Deploy Frontend (Cloudflare Worker)
         run: |
