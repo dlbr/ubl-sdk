@@ -155,22 +155,6 @@ importers:
         specifier: ^1.4.0
         version: 1.6.1(@types/node@25.9.1)(terser@5.48.0)
 
-  temp-pilot:
-    dependencies:
-      '@dlbr/ubl-sdk':
-        specifier: link:../packages/ubl-sdk
-        version: link:../packages/ubl-sdk
-      valibot:
-        specifier: ^1.4.0
-        version: 1.4.0(typescript@5.9.3)
-    devDependencies:
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      typescript:
-        specifier: ^5.4.0
-        version: 5.9.3
-
 packages:
 
   '@alloc/quick-lru@5.2.0':
