@@ -15,10 +15,10 @@ git config user.email "github-actions[bot]@users.noreply.github.com"
 
 # Splitovanje ubl-sdk foldera i push na javni repo
 echo "Syncing subtree to dlbr/ubl-sdk..."
-git subtree push --prefix=packages/ubl-sdk https://x-access-token:${UBL_SDK_SYNC_TOKEN}@github.com/dlbr/ubl-sdk.git main
+git subtree push --prefix=packages/ubl-sdk https://${UBL_SDK_SYNC_TOKEN}@github.com/dlbr/ubl-sdk.git main
 
 # Guranje lokalnih tagova (koje je generisao Changesets) na javni repo
 echo "Pushing tags to dlbr/ubl-sdk..."
-git push https://x-access-token:${UBL_SDK_SYNC_TOKEN}@github.com/dlbr/ubl-sdk.git --tags
+git push https://${UBL_SDK_SYNC_TOKEN}@github.com/dlbr/ubl-sdk.git --tags
 
 echo "Sync complete!"
