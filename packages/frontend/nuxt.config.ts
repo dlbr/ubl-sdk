@@ -1,3 +1,5 @@
+import { cloudflare } from '@cloudflare/unenv-preset';
+
 export default defineNuxtConfig({
   sourcemap: false,
   compatibilityDate: "2026-05-25",
@@ -6,6 +8,7 @@ export default defineNuxtConfig({
   },
   nitro: {
     preset: 'cloudflare_module',
+    unenv: cloudflare,
   },
   devtools: { enabled: false },
   modules: ['@nuxtjs/tailwindcss'],
