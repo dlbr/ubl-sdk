@@ -5,15 +5,18 @@ import { SefInvoiceSchema } from '../src/validators/ubl';
 describe('🛡️ Vertex Tax Calculations Forenzika [VRBL-CALC-1 do VRBL-CALC-4]', () => {
 
   const baseValidPayload = {
+    customizationId: 'urn:vertexinc:vrbl:billing:1',
+    profileId: 'urn:vertexinc:vrbl:billing:1',
+    routingDetails: { sender: 'RS113398540', receiver: 'GENERIC_RS_EINVOICE_1p0p0' },
     invoiceId: 'FAKTURA-2026-001',
     invoiceTypeCode: '380',
     issueDate: '2026-05-26',
-    lineExtensionAmount: 100000.00,  // 100k neto u stavkama
-    allowanceTotalAmount: 10000.00,  // 10k popust
-    chargeTotalAmount: 5000.00,      // 5k trošak transporta
-    taxExclusiveAmount: 95000.00,    // 100k - 10k + 5k = 95k osnovica (VRBL-CALC-1)
-    taxAmount: 19000.00,             // 95k * 20% = 19k porez
-    taxInclusiveAmount: 114000.00,   // 95k + 19k = 114k bruto (VRBL-CALC-3)
+    lineExtensionAmount: 100000.00,
+    allowanceTotalAmount: 10000.00,
+    chargeTotalAmount: 5000.00,
+    taxExclusiveAmount: 95000.00,
+    taxAmount: 19000.00,
+    taxInclusiveAmount: 114000.00,
     payableAmount: 114000.00,
     invoiceLines: [
       { id: '1', lineExtensionAmount: 100000.00, taxCategoryCode: 'S', taxCategoryPercent: 20 }
@@ -23,7 +26,7 @@ describe('🛡️ Vertex Tax Calculations Forenzika [VRBL-CALC-1 do VRBL-CALC-4]
       { chargeIndicator: true, amount: 5000.00, taxCategoryCode: 'S', taxCategoryPercent: 20 }
     ],
     taxSubtotals: [
-      { taxableAmount: 95000.00, taxAmount: 19000.00, taxCategoryCode: 'S', taxCategoryPercent: 20 } // VRBL-CALC-2 i VRBL-CALC-4
+      { taxableAmount: 95000.00, taxAmount: 19000.00, taxCategoryCode: 'S', taxCategoryPercent: 20 }
     ]
   };
 
