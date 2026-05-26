@@ -3,6 +3,14 @@
   "version": "1.0.2",
   "type": "module",
   "description": "Ultra-brzi, Edge-native JSON-to-UBL 2.1 XML generator prilagođen specifikacijama srpskog SEF-a",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dlbr/ubl-sdk.git"
+  },
+  "homepage": "https://github.com/dlbr/ubl-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/dlbr/ubl-sdk/issues"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
