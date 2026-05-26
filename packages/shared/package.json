@@ -6,7 +6,9 @@
   "types": "./index.ts",
   "dependencies": {
     "@dlbr/ubl-sdk": "workspace:*",
+    "@resvg/resvg-wasm": "^2.6.2",
     "fast-xml-parser": "^5.8.0",
+    "satori": "^0.26.0",
     "valibot": "^1.4.0"
   },
   "devDependencies": {

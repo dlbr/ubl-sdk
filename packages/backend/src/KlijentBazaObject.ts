@@ -103,6 +103,29 @@ export class KlijentBaza extends DurableObject<Env> {
       return Response.json({ success: true });
     });
 
+    this.app.get('/api/internal/check-quota', async () => {
+      const { moze, error } = await this.checkLimit(1);
+      if (!moze) return Response.json(error, { status: 403 });
+      return Response.json({ success: true });
+    });
+
+    this.app.get('/api/internal/get-potrosnja', async () => {
+      const stats = await this.getStats();
+      const currentMonth = new Date().toISOString().substring(0, 7);
+      const monthly = stats.stats.find((s: any) => s.mesec === currentMonth) || { faktura_count: 0, eotpremnice_count: 0 };
+      return Response.json(monthly);
+    });
+
+    this.app.get('/api/internal/get-fakture', async ({ req }: RouterContext<Env>) => {
+      const url = new URL(req.url);
+      const page = parseInt(url.searchParams.get('page') || '1', 10);
+      return Response.json(await this.getFakture(page));
+    });
+
+    this.app.get('/api/internal/webhook-instructions', async () => {
+      return Response.json(await this.getWebhookInstructions());
+    });
+
     this.app.post('/test/seed', async ({ req }: RouterContext<Env>) => {
       const data = await req.json() as any;
       if (data.action === 'SEED_IMPORT') {

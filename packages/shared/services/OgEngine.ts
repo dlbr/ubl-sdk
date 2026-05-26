@@ -4,31 +4,23 @@ import { initWasm, Resvg } from '@resvg/resvg-wasm';
 export class OgEngine {
   private static wasmInitialized = false;
 
-  /**
-   * 🛡️ Inicijalizacija resvg WASM modula
-   */
   private static async ensureWasmInitialized() {
     if (this.wasmInitialized) return;
     
-    // U Cloudflare Workers okruženju, WASM module obično dobijamo preko binding-a ili specifičnog importa
-    // Ovde koristimo dinamički import koji Wrangler prepoznaje
+    // 🚀 Koristimo lokalnu kopiju WASM-a koja je sada deo asset-a paketa
     // @ts-ignore
-    const resvgWasm = await import('@resvg/resvg-wasm/index_bg.wasm');
+    const resvgWasm = await import('../assets/resvg.wasm');
     
     await initWasm(resvgWasm.default);
     this.wasmInitialized = true;
   }
 
-  /**
-   * 🎨 Generiše sirovi PNG buffer na osnovu dinamičkih NBS podataka
-   */
   static async generatePng(
     payload: { valuta: string; kurs: string; promena: string; raste: boolean },
     fontBuffer: ArrayBuffer
   ): Promise<Uint8Array> {
     await this.ensureWasmInitialized();
 
-    // JSX-like struktura za Satori
     const element = {
       type: 'div',
       props: {

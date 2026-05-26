@@ -23,6 +23,9 @@ describe('🛡️ Valibot Emulacija SEF Schematron Pravila', () => {
 
   it('✅ 1. Potpuno ispravna domaća faktura u RSD mora bez problema proći validator', () => {
     const res = safeParse(SefInvoiceSchema, bazičnaValidnaFaktura);
+    if (!res.success) {
+      console.log('Validation Issues:', JSON.stringify(res.issues, null, 2));
+    }
     expect(res.success).toBe(true);
   });
 

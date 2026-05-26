@@ -5,6 +5,18 @@ compatibility_flags = ["nodejs_compat"]
 
 [alias]
 "@dlbr/ubl-sdk" = "../ubl-sdk/src/index.ts"
+"@sef/shared" = "../shared/index.ts"
+
+# 🚀 PRAVILA ZA BINARNE FAJLOVE (WASM i Fontovi)
+[[rules]]
+type = "Data"
+globs = ["**/*.ttf"]
+fallthrough = true
+
+[[rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+fallthrough = true
 
 # 🚀 Zvanični Cloudflare Email Sending binding
 [[send_email]]

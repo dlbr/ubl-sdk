@@ -29,12 +29,18 @@ importers:
       '@dlbr/ubl-sdk':
         specifier: workspace:*
         version: link:../ubl-sdk
+      '@resvg/resvg-wasm':
+        specifier: ^2.6.2
+        version: 2.6.2
       '@sef/shared':
         specifier: workspace:*
         version: link:../shared
       itty-router:
         specifier: ^5.0.18
         version: 5.0.23
+      satori:
+        specifier: ^0.26.0
+        version: 0.26.0
       valibot:
         specifier: ^1.4.0
         version: 1.4.0(typescript@6.0.3)
@@ -91,6 +97,12 @@ importers:
       '@sef/shared':
         specifier: workspace:*
         version: link:../shared
+      fast-xml-parser:
+        specifier: ^5.8.0
+        version: 5.8.0
+      postal-mime:
+        specifier: ^2.7.4
+        version: 2.7.4
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260523.1
@@ -3884,6 +3896,9 @@ packages:
   portfinder@1.0.38:
     resolution: {integrity: sha512-rEwq/ZHlJIKw++XtLAO8PPuOQA/zaPJOZJ37BVuN97nLpMJeuDVLVGRwbFoBgLudgdTMP2hdRJP++H+8QOA3vg==}
     engines: {node: '>= 10.12'}
+
+  postal-mime@2.7.4:
+    resolution: {integrity: sha512-0WdnFQYUrPGGTFu1uOqD2s7omwua8xaeYGdO6rb88oD5yJ/4pPHDA4sdWqfD8wQVfCny563n/HQS7zTFft+f/g==}
 
   postcss-calc@10.1.1:
     resolution: {integrity: sha512-NYEsLHh8DgG/PRH2+G9BTuUdtf9ViS+vdoQ0YA5OQdGsfN4ztiwtDWNtBl9EKeqNMFnIu8IKZ0cLxEQ5r5KVMw==}
@@ -8878,6 +8893,8 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
+
+  postal-mime@2.7.4: {}
 
   postcss-calc@10.1.1(postcss@8.5.15):
     dependencies:

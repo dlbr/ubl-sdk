@@ -1,4 +1,3 @@
-// Tipovi za tvoj Router
 export type RouterContext<Env = any> = {
   req: Request
   env: Env
@@ -8,30 +7,23 @@ export type RouterContext<Env = any> = {
   [key: string]: any
 }
 
-export type Handler<Env = any> = (c: RouterContext<Env>) => Response | Promise<Response | void> | void
+export type Handler<Env = any> = (c: RouterContext<Env>) => Promise<Response | void> | Response | void
 
-type Route = {
+export type Route<Env = any> = {
   path: string
   method: string
-  handlers: Handler[]
+  handlers: Handler<Env>[]
 }
 
-export type RouterType<Env = any> = {
-  fetch: (req: Request, env: Env, ctx: ExecutionContext) => Promise<Response>
-  request: (path: string, options: any, env: Env, ctx?: ExecutionContext) => Promise<Response>
-  on: (method: string, path: string, ...handlers: Handler<Env>[]) => RouterType<Env>
-  [key: string]: any 
-}
+export const Router = <Env = any>() => {
+  const routes: Route<Env>[] = []
 
-/**
- * Super-simple Router with Middleware support.
- * Chaines multiple handlers for the same route.
- */
-export const Router = <Env = any>(): RouterType<Env> => {
-  const routes: Route[] = []
-
-  const core = {
-    fetch: async (req: Request, env: Env, ctx: ExecutionContext): Promise<Response> => {
+  const target = {
+    on: (method: string, path: string, ...handlers: Handler<Env>[]) => {
+      routes.push({ path, method: method.toUpperCase(), handlers })
+      return receiverProxy
+    },
+    fetch: async (req: Request, env: Env, ctx: ExecutionContext) => {
       const url = new URL(req.url)
       const method = req.method.toUpperCase()
       const pathname = url.pathname.replace(/\/$/, '') || '/'
@@ -39,31 +31,26 @@ export const Router = <Env = any>(): RouterType<Env> => {
       for (const route of routes) {
         if (route.method !== 'ALL' && route.method !== method) continue
 
-        // Exact match (ignoring trailing slash)
         const routePath = route.path.replace(/\/$/, '') || '/'
-        
-        let match = false;
-        let result: any = undefined;
+        let match = false
+        let result: any = {}
 
         if (routePath === pathname) {
           match = true;
-        } else if (route.path.includes('/:')) {
-          const parts = route.path.split('/')
-          const pathParts = pathname.split('/')
-          if (parts && pathParts && parts.length === pathParts.length) {
-            let subMatch = true
-            result = { pathname: { groups: {} as any } }
-            for (let i = 0; i < parts.length; i++) {
-              const part = parts[i];
-              if (part && part.startsWith(':')) {
-                const paramName = part.substring(1)
-                result.pathname.groups[paramName] = pathParts[i]
-              } else if (part !== pathParts[i]) {
-                subMatch = false
+        } else if (routePath.includes(':')) {
+          const pathParts = pathname.split('/').filter(Boolean)
+          const routeParts = routePath.split('/').filter(Boolean)
+
+          if (pathParts.length === routeParts.length) {
+            match = true
+            for (let i = 0; i < routeParts.length; i++) {
+              if (routeParts[i].startsWith(':')) {
+                result[routeParts[i].slice(1)] = pathParts[i]
+              } else if (routeParts[i] !== pathParts[i]) {
+                match = false
                 break
               }
             }
-            if (subMatch) match = true;
           }
         }
 
@@ -77,23 +64,17 @@ export const Router = <Env = any>(): RouterType<Env> => {
         }
       }
 
-      console.warn(`[Router 404] No match for ${method} ${url.pathname}`);
+      console.error(`[Router 404] No match for ${method} ${pathname}. Registered routes: ${routes.length}`);
       return new Response('Not Found', { status: 404 })
     },
-
-    request: async (path: string, options: any, env: Env, ctx?: ExecutionContext): Promise<Response> => {
-      const url = `http://localhost${path}`
+    request: async (path: string, options: any, env: Env, ctx?: any) => {
+      const url = path.startsWith('http') ? path : `http://localhost${path}`
       const req = new Request(url, options)
-      return core.fetch(req, env, ctx || ({ waitUntil: () => {} } as any))
-    },
-
-    on: (method: string, path: string, ...handlers: Handler<Env>[]) => {
-      routes.push({ path, method: method.toUpperCase(), handlers })
-      return receiverProxy
-    },
+      return target.fetch(req, env, ctx || {})
+    }
   }
 
-  const receiverProxy = new Proxy(core as unknown as RouterType<Env>, {
+  const receiverProxy = new Proxy(target, {
     get: (target, prop: string) => {
       if (prop === 'fetch' || prop === 'on' || prop === 'request') return (target as any)[prop].bind(target)
       return (path: string, ...handlers: Handler<Env>[]) => target.on(prop, path, ...handlers)
