@@ -1,32 +1,22 @@
-import { defineEventHandler, createError, getQuery, setHeader, type H3Event } from 'h3';
+import { defineEventHandler, createError, getQuery, setHeader } from 'h3';
 
-export default defineEventHandler(async (event: H3Event) => {
+export default defineEventHandler(async (event) => {
+  const env = event.context.cloudflare?.env;
   const session = event.context.session;
-  if (!session || !session.klijentId) throw createError({ statusCode: 401, statusMessage: 'Niste autorizovani.' });
+  if (!session?.klijentId) throw createError({ statusCode: 401 });
 
-  const query = getQuery(event);
-  const period = query.period as string || new Date().toISOString().substring(0, 7);
+  const { period = new Date().toISOString().substring(0, 7) } = getQuery(event) as { period?: string };
 
-  const env = event.context.cloudflare.env;
+  // TXT fajl — ostaje fetch jer RPC ne podržava streaming binarnih odgovora
+  const res = await env.SEF_API.fetch(
+    `https://internal/api/analytics/pppdv-export?period=${period}&klijentId=${session.klijentId}`,
+    { headers: { 'Authorization': `Bearer ${env.INTERNAL_API_KEY ?? ''}`, 'X-Klijent-ID': session.klijentId } }
+  );
 
-  try {
-    const backendRes = await env.SEF_API.fetch(`https://internal/api/analytics/pppdv-export?period=${period}`, {
-      headers: {
-        'X-Klijent-ID': session.klijentId,
-        'X-Operater': session.operater
-      }
-    });
+  if (!res.ok) throw createError({ statusCode: res.status, statusMessage: 'Greška pri izvozu.' });
 
-    if (!backendRes.ok) throw createError({ statusCode: backendRes.status, statusMessage: 'Backend greška pri izvozu.' });
-
-    const txt = await backendRes.text();
-    
-    setHeader(event, 'Content-Type', 'text/plain; charset=utf-8');
-    setHeader(event, 'Content-Disposition', `attachment; filename="pppdv_${period}.txt"`);
-    
-    return txt;
-
-  } catch (err: any) {
-    throw createError({ statusCode: 500, statusMessage: err.message });
-  }
+  const txt = await res.text();
+  setHeader(event, 'Content-Type', 'text/plain; charset=utf-8');
+  setHeader(event, 'Content-Disposition', `attachment; filename="pppdv_${period}.txt"`);
+  return txt;
 });

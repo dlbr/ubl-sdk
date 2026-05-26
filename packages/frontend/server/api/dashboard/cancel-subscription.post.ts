@@ -1,9 +1,8 @@
-import { defineEventHandler } from 'h3';
-import { proxyToBackend } from '../../utils/proxy';
+import { defineEventHandler, createError } from 'h3';
 
 export default defineEventHandler(async (event) => {
-  return await proxyToBackend(event, '/api/dashboard/config', {
-    method: 'POST',
-    body: JSON.stringify({ status_pretplate: 'U_OTKAZNOM_ROKU' })
-  });
+  const env = event.context.cloudflare?.env;
+  const session = event.context.session;
+  if (!session?.klijentId) throw createError({ statusCode: 401 });
+  return env.SEF_API.cancelSubscription(session.klijentId);
 });

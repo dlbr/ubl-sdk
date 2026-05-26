@@ -277,6 +277,10 @@ export class SEFBackendRPC extends WorkerEntrypoint<Env> {
     return this.kDO(klijentId).fetch('http://do/api/subscription/cancel', { method: 'POST' }).then(r => r.json());
   }
 
+  async getLogistikaDocuments(klijentId: string, searchParams: string) {
+    return this.kDO(klijentId).fetch(`http://do/api/logistika/documents?${searchParams}`).then(r => r.json());
+  }
+
   // fetch() ostaje za webhooks, javne rute i backward compat
   async fetch(req: Request) {
     return app.fetch(req, this.env, this.ctx);

@@ -1,8 +1,11 @@
-import { defineEventHandler, getQuery } from 'h3';
-import { proxyToBackend } from '../../utils/proxy';
+import { defineEventHandler, getQuery, createError } from 'h3';
 
 export default defineEventHandler(async (event) => {
+  const env = event.context.cloudflare?.env;
+  const session = event.context.session;
+  if (!session?.klijentId) throw createError({ statusCode: 401 });
+
   const query = getQuery(event);
   const searchParams = new URLSearchParams(query as any).toString();
-  return await proxyToBackend(event, `/api/logistika/documents?${searchParams}`);
+  return env.SEF_API.getLogistikaDocuments(session.klijentId, searchParams);
 });

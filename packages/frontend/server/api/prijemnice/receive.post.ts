@@ -1,10 +1,9 @@
-import { defineEventHandler, readBody } from 'h3';
-import { proxyToBackend } from '../../utils/proxy';
+import { defineEventHandler, readBody, createError } from 'h3';
 
 export default defineEventHandler(async (event) => {
+  const env = event.context.cloudflare?.env;
+  const session = event.context.session;
+  if (!session?.klijentId) throw createError({ statusCode: 401 });
   const body = await readBody(event);
-  return await proxyToBackend(event, '/api/prijemnice/receive', {
-    method: 'POST',
-    body: JSON.stringify(body)
-  });
+  return env.SEF_API.receivePrijemnica(session.klijentId, body);
 });
