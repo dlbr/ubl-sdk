@@ -2,12 +2,12 @@ name = "sef-bridge-backend"
 main = "src/index.ts"
 compatibility_date = "2026-05-25"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = false
 
 [alias]
 "@dlbr/ubl-sdk" = "../ubl-sdk/src/index.ts"
 "@sef/shared" = "../shared/index.ts"
 
-# 🚀 PRAVILA ZA BINARNE FAJLOVE (WASM i Fontovi)
 [[rules]]
 type = "Data"
 globs = ["**/*.woff2"]
@@ -18,7 +18,6 @@ type = "CompiledWasm"
 globs = ["**/*.wasm"]
 fallthrough = true
 
-# 🚀 Zvanični Cloudflare Email Sending binding
 [[send_email]]
 name = "EMAIL"
 
@@ -56,46 +55,6 @@ binding = "OTPREMNICA_QUEUE"
 queue = "eotpremnice-reconciliation-queue"
 
 [[queues.producers]]
-binding = "WEBHOOK_QUEUE"
-queue = "sef-webhook-delivery"
-
-[env.production]
-name = "sef-bridge-backend"
-workers_dev = false
-
-[env.production.durable_objects]
-bindings = [
-  { name = "KLIJENT_BAZA_OBJECT", class_name = "KlijentBaza" }
-]
-
-[[env.production.send_email]]
-name = "EMAIL"
-
-[[env.production.d1_databases]]
-binding = "REGISTAR_DB"
-database_name = "sef_centralni_registar"
-database_id = "189e8330-f1b4-4172-a9b0-27271acb7847"
-
-[[env.production.kv_namespaces]]
-binding = "PORESKI_KV"
-id = "b688022ffcc247d4843b97d70b76b719"
-
-[[env.production.r2_buckets]]
-binding = "SEF_UBL_ARHIVA"
-bucket_name = "prod-sef-ubl-arhiva-10godina"
-
-[env.production.ai]
-binding = "AI"
-
-[[env.production.queues.producers]]
-binding = "SEF_QUEUE"
-queue = "sef-compliance-queue"
-
-[[env.production.queues.producers]]
-binding = "OTPREMNICA_QUEUE"
-queue = "eotpremnice-reconciliation-queue"
-
-[[env.production.queues.producers]]
 binding = "WEBHOOK_QUEUE"
 queue = "sef-webhook-delivery"
 
