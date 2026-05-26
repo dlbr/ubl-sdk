@@ -178,3 +178,8 @@ export interface SmanjenjeViseFakturaData extends BaseInvoiceData {
   iznosZaSmanjenjeOsnovice: number;
   iznosZaSmanjenjePdv: number;
 }
+
+export interface ValidationOptions {
+  mode?: 'B2B' | 'B2G';
+  strict?: boolean;
+}
