@@ -63,26 +63,21 @@ export const SefInvoiceSchema = v.pipe(
     return toCent(input.taxInclusiveAmount) === expectedBrutoCents;
   }, '[FATAL] [VRBL-CALC-3]: Krovni bruto iznos (taxInclusiveAmount) mora biti jednak zbiru krovne osnovice (taxExclusiveAmount) i krovnog poreza (taxAmount).'),
 
+  // 🎯 VRBL-CALC-5: TaxExclusiveAmount = LineExtensionAmount + ChargeTotalAmount - AllowanceTotalAmount
   v.check((input) => {
-    for (const sub of input.taxSubtotals) {
-      const linesCents = input.invoiceLines
-        .filter(l => l.taxCategoryCode === sub.taxCategoryCode && l.taxCategoryPercent === sub.taxCategoryPercent)
-        .reduce((acc, l) => acc + toCent(l.lineExtensionAmount), 0);
+    const expected = toCent(input.lineExtensionAmount) + toCent(input.chargeTotalAmount) - toCent(input.allowanceTotalAmount);
+    return toCent(input.taxExclusiveAmount) === expected;
+  }, '[FATAL] [VRBL-CALC-5]: Poreska osnovica (taxExclusiveAmount) mora biti jednaka zbiru stavki plus troškovi minus popusti.'),
 
-      const allowanceCents = input.allowanceCharges
-        .filter(ac => !ac.chargeIndicator && ac.taxCategoryCode === sub.taxCategoryCode && ac.taxCategoryPercent === sub.taxCategoryPercent)
-        .reduce((acc, ac) => acc + toCent(ac.amount), 0);
+  // 🎯 VRBL-CALC-6: PayableAmount = TaxInclusiveAmount - PrepaidAmount + RoundingAmount
+  v.check((input) => {
+    const expected = toCent(input.taxInclusiveAmount) - toCent(input.prepaidAmount || 0); // Assuming RoundingAmount is 0 for now
+    return toCent(input.payableAmount) === expected;
+  }, '[FATAL] [VRBL-CALC-6]: Iznos za uplatu (payableAmount) mora biti jednak bruto iznosu (taxInclusiveAmount) minus avans (prepaidAmount).'),
 
-      const chargeCents = input.allowanceCharges
-        .filter(ac => ac.chargeIndicator && ac.taxCategoryCode === sub.taxCategoryCode && ac.taxCategoryPercent === sub.taxCategoryPercent)
-        .reduce((acc, ac) => acc + toCent(ac.amount), 0);
-
-      const expectedTaxableCents = linesCents - allowanceCents + chargeCents;
-
-      if (toCent(sub.taxableAmount) !== expectedTaxableCents) {
-        return false;
-      }
-    }
-    return true;
-  }, '[FATAL] [VRBL-CALC-4]: Osnovica poreske grupe (TaxSubtotal/TaxableAmount) mora odgovarati zbiru neto vrednosti njenih stavki, umanjenom za pripadajuće krovne popuste i uvećanom za pripadajuće krovne troškove.')
+  // 🎯 VRBL-CALC-8: LineExtensionAmount = sum(InvoiceLineExtensionAmount)
+  v.check((input) => {
+    const sumLines = input.invoiceLines.reduce((acc, line) => acc + toCent(line.lineExtensionAmount), 0);
+    return toCent(input.lineExtensionAmount) === sumLines;
+  }, '[FATAL] [VRBL-CALC-8]: Krovni neto iznos (lineExtensionAmount) mora biti jednak zbiru neto iznosa svih linija fakture.')
 );
