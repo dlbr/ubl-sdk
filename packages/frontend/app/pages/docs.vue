@@ -1,185 +1,252 @@
 <script setup lang="ts">
 const { klijentId } = useSefAuth()
+
+useSeoMeta({
+  title: 'Dokumentacija | SEF Bridge',
+  description: 'Tehnička dokumentacija SEF Bridge platforme — eFakture, eOtpremnice, NBS kursna lista, Cloudflare Workers RPC arhitektura.'
+})
+
+const endpoints = [
+  {
+    group: 'Javno (bez autentifikacije)',
+    color: 'slate',
+    items: [
+      { method: 'GET', path: '/kursna-lista', desc: 'Zvanični NBS srednji kurs za danas. EUR, USD, CHF sa trend indikatorom.' },
+      { method: 'GET', path: '/api/public/v1/kursna-lista/og.png', desc: 'OG slika za social sharing — automatski generisana.' },
+    ]
+  },
+  {
+    group: 'Autentifikacija',
+    color: 'violet',
+    items: [
+      { method: 'POST', path: '/api/auth/login', desc: 'Prijava — verifikuje SEF API ključ, kreira AES-256-GCM sesiju (8h).' },
+      { method: 'POST', path: '/api/auth/logout', desc: 'Odjava — briše __Host- kolačić, zabranuje keširanje.' },
+      { method: 'GET', path: '/api/auth/session', desc: 'Trenutna sesija (klijentId, pib, operater).' },
+      { method: 'GET', path: '/api/onboarding/search?q=naziv', desc: 'FTS5 pretraga u REGISTAR_DB po nazivu firme ili PIB-u.' },
+    ]
+  },
+  {
+    group: 'Fakture',
+    color: 'blue',
+    items: [
+      { method: 'GET', path: '/api/fakture?page=1', desc: 'Lista faktura iz Durable Object read-modela. Paginizovano.' },
+      { method: 'POST', path: '/api/fakture/send', desc: 'Slanje eFakture na SEF portal. JSON → UBL 2.1 MFIN profil → R2 arhiva.' },
+    ]
+  },
+  {
+    group: 'Otpremnice / Prijemnice',
+    color: 'emerald',
+    items: [
+      { method: 'POST', path: '/api/otpremnice/send', desc: 'eOtpremnica na MFIN portal. Zahteva Standard ili Enterprise plan.' },
+      { method: 'POST', path: '/api/prijemnice/receive', desc: 'Potvrda prijema eOtpremnice — ažurira status u D1.' },
+      { method: 'POST', path: '/api/otpremnice/reconciliation/:id', desc: 'Knjižno odobrenje (credit note) prema otpremnici.' },
+    ]
+  },
+  {
+    group: 'Dashboard & Audit',
+    color: 'amber',
+    items: [
+      { method: 'GET', path: '/api/dashboard/stats', desc: 'Plan, licenca, kvota, usage — sve iz Durable Object-a.' },
+      { method: 'GET', path: '/api/dashboard/logs', desc: 'Audit log grešaka i operacija.' },
+      { method: 'GET', path: '/api/audit/download', desc: 'JSON manifest sa XML sadržajima za poreski audit (10 godina retencija).' },
+      { method: 'GET', path: '/api/analytics/pppdv-export?period=2026-05', desc: 'TXT izvoz za PP PDV formu.' },
+      { method: 'GET', path: '/api/webhook-setup', desc: 'Webhook URL-ovi za konfiguraciju na državnom SEF portalu.' },
+    ]
+  },
+  {
+    group: 'Webhooks (prima SEF portal)',
+    color: 'rose',
+    items: [
+      { method: 'POST', path: '/api/webhooks/sef-update', desc: 'SEF portal šalje statusne promene faktura u realnom vremenu.' },
+      { method: 'POST', path: '/api/webhooks/otpremnice', desc: 'eOtpremnice portal šalje status update — ažurira D1 i audit log.' },
+    ]
+  },
+]
+
+const plans = [
+  { name: 'Micro', limit: '50 faktura/mes', features: ['eFakture (SEF)', 'Audit log 10 god.', 'NBS kursna lista', 'Dashboard'], highlight: false },
+  { name: 'Standard', limit: '300 faktura/mes', features: ['Sve iz Micro', 'eOtpremnice (300/mes)', 'ePrijemnice', 'PP PDV export', 'Webhook relay'], highlight: true },
+  { name: 'Enterprise', limit: 'Neograničeno', features: ['Sve iz Standard', 'Agency modul', 'Multi-klijent', 'Priority support', 'SLA 99.9%'], highlight: false },
+]
+
+const colorMap: Record<string, string> = {
+  slate: 'bg-slate-100 text-slate-700',
+  violet: 'bg-violet-100 text-violet-700',
+  blue: 'bg-blue-100 text-blue-700',
+  emerald: 'bg-emerald-100 text-emerald-700',
+  amber: 'bg-amber-100 text-amber-700',
+  rose: 'bg-rose-100 text-rose-700',
+}
+
+const methodColor: Record<string, string> = {
+  GET: 'bg-emerald-500 text-white',
+  POST: 'bg-blue-600 text-white',
+  PUT: 'bg-amber-500 text-white',
+  DELETE: 'bg-rose-600 text-white',
+}
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20">
-    <!-- Header -->
-    <nav class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-      <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+  <div class="min-h-screen bg-[#0a0a0f] text-white font-sans">
+    <!-- Nav -->
+    <nav class="border-b border-white/10 sticky top-0 z-50 backdrop-blur-xl bg-[#0a0a0f]/80">
+      <div class="max-w-6xl mx-auto px-4 flex justify-between items-center h-16">
         <NuxtLink to="/" class="flex items-center gap-3">
-          <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-200">
-            <span class="text-white font-black text-lg">S</span>
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+            <span class="text-white font-black text-sm">S</span>
           </div>
-          <span class="font-bold text-lg tracking-tight text-gray-900">SEF Bridge API</span>
+          <span class="font-bold text-white">SEF Bridge</span>
+          <span class="text-xs text-white/30 font-mono">docs</span>
         </NuxtLink>
-        <NuxtLink v-if="klijentId" to="/dashboard" class="text-sm font-bold text-blue-600 hover:underline">
-          Nazad na Dashboard
-        </NuxtLink>
-        <NuxtLink v-else to="/onboarding" class="text-sm font-bold text-blue-600 hover:underline">
-          Aktivacija Naloga
-        </NuxtLink>
+        <div class="flex items-center gap-4">
+          <a href="https://github.com/dlbr/sef-ubl-builder" target="_blank" class="text-sm text-white/50 hover:text-white transition">GitHub ↗</a>
+          <NuxtLink v-if="klijentId" to="/dashboard" class="text-sm font-semibold text-blue-400 hover:text-blue-300 transition">Dashboard</NuxtLink>
+          <NuxtLink v-else to="/onboarding" class="text-sm font-semibold px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 transition">Aktivacija</NuxtLink>
+        </div>
       </div>
     </nav>
 
-    <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div class="bg-white rounded-3xl border border-gray-200 shadow-xl overflow-hidden">
-        <div class="p-8 md:p-12">
-          <header class="mb-16">
-            <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black uppercase tracking-widest border border-blue-100 mb-4">
-              Dokumentacija v3.5.0
-            </div>
-            <h1 class="text-4xl font-black text-gray-900 mb-6 tracking-tight leading-tight">
-              ERP B2B Integracioni Modul — "XML-as-a-Service"
-            </h1>
-            <p class="text-lg text-gray-600 leading-relaxed max-w-3xl">
-              Sistem usklađen sa Zakonom o e-fakturisaju: automatsko generisanje UBL 2.1 XML-a, 
-              poštovanje zakonskih rokova do <strong>10. u mesecu</strong> i JSON podrška za EEO/EPP evidencije.
-            </p>
-          </header>
+    <main class="max-w-6xl mx-auto px-4 py-16 space-y-24">
 
-          <div class="space-y-20">
-            <!-- 1. JSON-to-UBL Engine -->
-            <section id="integration-pitch">
-              <h2 class="text-2xl font-black text-gray-900 mb-6 flex items-center gap-3 text-blue-600">
-                <span class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-sm">1</span>
-                JSON ➔ UBL 2.1 Mašina
-              </h2>
-              <p class="text-gray-600 mb-6 leading-relaxed">
-                Vaš ERP šalje JSON, a naš sistem ga trenutno mapira u zakonski validan UBL 2.1 format. 
-                Sistem automatski ubacuje obavezan <code>&lt;cbc:TaxExemptionReason&gt;</code> tekst na osnovu prosleđene šifre oslobođenja.
-              </p>
-            </section>
-
-            <!-- 2. Poreski Oklop & Rokovi -->
-            <section id="legal-hardening">
-              <h2 class="text-2xl font-black text-gray-900 mb-8 flex items-center gap-3 text-blue-600">
-                <span class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-sm">2</span>
-                Poreski Oklop & Rokovi (Zakon o EFI)
-              </h2>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="border border-red-200 p-6 rounded-2xl bg-red-50 group">
-                  <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center mb-4 text-xl">🛡️</div>
-                  <h3 class="font-bold text-red-900 mb-2">Grace Period (Do 10. u mesecu)</h3>
-                  <p class="text-xs text-red-700 leading-relaxed font-medium">
-                    Čak i ako je klijent blokiran, sistem <strong>do 10. u mesecu</strong> (zakonski rok) dozvoljava slanje faktura iz prethodnog meseca. Time osiguravamo poštovanje Člana 11. zakona bez kazni.
-                  </p>
-                </div>
-                <div class="border border-green-200 p-6 rounded-2xl bg-green-50 group">
-                  <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mb-4 text-xl">📊</div>
-                  <h3 class="font-bold text-green-900 mb-2">Otkazivanje (Storno)</h3>
-                  <p class="text-xs text-green-700 leading-relaxed font-medium">
-                    Anuliranje fakture vrši se isključivo putem <code>Cancel</code> komande nad postojećim ID-jem (za neotvorene račune) ili izdavanjem Dokumenta o smanjenju (Tip 381).
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <!-- 3. Open Source Inicijativa -->
-            <section id="open-source" class="bg-gradient-to-br from-gray-900 to-blue-900 rounded-3xl p-8 md:p-12 text-white shadow-2xl overflow-hidden relative group">
-              <div class="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.44-1.304.759-1.607-2.665-.304-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.841 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-              </div>
-              <div class="relative z-10">
-                <h2 class="text-3xl font-black mb-6 uppercase tracking-tight">Verujemo u Open Source</h2>
-                <p class="text-blue-100 text-lg mb-8 leading-relaxed max-w-2xl">
-                  Srž našeg sistema — <strong>Matrix UBL Builder</strong> — je potpuno otvoren i besplatan alat. 
-                  Sada podržava i generisanje JSON payload-a za zvanične poreske evidencije (v3.4.0).
-                </p>
-                <div class="flex flex-col sm:flex-row gap-4">
-                  <a href="https://github.com/dlbr/sef-ubl-builder" target="_blank" class="inline-flex items-center justify-center px-6 py-3 bg-white text-blue-900 font-black rounded-xl hover:bg-blue-50 transition shadow-xl uppercase text-xs tracking-widest gap-2">
-                    <span>GitHub Repozitorijum</span>
-                    <span class="text-base">➔</span>
-                  </a>
-                </div>
-              </div>
-            </section>
-
-            <!-- 4. API Reference -->
-            <section id="api-reference">
-              <h2 class="text-2xl font-black text-gray-900 mb-8 flex items-center gap-3 text-blue-600">
-                <span class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center text-sm">3</span>
-                API Referenca (Core)
-              </h2>
-
-              <div class="space-y-8">
-                <!-- Sync Engine -->
-                <article class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                  <div class="flex items-center gap-3 mb-2">
-                    <span class="px-2 py-1 bg-purple-100 text-purple-700 text-[10px] font-black rounded uppercase">POST</span>
-                    <h3 class="text-lg font-bold font-mono">/api/fakture/sync</h3>
-                  </div>
-                  <p class="text-sm text-gray-600">Pokreće "Agresivnu sinhronizaciju". Povlači fakture iz v1/v3 izvora, normalizuje ih i arhivira u D1/R2.</p>
-                </article>
-
-                <!-- Invoice Grid -->
-                <article class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                  <div class="flex items-center gap-3 mb-2">
-                    <span class="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-black rounded uppercase">GET</span>
-                    <h3 class="text-lg font-bold font-mono">/api/fakture?page=1</h3>
-                  </div>
-                  <p class="text-sm text-gray-600">Povlači fakture iz lokalnog read-modela. Paginizovano (20 po strani).</p>
-                </article>
-
-                <!-- Batch Engine -->
-                <article class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                  <div class="flex items-center gap-3 mb-2">
-                    <span class="px-2 py-1 bg-purple-100 text-purple-700 text-[10px] font-black rounded uppercase">POST</span>
-                    <h3 class="text-lg font-bold font-mono">/api/fakture/batch</h3>
-                  </div>
-                  <p class="text-sm text-gray-600">Batch slanje faktura. Automatski prolazi kroz MasterValidator pre queue-iranja.</p>
-                </article>
-
-                <!-- Audit -->
-                <article class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                  <div class="flex items-center gap-3 mb-2">
-                    <span class="px-2 py-1 bg-yellow-100 text-yellow-700 text-[10px] font-black rounded uppercase">GET</span>
-                    <h3 class="text-lg font-bold font-mono">/api/audit/download?period=2026-05</h3>
-                  </div>
-                  <p class="text-sm text-gray-600">Generiše JSON manifest sa XML sadržajima za poreski audit.</p>
-                </article>
-
-                <!-- EEO/EPP -->
-                <article class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                  <div class="flex items-center gap-3 mb-2">
-                    <span class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-black rounded uppercase">POST</span>
-                    <h3 class="text-lg font-bold font-mono">/api/evidencija/eeo</h3>
-                  </div>
-                  <p class="text-sm text-gray-600">Zbirna evidencija obračuna (JSON).</p>
-                </article>
-              </div>
-            </section>
-          </div>
-
-          <footer class="mt-20 pt-12 border-t border-gray-100 text-center">
-            <div class="flex justify-center gap-4 mb-6">
-              <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-              <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Sistem je Operativan na Cloudflare Edge</span>
-            </div>
-            <p class="text-gray-400 text-xs font-medium uppercase tracking-tighter">
-              SEF Bridge v3.4.0 &bull; Razvijeno za ERP inženjere &bull; Sva prava zadržana 2026.
-            </p>
-          </footer>
+      <!-- Hero -->
+      <header class="text-center space-y-6">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs text-white/50 font-mono">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          Cloudflare Edge · Workers RPC · Durable Objects
         </div>
-      </div>
+        <h1 class="text-5xl font-black tracking-tight bg-gradient-to-r from-white via-blue-200 to-violet-400 bg-clip-text text-transparent leading-tight">
+          SEF Bridge Dokumentacija
+        </h1>
+        <p class="text-lg text-white/50 max-w-2xl mx-auto leading-relaxed">
+          Edge-native platforma za automatizovanu obradu eFaktura i eOtpremnica.<br>
+          UBL 2.1 MFIN profil · NBS kursna lista · Poreski audit 10 godina.
+        </p>
+      </header>
+
+      <!-- Arhitektura -->
+      <section id="arhitektura">
+        <h2 class="text-2xl font-bold mb-8 text-white/90">Arhitektura</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="border border-white/10 rounded-2xl p-6 bg-white/5 hover:bg-white/8 transition">
+            <div class="text-2xl mb-3">🌐</div>
+            <h3 class="font-bold text-white mb-2">Nuxt 4 Worker</h3>
+            <p class="text-sm text-white/50 leading-relaxed">Frontend deployovan kao Cloudflare Worker na <code>sef.dlbr.cloud</code>. AES-256-GCM sesija, edge-side rendering.</p>
+          </div>
+          <div class="border border-blue-500/30 rounded-2xl p-6 bg-blue-500/10 hover:bg-blue-500/15 transition">
+            <div class="text-2xl mb-3">⚡</div>
+            <h3 class="font-bold text-white mb-2">Backend Worker (RPC)</h3>
+            <p class="text-sm text-white/50 leading-relaxed">Nuxt poziva backend direktno via <strong class="text-blue-300">Service Binding RPC</strong> — bez HTTP overhead-a, bez auth headera. Binding IS autentifikacija.</p>
+          </div>
+          <div class="border border-violet-500/30 rounded-2xl p-6 bg-violet-500/10 hover:bg-violet-500/15 transition">
+            <div class="text-2xl mb-3">🔒</div>
+            <h3 class="font-bold text-white mb-2">Durable Objects</h3>
+            <p class="text-sm text-white/50 leading-relaxed">Per-klijent SQLite (KlijentBaza). Audit log, fakture, config, kvota — sve izolovano. Zero shared state.</p>
+          </div>
+          <div class="border border-white/10 rounded-2xl p-6 bg-white/5 hover:bg-white/8 transition">
+            <div class="text-2xl mb-3">🗄️</div>
+            <h3 class="font-bold text-white mb-2">D1 Centralni Registar</h3>
+            <p class="text-sm text-white/50 leading-relaxed">FTS5 pretraga kompanija, agency → klijent mapping, dokument status ledger.</p>
+          </div>
+          <div class="border border-white/10 rounded-2xl p-6 bg-white/5 hover:bg-white/8 transition">
+            <div class="text-2xl mb-3">📦</div>
+            <h3 class="font-bold text-white mb-2">R2 Arhiva (10 god.)</h3>
+            <p class="text-sm text-white/50 leading-relaxed">Sve UBL XML fajlove čuvamo 10 godina u skladu sa Uredbom o elektronskim fakturama.</p>
+          </div>
+          <div class="border border-white/10 rounded-2xl p-6 bg-white/5 hover:bg-white/8 transition">
+            <div class="text-2xl mb-3">📬</div>
+            <h3 class="font-bold text-white mb-2">Queues</h3>
+            <p class="text-sm text-white/50 leading-relaxed">SEF compliance queue, eOtpremnice reconciliation queue, webhook delivery queue — async processing.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- API Referenca -->
+      <section id="api">
+        <h2 class="text-2xl font-bold mb-8 text-white/90">API Referenca</h2>
+        <div class="space-y-8">
+          <div v-for="group in endpoints" :key="group.group">
+            <div class="flex items-center gap-3 mb-4">
+              <span :class="['text-xs font-bold px-2.5 py-1 rounded-full', colorMap[group.color]]">{{ group.group }}</span>
+            </div>
+            <div class="space-y-2">
+              <div v-for="ep in group.items" :key="ep.path"
+                class="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl bg-white/5 border border-white/8 hover:border-white/15 transition group">
+                <div class="flex items-center gap-3 flex-shrink-0">
+                  <span :class="['text-[10px] font-black px-2 py-1 rounded font-mono min-w-[44px] text-center', methodColor[ep.method]]">{{ ep.method }}</span>
+                  <code class="text-sm text-white/80 font-mono group-hover:text-white transition">{{ ep.path }}</code>
+                </div>
+                <p class="text-sm text-white/40 sm:ml-auto sm:text-right max-w-sm">{{ ep.desc }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Planovi -->
+      <section id="planovi">
+        <h2 class="text-2xl font-bold mb-8 text-white/90">Planovi</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div v-for="plan in plans" :key="plan.name"
+            :class="['rounded-2xl p-6 border transition', plan.highlight ? 'border-blue-500/50 bg-blue-500/10' : 'border-white/10 bg-white/5']">
+            <div v-if="plan.highlight" class="text-xs font-black text-blue-400 uppercase tracking-widest mb-3">Najpopularniji</div>
+            <h3 class="text-xl font-bold text-white mb-1">{{ plan.name }}</h3>
+            <p class="text-sm text-white/40 mb-6 font-mono">{{ plan.limit }}</p>
+            <ul class="space-y-2">
+              <li v-for="f in plan.features" :key="f" class="flex items-center gap-2 text-sm text-white/60">
+                <span class="text-emerald-400 text-xs">✓</span> {{ f }}
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Integration primer -->
+      <section id="integracija">
+        <h2 class="text-2xl font-bold mb-8 text-white/90">Brza integracija (JSON → SEF)</h2>
+        <div class="bg-[#111118] border border-white/10 rounded-2xl p-6 overflow-auto">
+          <pre class="text-sm text-white/70 font-mono leading-relaxed"><code><span class="text-white/30">// 1. Login</span>
+<span class="text-blue-300">POST</span> /api/auth/login
+{ "pib": "113398540", "api_key": "sk_live_...", "operater": "Petar Petrović" }
+
+<span class="text-white/30">// 2. Pošalji fakturu</span>
+<span class="text-blue-300">POST</span> /api/fakture/send
+{
+  "brojFakture": "2026/001",
+  "valuta": "RSD",
+  "datumIzdavanja": "2026-05-26",
+  "stavke": [{ "naziv": "Usluga razvoja", "kolicina": 1, "cena": 50000, "pdvStopa": 20 }]
+}
+
+<span class="text-white/30">// 3. Primaj webhook potvrde</span>
+<span class="text-blue-300">POST</span> /api/webhooks/sef-update  <span class="text-white/30">← konfiguriši na SEF portalu</span></code></pre>
+        </div>
+      </section>
+
+      <!-- Open Source -->
+      <section id="open-source" class="rounded-3xl p-8 bg-gradient-to-br from-violet-900/40 to-blue-900/40 border border-violet-500/20 text-center space-y-4">
+        <div class="text-3xl">📖</div>
+        <h2 class="text-2xl font-bold text-white">UBL Builder — Open Source</h2>
+        <p class="text-white/50 max-w-xl mx-auto text-sm leading-relaxed">
+          Jezgro sistema (<strong class="text-white/70">sef-ubl-builder</strong>) je potpuno otvoreno.
+          UBL 2.1 MFIN profil, svi poreski scenariji, validacija šifara oslobođenja.
+        </p>
+        <a href="https://github.com/dlbr/sef-ubl-builder" target="_blank"
+          class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-gray-900 font-bold text-sm hover:bg-white/90 transition shadow-xl shadow-white/10">
+          GitHub Repozitorijum ↗
+        </a>
+      </section>
+
     </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-white/10 py-8 text-center">
+      <p class="text-xs text-white/20 font-mono">SEF Bridge · Cloudflare Edge · MIT licenca · 2026</p>
+    </footer>
   </div>
 </template>
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono:wght@500&display=swap');
 .font-sans { font-family: 'Inter', sans-serif; }
-.font-mono { font-family: 'JetBrains Mono', monospace; }
-
-code {
-  @apply bg-gray-100 text-blue-600 px-1.5 py-0.5 rounded font-mono text-[13px] font-bold;
-}
-
-pre {
-  @apply leading-relaxed;
-}
-
-section {
-  @apply scroll-mt-24;
-}
+code { font-family: 'JetBrains Mono', monospace; }
 </style>
