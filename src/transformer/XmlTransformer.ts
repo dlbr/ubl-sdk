@@ -362,7 +362,10 @@ export class XmlTransformer {
   </cac:BillingReference>` : '';
     
     // 4. Delivery & Payment & Period
-    const delivery = invoice.deliveryDate ? `<cac:Delivery><cbc:ActualDeliveryDate>${invoice.deliveryDate}</cbc:ActualDeliveryDate></cac:Delivery>` : '';
+    // SEF Rule: ActualDeliveryDate is forbidden on Type 386 (Advance Invoice).
+    const delivery = (invoice.deliveryDate && invoice.typeCode !== '386')
+      ? `<cac:Delivery><cbc:ActualDeliveryDate>${invoice.deliveryDate}</cbc:ActualDeliveryDate></cac:Delivery>`
+      : '';
     const payment = `
   <cac:PaymentMeans>
     <cbc:PaymentMeansCode>${PAYMENT_MEANS.CREDIT_TRANSFER}</cbc:PaymentMeansCode>

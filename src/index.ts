@@ -9,4 +9,4 @@ export * from './services/PoreskiJsonBuilder.js';
 export * from './transformer/XmlTransformer.js';
 export * from './constants.js';
 export * from './SefUblBuilder.js';
-export { SefLiveValidator, MasterValidator } from './validator.js';
+export { SefInvoiceSchema, TaxTotalSchema, SefInvoicePeriodSchema, IsoCurrencySchema, SefLiveValidator, MasterValidator, validanPIB, validanMB } from './validator.js';
