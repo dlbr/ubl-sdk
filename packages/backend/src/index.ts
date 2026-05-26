@@ -281,6 +281,29 @@ export class SEFBackendRPC extends WorkerEntrypoint<Env> {
     return this.kDO(klijentId).fetch(`http://do/api/logistika/documents?${searchParams}`).then(r => r.json());
   }
 
+  async login(pib: string) {
+    return { success: true, klijentId: `klijent_${pib}`, pib };
+  }
+
+  async getDocumentChain(klijentId: string, id: string) {
+    return this.kDO(klijentId).fetch(`http://do/api/dokumenti/chain/${id}`).then(r => r.json());
+  }
+
+  async getOtpremniceReconciliation(klijentId: string, id: string) {
+    return this.kDO(klijentId).fetch(`http://do/otpremnice/reconciliation/${id}`).then(r => r.json());
+  }
+
+  async adminRenewSubscription(adminKey: string, body: any) {
+    if (adminKey !== (this.env as any).ADMIN_API_KEY) {
+      throw new Error('FORBIDDEN');
+    }
+    const kDO = this.kDO(`klijent_${body.pib}`);
+    return kDO.fetch('http://do/api/admin/renew-subscription', {
+      method: 'POST', body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' }
+    }).then(r => r.json());
+  }
+
   // fetch() ostaje za webhooks, javne rute i backward compat
   async fetch(req: Request) {
     return app.fetch(req, this.env, this.ctx);

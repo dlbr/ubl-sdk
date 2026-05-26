@@ -11,6 +11,7 @@ const mockEnv = {
   ADMIN_API_KEY: 'admin_secret',
   SEF_API_URL: 'https://demoefaktura.mfin.gov.rs',
   SEF_API: {
+    // HTTP fetch — koristi ga login handler direktno
     fetch: async (url: string, options: any) => {
       if (url.includes('/auth/login') || url.includes('/register')) {
         const body = JSON.parse(options.body);
@@ -20,32 +21,41 @@ const mockEnv = {
           limit: body.plan === 'Plus' ? 500 : 50,
           licenca_istice_timestamp: Date.now() + 365 * 24 * 60 * 60 * 1000
         };
-        // Simuliramo poziv backend-a ka DO-u
         const doMock = mockEnv.KLIJENT_BAZA_OBJECT.get();
         await doMock.fetch('http://do/config', { method: 'POST', body: JSON.stringify(configToSave) });
-
         return new Response(JSON.stringify({ success: true, klijentId: 'klijent_123456789', pib: '123456789', operater: 'Test Operater' }));
       }
-      if (url.includes('/stats')) {
-        const config = (globalThis as any).__MOCK_DO_CONFIG || {};
-        return new Response(JSON.stringify({
-          success: true,
-          plan_name: config.plan || 'Micro',
-          billing_period: config.billing_period || 'monthly',
-          limit_faktura: config.limit || 50,
-          limit_faktura_godisnje: config.limit_faktura_godisnje || 600,
-          licenca_istice_timestamp: config.licenca_istice_timestamp,
-          status_pretplate: 'AKTIVAN',
-          usage: {
-            potroseno: 0,
-            limit: config.limit || 50,
-            procenat: 0,
-            prikazi_brojac: true
-          }
-        }));
-      }
       return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
-    }
+    },
+    // RPC metode
+    getDashboardStats: async (klijentId: string) => {
+      const config = (globalThis as any).__MOCK_DO_CONFIG || {};
+      return {
+        success: true,
+        plan_name: config.plan || 'Micro',
+        billing_period: config.billing_period || 'monthly',
+        limit_faktura: config.limit || 50,
+        limit_faktura_godisnje: config.limit_faktura_godisnje || 600,
+        licenca_istice_timestamp: config.licenca_istice_timestamp,
+        status_pretplate: 'AKTIVAN',
+        usage: { potroseno: 0, limit: config.limit || 50, procenat: 0, prikazi_brojac: true }
+      };
+    },
+    getDashboardLogs: async (_klijentId: string) => ({ success: true, logs: [] }),
+    getKursnaLista: async () => ({ tiker: [], schemaOrg: {} }),
+    getFakture: async (_klijentId: string) => ({ fakture: [], total: 0 }),
+    sendFaktura: async (_klijentId: string, _body: any) => ({ success: true }),
+    getAuditDownload: async (_klijentId: string) => ({ success: true, dokumenti: [] }),
+    getAuditRetentionPolicy: async (_klijentId: string) => ({ policy: '10_YEARS' }),
+    getAnalyticsPotrosnja: async (_klijentId: string) => ({ success: true }),
+    sendOtpremnica: async (_klijentId: string, _body: any) => ({ success: true }),
+    receivePrijemnica: async (_klijentId: string, _body: any) => ({ success: true }),
+    cancelSubscription: async (_klijentId: string) => ({ success: true }),
+    getLogistikaDocuments: async (_klijentId: string, _params: string) => ({ success: true, dokumenti: [] }),
+    getDocumentChain: async (_klijentId: string, _id: string) => ({ success: true, chain: [] }),
+    getOtpremniceReconciliation: async (_klijentId: string, _id: string) => ({ success: true }),
+    adminRenewSubscription: async (_adminKey: string, _body: any) => ({ success: true }),
+    login: async (pib: string) => ({ success: true, klijentId: `klijent_${pib}`, pib }),
   },
   REGISTAR_DB: {
     prepare: () => ({
@@ -59,14 +69,13 @@ const mockEnv = {
     idFromString: (id: string) => ({ toString: () => id }),
     get: () => ({
       fetch: async (url: string, options?: any) => {
-        // Mock-ujemo unutrašnji state Durable Object-a
         if (url.endsWith('/config')) {
           if (options?.method === 'POST') {
              const data = JSON.parse(options.body);
-             (globalThis as any).__MOCK_DO_CONFIG = data; // Privremeno čuvamo za verifikaciju
+             (globalThis as any).__MOCK_DO_CONFIG = data;
              return { ok: true };
           }
-          return { ok: false }; // Prvi poziv (pre aktivacije) je 404
+          return { ok: false };
         }
         if (url.endsWith('/stats')) {
           const config = (globalThis as any).__MOCK_DO_CONFIG || {};
@@ -80,12 +89,7 @@ const mockEnv = {
               limit_faktura_godisnje: config.limit_faktura_godisnje || 600,
               licenca_istice_timestamp: config.licenca_istice_timestamp,
               status_pretplate: 'AKTIVAN',
-              usage: {
-                potroseno: 0,
-                limit: config.limit || 50,
-                procenat: 0,
-                prikazi_brojac: true
-              }
+              usage: { potroseno: 0, limit: config.limit || 50, procenat: 0, prikazi_brojac: true }
             })
           };
         }
