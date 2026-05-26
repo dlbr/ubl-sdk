@@ -1,0 +1,20 @@
+name = "sef-inbound-worker"
+main = "src/inbound.ts"
+compatibility_date = "2026-05-26"
+
+[durable_objects]
+bindings = [
+  { name = "INVOICE_STATE", class_name = "InvoiceStateDO" }
+]
+
+[[migrations]]
+tag = "v1_init_inbound"
+new_sqlite_classes = ["InvoiceStateDO"]
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "REGISTAR_DB"
+database_name = "sef_centralni_registar"
+database_id = "189e8330-f1b4-4172-a9b0-27271acb7847"
