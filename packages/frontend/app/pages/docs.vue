@@ -99,7 +99,7 @@ const methodColor: Record<string, string> = {
           <span class="text-xs text-white/30 font-mono">docs</span>
         </NuxtLink>
         <div class="flex items-center gap-4">
-          <a href="https://github.com/dlbr/sef-ubl-builder" target="_blank" class="text-sm text-white/50 hover:text-white transition">GitHub ↗</a>
+          <a href="https://github.com/dlbr/ubl-sdk" target="_blank" class="text-sm text-white/50 hover:text-white transition">GitHub ↗</a>
           <NuxtLink v-if="klijentId" to="/dashboard" class="text-sm font-semibold text-blue-400 hover:text-blue-300 transition">Dashboard</NuxtLink>
           <NuxtLink v-else to="/onboarding" class="text-sm font-semibold px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 transition">Aktivacija</NuxtLink>
         </div>
@@ -225,12 +225,12 @@ const methodColor: Record<string, string> = {
       <!-- Open Source -->
       <section id="open-source" class="rounded-3xl p-8 bg-gradient-to-br from-violet-900/40 to-blue-900/40 border border-violet-500/20 text-center space-y-4">
         <div class="text-3xl">📖</div>
-        <h2 class="text-2xl font-bold text-white">UBL Builder — Open Source</h2>
+        <h2 class="text-2xl font-bold text-white">UBL SDK — Open Source</h2>
         <p class="text-white/50 max-w-xl mx-auto text-sm leading-relaxed">
-          Jezgro sistema (<strong class="text-white/70">sef-ubl-builder</strong>) je potpuno otvoreno.
+          Jezgro sistema (<strong class="text-white/70">ubl-sdk</strong>) je potpuno otvoreno.
           UBL 2.1 MFIN profil, svi poreski scenariji, validacija šifara oslobođenja.
         </p>
-        <a href="https://github.com/dlbr/sef-ubl-builder" target="_blank"
+        <a href="https://github.com/dlbr/ubl-sdk" target="_blank"
           class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-gray-900 font-bold text-sm hover:bg-white/90 transition shadow-xl shadow-white/10">
           GitHub Repozitorijum ↗
         </a>

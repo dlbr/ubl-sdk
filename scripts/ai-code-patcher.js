@@ -19,7 +19,7 @@ async function patchCode() {
         Analiziraj ovaj tekst iz MFIN dokumentacije: 
         ${content}
         
-        Ako MFIN uvodi nova pravila, napiši novi validacioni kod za packages/sef-ubl-builder/src/validator.ts.
+        Ako MFIN uvodi nova pravila, napiši novi validacioni kod za packages/ubl-sdk/src/validator.ts.
         Output mora biti SAMO kod koji treba dodati u MasterValidator.validate() metod.
         Ako nema promena, vrati string: NO_CHANGES
       ` }] }]
