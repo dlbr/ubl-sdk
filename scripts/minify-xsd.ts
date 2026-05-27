@@ -14,6 +14,9 @@ function minifyXml(content: string): string {
     .trim();
 }
 
+let totalOriginalSize = 0;
+let totalMinifiedSize = 0;
+
 function processDirectory(dir: string) {
   const fullPath = path.join(SCHEMA_ROOT, dir);
   const outPath = path.join(OUTPUT_ROOT, dir);
@@ -31,14 +34,18 @@ function processDirectory(dir: string) {
     if (stat.isDirectory()) {
       processDirectory(path.join(dir, file));
     } else if (file.endsWith('.xsd')) {
-      console.log(`✂️ Minifying ${file}...`);
       const content = fs.readFileSync(filePath, 'utf8');
+      totalOriginalSize += content.length;
+      
       const minified = minifyXml(content);
       fs.writeFileSync(path.join(outPath, file), minified);
+      totalMinifiedSize += minified.length;
     }
   }
 }
 
 console.log('🚀 Starting XSD minification...');
 processDirectory('.');
-console.log('✨ Minification complete.');
+const saved = ((totalOriginalSize - totalMinifiedSize) / 1024).toFixed(2);
+console.log(`✅ Minifikacija završena! Uštedeli ste ${saved} KB.`);
+console.log(`📊 Ukupno: ${Math.round(totalOriginalSize / 1024)} KB -> ${Math.round(totalMinifiedSize / 1024)} KB`);

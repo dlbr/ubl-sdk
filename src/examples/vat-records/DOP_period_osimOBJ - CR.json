@@ -1,0 +1,23 @@
+{
+  "year": 2023,
+  "calculationNumber": "Broj_evidencije_DOP_period-osim_OBJ",
+  "documentNumber": "Broj_DOPa",
+  "vatPeriod": 14,
+  "documentDirection": 1,
+  "documentType": 383,
+  "relatedPartyIdentifier": "111111111",
+  "noRealEstateDescription10": "TEST",
+  "noRealEstateBaseAmount10": 1396.56,
+  "noRealEstateCalculatedVat10": 139.66,
+  "noRealEstateDescription20": "TEST",
+  "noRealEstateBaseAmount20": 245.89,
+  "noRealEstateCalculatedVat20": 49.18,
+  "relatedInvoiceOption": 2,
+  "relatedInvoiceIssueDateFrom": "2024-08-01",
+  "relatedInvoiceIssueDateTo": "2024-08-08"
+
+
+}
+
+
+

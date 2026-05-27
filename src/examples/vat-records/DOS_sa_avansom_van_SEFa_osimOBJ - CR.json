@@ -1,0 +1,19 @@
+ {
+  "year": 2023,
+  "calculationNumber": "Broj_evidencije_DOS_povezani_avans_van_SEFa-osim_OBJ",
+  "documentNumber": "Broj_DOSa",
+  "vatPeriod": 8,
+  "documentDirection": 1,
+  "documentType": 381,
+  "relatedPartyIdentifier": "111111111",
+  "noRealEstateDescription10": "TEST",
+  "noRealEstateBaseAmount10": 1396.56,
+  "noRealEstateCalculatedVat10": 139.66,
+  "noRealEstateDescription20": "TEST",
+  "noRealEstateBaseAmount20": 245.89,
+  "noRealEstateCalculatedVat20": 49.18,
+  "relatedInvoiceOption": 3,
+  "relatedVatRecordOutOfSystem":
+  ["broj_avansa_van_sefa"]
+
+}

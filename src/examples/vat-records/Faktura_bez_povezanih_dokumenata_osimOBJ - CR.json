@@ -1,0 +1,17 @@
+ {
+  "year": 2023,
+  "calculationNumber": "Faktura_bez_dokumenata-osim_OBJ",
+  "documentNumber": "Br_fakture",
+  "vatPeriod": 2,
+  "documentDirection": 1,
+  "documentType": 380,
+  "relatedPartyIdentifier": "111111111",
+  "noRealEstateDescription10": "TEST",
+  "noRealEstateBaseAmount10": 1396.56,
+  "noRealEstateCalculatedVat10": 139.66,
+  "noRealEstateDescription20": "",
+  "noRealEstateBaseAmount20": 100.00,
+  "noRealEstateCalculatedVat20": 20.00,
+  "relatedInvoiceOption": 0
+
+}
