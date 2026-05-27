@@ -30,6 +30,12 @@ export class NbsSoapService {
     RATE_SERVICE: 'https://www.nbs.rs/communicationoffice/ExchangeRateRateService.asmx'
   };
 
+  private static readonly CURRENCY_MAP: Record<string, number> = {
+    'EUR': 978,
+    'USD': 840,
+    'CHF': 756
+  };
+
   private static async callSoap(
     endpoint: string,
     methodName: string,
@@ -60,7 +66,12 @@ export class NbsSoapService {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': `"http://communicationoffice.nbs.rs/${methodName}"`
+        'SOAPAction': `"${methodName === 'GetExchangeRateByCurrency' && endpoint === this.ENDPOINTS.RATE_SERVICE ? 'http://communicationoffice.nbs.rs/GetExchangeRateByCurrency' : 'http://communicationoffice.nbs.rs/' + methodName}"`,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'sr-RS,sr;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Referer': 'https://www.nbs.rs/',
+        'Origin': 'https://www.nbs.rs/'
       },
       body: soapEnvelope
     });
@@ -95,6 +106,7 @@ export class NbsSoapService {
     }
 
     try {
+      // 🟢 Korak 1: Provera u bazi (da li već imamo ovaj specifičan kurs)
       const dbRow = await env.REGISTAR_DB.prepare(`
         SELECT kurs FROM nbs_kursna_lista_cache 
         WHERE valuta = ? AND datum = ?
@@ -111,6 +123,7 @@ export class NbsSoapService {
     const formattedDate = dateStr.replace(/-/g, ''); 
     
     try {
+      // 🔵 Korak 2: Poziv NBS SOAP servisa
       const rateResult = await this.callSoap(
         this.ENDPOINTS.RATE_SERVICE,
         'GetExchangeRateByCurrency',
@@ -119,8 +132,9 @@ export class NbsSoapService {
       );
 
       const finalRate = parseFloat(rateResult);
-      if (isNaN(finalRate)) throw new Error(`INVALID_NUMBER`);
+      if (isNaN(finalRate) || finalRate <= 0) throw new Error(`INVALID_NUMBER`);
 
+      // 3. Upisujemo u bazu za buduće pozive
       await env.REGISTAR_DB.prepare(`
         INSERT INTO nbs_kursna_lista_cache (valuta, datum, kurs) 
         VALUES (?, ?, ?)
@@ -132,6 +146,7 @@ export class NbsSoapService {
 
     } catch (error: any) {
       console.error(`🚨 [NBS-API-FAIL] NBS nedostupan za ${currency} na ${dateStr} (Greška: ${error?.message || error}). Pokrećem fallback...`);
+      // 🟡 Korak 3: Fallback na najnoviji dostupni kurs iz tvoje baze
       return await this.getLatestAvailableFallback(currency, env);
     }
   }
@@ -203,7 +218,7 @@ export class NbsSoapService {
   static async getExchangeRateListType(exchangeRateListTypeID: number | null, env: NbsEnv): Promise<any> {
     const params: Record<string, any> = {};
     if (exchangeRateListTypeID !== null) params.exchangeRateListTypeID = exchangeRateListTypeID;
-    // Preма документацији, ова метода припада и текућим и општим сервисима, користимо CURRENT за конзистентност
+    // Preма документацији, ова метода припада и текућим и општим сервисиma, користимо CURRENT за конзистентност
     return this.callSoap(this.ENDPOINTS.CURRENT_EXCHANGE_RATE_XML, 'GetExchangeRateListType', params, env);
   }
 
@@ -240,13 +255,20 @@ export class NbsSoapService {
   }
 
   static async getCurrentExchangeRateRsdEur(env: NbsEnv): Promise<any> {
-    return this.callSoap(this.ENDPOINTS.EXCHANGE_RATE_XML, 'GetCurrentExchangeRateRsdEur', {}, env);
+    return this.callSoap(this.ENDPOINTS.CURRENT_EXCHANGE_RATE_XML, 'GetCurrentExchangeRateRsdEur', {}, env);
   }
 
   static async getExchangeRateRsdEurType(typeID: number | null, env: NbsEnv): Promise<any> {
     const params: Record<string, any> = {};
     if (typeID !== null) params.typeID = typeID;
     return this.callSoap(this.ENDPOINTS.EXCHANGE_RATE_XML, 'GetExchangeRateRsdEurType', params, env);
+  }
+
+  static async getCurrentExchangeRateRsdEurByPeriod(dateFrom: string, dateTo: string, env: NbsEnv): Promise<any> {
+    return this.callSoap(this.ENDPOINTS.EXCHANGE_RATE_XML, 'GetExchangeRateRsdEurByPeriod', {
+      dateFrom: dateFrom.replace(/-/g, '.'),
+      dateTo: dateTo.replace(/-/g, '.')
+    }, env);
   }
 
   // --- Core / Codebook Methods ---
@@ -303,12 +325,13 @@ export class NbsSoapService {
       `).bind(currency).first<{ kurs: number }>();
 
       if (result && result.kurs) {
+        console.log(`ℹ️ [NBS-FALLBACK] Koristim istorijski kurs za ${currency}: ${result.kurs}`);
         return result.kurs;
       }
     } catch (err) {
       console.error(`🚨 [NBS-FATAL] Baza je nedostupna:`, err);
     }
-    return currency === 'EUR' ? 117.2031 : 1.0;
+
+    throw new Error(`FATAL_NBS_FALLBACK_FAILURE: Ne mogu da pronađem nijedan istorijski kurs za ${currency}. Fakturisanje je obustavljeno radi zaštite integriteta podataka.`);
   }
 }
-

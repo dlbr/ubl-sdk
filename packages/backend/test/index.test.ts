@@ -147,7 +147,7 @@ describe('SEF Bridge - Integration Tests', () => {
     } else {
       expect(res.status).toBe(500);
       const data = await res.json() as any;
-      expect(data.error).toBe('OG_GEN_FAIL');
+      expect(data.error).toBe('RENDER_PROXY_FAIL');
     }
   });
 });

@@ -164,7 +164,7 @@ app.get('/api/public/v1/kursna-lista/og.png', async (c: any) => {
 
     // Offload to render service
     const renderUrl = `https://render.dlbr.cloud/api/render/og.png?v=EUR&k=${kurs.toFixed(4)}`;
-    return fetch(renderUrl);
+    return await fetch(renderUrl);
   } catch (err: any) {
     return Response.json({ error: 'RENDER_PROXY_FAIL', detail: err?.message }, { status: 500 });
   }
@@ -238,7 +238,7 @@ app.get('/api/compliance/v1/export/:id', internalOnly, async (c: any) => {
     const timestamp = Date.now().toString();
     const signature = await hmac(invoiceId + timestamp, c.env.RENDER_SERVICE_KEY || 'MOCK');
 
-    return fetch(renderUrl, {
+    return await fetch(renderUrl, {
       headers: {
         'X-Signature': signature,
         'X-Timestamp': timestamp
