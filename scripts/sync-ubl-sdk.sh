@@ -6,36 +6,50 @@ set -e
 
 PUBLIC_REPO="git@github.com:dlbr/ubl-sdk.git"
 
+# Čitanje verzije iz package.json
+VERSION=$(node -p "require('./packages/ubl-sdk/package.json').version")
+TAG="v${VERSION}"
+echo "Version to sync: ${TAG}"
+
+TEMP_DIR=".temp-ubl-sdk-clone"
+rm -rf "$TEMP_DIR"
+
+echo "Cloning public repo..."
+git clone "$PUBLIC_REPO" "$TEMP_DIR"
+
+echo "Syncing files..."
+# Brišemo sve osim .git i .github iz klona kako bismo osigurali da obrisani fajlovi budu uklonjeni
+find "$TEMP_DIR" -maxdepth 1 -not -name "." -not -name ".." -not -name ".git" -not -name ".github" -exec rm -rf {} +
+
+# Kopiramo nove fajlove iz packages/ubl-sdk/ osim .github/
+rsync -av --exclude='.github' --exclude='node_modules' --exclude='dist' packages/ubl-sdk/ "$TEMP_DIR/"
+
+cd "$TEMP_DIR"
+
 echo "Configuring git..."
 git config user.name "github-actions[bot]"
 git config user.email "github-actions[bot]@users.noreply.github.com"
 
-# Čitanje verzije iz package.json
-VERSION=$(node -p "require('./packages/ubl-sdk/package.json').version")
-TAG="v${VERSION}"
-echo "Version to publish: ${TAG}"
-
-# Provjeri da li tag već postoji na javnom repou
-if git ls-remote --tags "$PUBLIC_REPO" "refs/tags/${TAG}" | grep -q "${TAG}"; then
-  echo "Tag ${TAG} already exists on public repo. Skipping."
-  exit 0
+# Provjera da li ima promjena za commit
+if [ -n "$(git status --porcelain)" ]; then
+  git add -A
+  git commit -m "chore(release): sync v${VERSION}"
+  echo "Pushing changes to main..."
+  git push origin main
+else
+  echo "No changes to sync."
 fi
 
-# Kreiranje čistog branch-a koji sadrži samo packages/ubl-sdk/ historiju
-echo "Splitting packages/ubl-sdk subtree..."
-SPLIT_BRANCH="ubl-sdk-sync-${VERSION}"
-git subtree split --prefix=packages/ubl-sdk -b "$SPLIT_BRANCH"
+# Kreiranje i push taga
+if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "${TAG}"; then
+  echo "Tag ${TAG} already exists. Skipping tag push."
+else
+  echo "Creating and pushing tag ${TAG}..."
+  git tag "$TAG"
+  git push origin "$TAG"
+fi
 
-# Force push čistog branch-a na main javnog repoa
-echo "Force-pushing to dlbr/ubl-sdk main..."
-git push "$PUBLIC_REPO" "${SPLIT_BRANCH}:main" --force
-
-# Čišćenje lokalnog temp branch-a
-git branch -D "$SPLIT_BRANCH"
-
-# Kreiranje i push v* taga koji triggeruje publish.yml na javnom repou
-echo "Creating and pushing tag ${TAG}..."
-git tag "$TAG" || true
-git push "$PUBLIC_REPO" "refs/tags/${TAG}"
+cd ..
+rm -rf "$TEMP_DIR"
 
 echo "Sync complete! Published ${TAG} to dlbr/ubl-sdk."
