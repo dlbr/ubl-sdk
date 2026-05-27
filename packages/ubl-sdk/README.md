@@ -132,8 +132,10 @@ const provider = process.env.IS_CLOUDFLARE
   : new FileSystemSchemaProvider('./dist-schemas');
 
 // XSD Validacija (Premium Feature)
-await MasterValidator.validateAgainstXSD(xml, provider);
+// Prilikom validacije, neophodno je proslediti putanju do šeme
+await MasterValidator.validateAgainstXSD(xml, provider, 'maindoc/UBL-Invoice-2.1.xsd');
 ```
+
 
 ---
 
