@@ -52,4 +52,12 @@ fi
 cd ..
 rm -rf "$TEMP_DIR"
 
+# Kreiranje GitHub Release na javnom repou pomoću gh CLI ako je token dostupan
+if [ -n "$UBL_SDK_SYNC_TOKEN" ]; then
+  echo "Creating GitHub Release on dlbr/ubl-sdk..."
+  GH_TOKEN="$UBL_SDK_SYNC_TOKEN" gh release create "$TAG" --repo dlbr/ubl-sdk --generate-notes || echo "Release already exists or failed to create."
+else
+  echo "UBL_SDK_SYNC_TOKEN not set, skipping GitHub Release creation."
+fi
+
 echo "Sync complete! Published ${TAG} to dlbr/ubl-sdk."

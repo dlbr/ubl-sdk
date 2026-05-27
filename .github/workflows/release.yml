@@ -46,3 +46,4 @@ jobs:
           title: "chore(release): version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UBL_SDK_SYNC_TOKEN: ${{ secrets.UBL_SDK_SYNC_TOKEN }}
