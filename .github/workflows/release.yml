@@ -31,6 +31,13 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Diagnose token owner
+        run: |
+          echo "Token owner:"
+          curl -s -H "Authorization: Bearer $UBL_SDK_SYNC_TOKEN" https://api.github.com/user | grep '"login"'
+        env:
+          UBL_SDK_SYNC_TOKEN: ${{ secrets.UBL_SDK_SYNC_TOKEN }}
+
       - name: Create Release Pull Request or Publish
         id: changesets
         uses: changesets/action@v1
