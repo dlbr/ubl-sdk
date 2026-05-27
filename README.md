@@ -141,3 +141,4 @@ await MasterValidator.validateAgainstXSD(xml, provider);
 Ovaj SDK je alat otvorenog koda namenjen programskom generisanju i lokalnoj proveri UBL XML struktura prema zvaničnim tehničkim specifikacijama Ministarstva finansija Republike Srbije (Sistem za elektronske fakture - SEF).
 
 Biblioteka se isporučuje **„KOD KAKAV JESTE“ (AS IS)**, bez ikakvih garancija o usklađenosti sa važećim zakonima, propisima ili promenama na državnim API platformama. Autor(i) ne snose odgovornost za pravne, finansijske ili tehničke posledice koje mogu proisteći iz upotrebe ili nepravilnog generisanja XML dokumenata. Krajnji korisnik je u potpunosti odgovoran za proveru poreske i zakonske ispravnosti svake fakture pre slanja na državni portal.
+
