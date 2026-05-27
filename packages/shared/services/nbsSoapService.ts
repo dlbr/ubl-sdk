@@ -89,8 +89,8 @@ export class NbsSoapService {
       this.memoryCache.set(cacheKey, finalRate);
       return finalRate;
 
-    } catch (error) {
-      console.error(`🚨 [NBS-API-FAIL] NBS nedostupan. Pokrećem fallback...`);
+    } catch (error: any) {
+      console.error(`🚨 [NBS-API-FAIL] NBS nedostupan za ${currency} na ${dateStr} (Greška: ${error?.message || error}). Pokrećem fallback...`);
       return await this.getLatestAvailableFallback(currency, env);
     }
   }
