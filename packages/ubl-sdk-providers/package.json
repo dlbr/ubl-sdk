@@ -1,6 +1,6 @@
 {
   "name": "@dlbr/ubl-sdk-providers",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Platform-specific storage adapters for @dlbr/ubl-sdk XSD validation",
   "main": "dist/index.js",
