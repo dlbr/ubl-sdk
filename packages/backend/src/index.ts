@@ -49,6 +49,35 @@ const extractParamIdFromUrl = (urlStr: string): string | null => {
   }
 };
 
+const getValutaDetails = async (currency: 'EUR' | 'USD' | 'CHF', danas: string, env: any) => {
+  const juceDate = new Date(new Date(danas).getTime() - 86400000);
+  const juce = juceDate.toISOString().split('T')[0];
+
+  const [kursDanas, kursJuce] = await Promise.all([
+    NbsSoapService.getMiddleRate(currency, danas, env).catch(() => null),
+    NbsSoapService.getMiddleRate(currency, juce, env).catch(() => null)
+  ]);
+
+  const fallbackDanas = currency === 'EUR' ? 117.2 : currency === 'USD' ? 108.5 : 121.1;
+  const rateDanas = kursDanas || fallbackDanas;
+  const rateJuce = kursJuce || rateDanas;
+
+  let smer: 'GORE' | 'DOLE' | 'ISTO' = 'ISTO';
+  let promenaProcenat = 0;
+
+  if (rateJuce > 0 && rateDanas !== rateJuce) {
+    const diff = rateDanas - rateJuce;
+    smer = diff > 0 ? 'GORE' : 'DOLE';
+    promenaProcenat = Math.abs((diff / rateJuce) * 100);
+  }
+
+  return {
+    kurs: rateDanas,
+    smer,
+    promenaProcenat
+  };
+};
+
 const internalOnly = (c: RouterContext<Env> & { klijentId?: string, operater?: string }) => {
   // Bearer token check — INTERNAL_API_KEY shared secret između Nuxt i Backend Worker-a
   const apiKey = (c.env as any).INTERNAL_API_KEY;
@@ -95,19 +124,23 @@ app.get('/api/public/v1/kursna-lista/og.png', async ({ env }: any) => {
 
 app.get('/api/public/v1/kursna-lista', async ({ env }: any) => {
   const danas = new Date().toISOString().split('T')[0];
-  const eur = await NbsSoapService.getMiddleRate('EUR', danas, env);
+  const [eurDetails, usdDetails, chfDetails] = await Promise.all([
+    getValutaDetails('EUR', danas, env),
+    getValutaDetails('USD', danas, env),
+    getValutaDetails('CHF', danas, env)
+  ]);
   return Response.json({
     status: 'success',
     datum: danas,
     valute: { 
-      EUR: { kurs: eur || 117.2, trend: { smer: 'GORE' } }, 
-      USD: { kurs: 108.5, trend: { smer: 'DOLE' } }, 
-      CHF: { kurs: 121.1, trend: { smer: 'ISTO' } } 
+      EUR: { kurs: eurDetails.kurs, trend: { smer: eurDetails.smer, promenaProcenat: eurDetails.promenaProcenat } }, 
+      USD: { kurs: usdDetails.kurs, trend: { smer: usdDetails.smer, promenaProcenat: usdDetails.promenaProcenat } }, 
+      CHF: { kurs: chfDetails.kurs, trend: { smer: chfDetails.smer, promenaProcenat: chfDetails.promenaProcenat } } 
     },
     tiker: [
-      { valuta: 'EUR', kurs: eur || 117.2, smer: 'GORE' },
-      { valuta: 'USD', kurs: 108.5, smer: 'DOLE' },
-      { valuta: 'CHF', kurs: 121.1, smer: 'ISTO' }
+      { valuta: 'EUR', kurs: eurDetails.kurs, smer: eurDetails.smer, promenaProcenat: eurDetails.promenaProcenat },
+      { valuta: 'USD', kurs: usdDetails.kurs, smer: usdDetails.smer, promenaProcenat: usdDetails.promenaProcenat },
+      { valuta: 'CHF', kurs: chfDetails.kurs, smer: chfDetails.smer, promenaProcenat: chfDetails.promenaProcenat }
     ]
   });
 });
@@ -251,14 +284,18 @@ export class SEFBackendRPC extends WorkerEntrypoint<Env> {
 
   async getKursnaLista() {
     const danas = new Date().toISOString().split('T')[0];
-    const eur = await NbsSoapService.getMiddleRate('EUR', danas, this.env).catch(() => null);
+    const [eurDetails, usdDetails, chfDetails] = await Promise.all([
+      getValutaDetails('EUR', danas, this.env),
+      getValutaDetails('USD', danas, this.env),
+      getValutaDetails('CHF', danas, this.env)
+    ]);
     return {
       status: 'success',
       datum: danas,
       tiker: [
-        { valuta: 'EUR', kurs: eur || 117.2, smer: 'GORE', promenaProcenat: 0 },
-        { valuta: 'USD', kurs: 108.5, smer: 'DOLE', promenaProcenat: 0 },
-        { valuta: 'CHF', kurs: 121.1, smer: 'ISTO', promenaProcenat: 0 },
+        { valuta: 'EUR', kurs: eurDetails.kurs, smer: eurDetails.smer, promenaProcenat: eurDetails.promenaProcenat },
+        { valuta: 'USD', kurs: usdDetails.kurs, smer: usdDetails.smer, promenaProcenat: usdDetails.promenaProcenat },
+        { valuta: 'CHF', kurs: chfDetails.kurs, smer: chfDetails.smer, promenaProcenat: chfDetails.promenaProcenat },
       ]
     };
   }
