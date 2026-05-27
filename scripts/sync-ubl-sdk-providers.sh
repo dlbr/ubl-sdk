@@ -21,7 +21,7 @@ echo "Syncing files..."
 # Brišemo sve osim .git i .github iz klona
 find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -not -name ".git" -not -name ".github" -exec rm -rf {} +
 
-# Kopiramo nove fajlove iz packages/ubl-sdk-providers/ osim node_modules i dist
+# Kopiramo nove fajlove iz packages/ubl-sdk-providers/
 rsync -av --exclude='node_modules' --exclude='dist' packages/ubl-sdk-providers/ "$TEMP_DIR/"
 
 cd "$TEMP_DIR"
@@ -52,4 +52,4 @@ fi
 cd ..
 rm -rf "$TEMP_DIR"
 
-echo "Sync complete! Published ${TAG} to dlbr/ubl-sdk-providers."
+echo "Sync complete! Published ${TAG} to dlbr/ubl-sdk-providers. (CI/CD Action will handle NPM/Release)"
