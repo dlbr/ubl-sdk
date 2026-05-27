@@ -22,7 +22,7 @@ echo "Syncing files..."
 find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -not -name ".git" -not -name ".github" -exec rm -rf {} +
 
 # Kopiramo nove fajlove iz packages/ubl-sdk-providers/
-rsync -av --exclude='node_modules' --exclude='dist' packages/ubl-sdk-providers/ "$TEMP_DIR/"
+rsync -av --exclude='node_modules' --exclude='dist' --exclude='pnpm-lock.yaml' packages/ubl-sdk-providers/ "$TEMP_DIR/"
 
 cd "$TEMP_DIR"
 
