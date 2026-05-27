@@ -8,18 +8,14 @@ import {
   SefUblBuilder, 
   NbsSoapService,
   EmailService,
-  OgEngine,
   WebhookRelay,
   posaljiHotfixTelegramAlarm, 
   handleLogisticsQueue,
   DOZVOLE_PLAN_OVA,
   sha256,
-  CryptographicLedger,
-  ComplianceExporter
+  CryptographicLedger
 } from '@sef/shared';
 import ComplianceWatcher from "./compliance-watcher";
-// @ts-ignore – wrangler [[rules]] type="Data" resolves .ttf as ArrayBuffer
-import interFont from '../../shared/assets/Inter-Bold.ttf';
 
 export interface Env {
   ADMIN_API_KEY: string;
@@ -166,20 +162,11 @@ app.get('/api/public/v1/kursna-lista/og.png', async (c: any) => {
     const eur = await NbsSoapService.getMiddleRate('EUR', danas, c.env);
     const kurs = eur ?? 117.2031;
 
-    const png = await OgEngine.generatePng(
-      { valuta: 'EUR', kurs: kurs.toFixed(4), promena: '0.0000', raste: false },
-      interFont as unknown as ArrayBuffer,
-    );
-
-    return new Response(png, {
-      status: 200,
-      headers: {
-        'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
-      },
-    });
+    // Offload to render service
+    const renderUrl = `https://render.dlbr.cloud/api/render/og.png?v=EUR&k=${kurs.toFixed(4)}`;
+    return fetch(renderUrl);
   } catch (err: any) {
-    return Response.json({ error: 'OG_GEN_FAIL', detail: err?.message }, { status: 500 });
+    return Response.json({ error: 'RENDER_PROXY_FAIL', detail: err?.message }, { status: 500 });
   }
 });
 
@@ -244,33 +231,22 @@ app.get('/api/public/v1/kursna-lista/historical', async (c: any) => {
 
 app.get('/api/compliance/v1/export/:id', internalOnly, async (c: any) => {
   const invoiceId = c.result.id;
-  const pdfUrl = c.env.PDF_SERVICE_URL || 'https://pdf-service.dlbr.workers.dev/api/v1/generate';
-  const pdfKey = c.env.PDF_SERVICE_KEY || 'MOCK-KEY';
-
+  
   try {
-    const zipBuffer = await ComplianceExporter.generatePackage(
-      c.env.REGISTAR_DB,
-      invoiceId,
-      pdfUrl,
-      pdfKey,
-      {
-        companyName: "SEF Bridge Korisnik", // TODO: Izvući iz baze klijenta
-        verificationBaseUrl: "https://dlbr.cloud",
-        complianceKv: c.env.COMPLIANCE_KV
-      }
-    );
+    // Proxy to render service
+    const renderUrl = `https://render.dlbr.cloud/api/render/export/${invoiceId}`;
+    const timestamp = Date.now().toString();
+    const signature = await hmac(invoiceId + timestamp, c.env.RENDER_SERVICE_KEY || 'MOCK');
 
-    return new Response(zipBuffer, {
-      status: 200,
+    return fetch(renderUrl, {
       headers: {
-        'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="compliance_export_${invoiceId}.zip"`,
-        'Cache-Control': 'no-store'
+        'X-Signature': signature,
+        'X-Timestamp': timestamp
       }
     });
   } catch (err: any) {
-    console.error(`🚨 [EXPORT_FAIL] Faktura: ${invoiceId}, Greška:`, err);
-    return Response.json({ error: 'EXPORT_FAILED', message: err.message }, { status: 500 });
+    console.error(`🚨 [EXPORT_PROXY_FAIL] Faktura: ${invoiceId}, Greška:`, err);
+    return Response.json({ error: 'RENDER_PROXY_FAIL', message: err.message }, { status: 500 });
   }
 });
 

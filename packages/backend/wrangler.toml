@@ -8,16 +8,6 @@ workers_dev = false
 "@dlbr/ubl-sdk" = "../ubl-sdk/src/index.ts"
 "@sef/shared" = "../shared/index.ts"
 
-[[rules]]
-type = "Data"
-globs = ["**/*.woff2", "**/*.ttf"]
-fallthrough = true
-
-[[rules]]
-type = "CompiledWasm"
-globs = ["**/*.wasm"]
-fallthrough = true
-
 [[send_email]]
 name = "EMAIL"
 
@@ -38,7 +28,7 @@ id = "b688022ffcc247d4843b97d70b76b719"
 
 [[kv_namespaces]]
 binding = "COMPLIANCE_KV"
-id = "YOUR_COMPLIANCE_KV_ID"
+id = "c23b714b289744a4922b8734a465faa6"
 
 [[r2_buckets]]
 binding = "SEF_UBL_ARHIVA"

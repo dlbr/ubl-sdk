@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "sef-bridge-backend" generated at 2026-05-27T10:41:27.271Z.

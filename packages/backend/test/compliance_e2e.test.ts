@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ComplianceExporter, ComplianceCertificateBuilder, CryptographicLedger, hmac } from '@sef/shared';
+import { ComplianceCertificateBuilder, CryptographicLedger, hmac } from '@sef/shared';
+import { ComplianceExporter } from '@sef/shared/services/ComplianceExporter';
 import JSZip from 'jszip';
 
 describe('🚀 Compliance E2E — Putanja Revizorskog Traga', () => {

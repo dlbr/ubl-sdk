@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MasterValidator } from '../packages/ubl-sdk/src/validator';
 import { SefInvoiceSchema } from '../packages/ubl-sdk/src/validator';
 import { SefUblBuilder } from '../packages/ubl-sdk/src/SefUblBuilder';
-import { ComplianceExporter, CryptographicLedger } from '@sef/shared';
+import { CryptographicLedger } from '@sef/shared';
+import { ComplianceExporter } from '@sef/shared/services/ComplianceExporter';
 import * as v from 'valibot';
 import JSZip from 'jszip';
 

@@ -1,0 +1,30 @@
+name = "sef-render-service"
+main = "src/index.ts"
+compatibility_date = "2026-05-25"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[alias]
+"@sef/shared" = "../shared/index.ts"
+"@sef/shared/services/OgEngine" = "../shared/services/OgEngine.ts"
+"@sef/shared/services/ComplianceExporter" = "../shared/services/ComplianceExporter.ts"
+"@dlbr/ubl-sdk" = "../ubl-sdk/src/index.ts"
+
+[[rules]]
+type = "Data"
+globs = ["**/*.woff2", "**/*.ttf"]
+fallthrough = true
+
+[[rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+fallthrough = true
+
+[[d1_databases]]
+binding = "REGISTAR_DB"
+database_name = "sef_centralni_registar"
+database_id = "189e8330-f1b4-4172-a9b0-27271acb7847"
+
+[[kv_namespaces]]
+binding = "COMPLIANCE_KV"
+id = "c23b714b289744a4922b8734a465faa6"
