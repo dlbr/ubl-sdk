@@ -17,7 +17,9 @@
   },
   "license": "MIT",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "peerDependencies": {
     "@dlbr/ubl-sdk": ">=1.0.8"
