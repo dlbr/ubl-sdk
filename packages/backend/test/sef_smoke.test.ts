@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MasterValidator, XmlTransformer } from '@dlbr/ubl-sdk';
-import { FileSystemSchemaProvider } from '@dlbr/ubl-sdk-providers';
+import { MockSchemaProvider } from './mocks/MockSchemaProvider';
 import path from 'path';
 import { sefServer } from './mocks/sef-api';
 
 describe('🚀 SEF Bridge Integration Smoke Test', () => {
-  // U test environmentu (Worker) pathovi su specifični. Koristimo relativnu putanju u odnosu na projektni root koji vitest vidi.
-  const provider = new FileSystemSchemaProvider('/Users/dlbr/labs/sef/packages/ubl-sdk/schemas');
+  const provider = new MockSchemaProvider();
   const schemaPath = 'maindoc/UBL-Invoice-2.1.xsd';
 
   beforeAll(() => {
