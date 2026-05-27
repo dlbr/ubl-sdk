@@ -62,9 +62,13 @@ const getValutaDetails = async (currency: 'EUR' | 'USD' | 'CHF', danas: string, 
     NbsSoapService.getMiddleRate(currency, juce, env).catch(() => null)
   ]);
 
-  const fallbackDanas = currency === 'EUR' ? 117.2 : currency === 'USD' ? 108.5 : 121.1;
-  const rateDanas = kursDanas || fallbackDanas;
-  const rateJuce = kursJuce || rateDanas;
+  // Ako nemamo danasnji kurs, koristimo fiksni fallback samo za prikaz
+  const fallbackRate = currency === 'EUR' ? 117.2031 : currency === 'USD' ? 108.5000 : 121.1000;
+  
+  const rateDanas = kursDanas || fallbackRate;
+  
+  // Ako nemamo jučerašnji kurs u bazi, trend je 0 (ISTO)
+  const rateJuce = kursJuce || 0;
 
   let smer: 'GORE' | 'DOLE' | 'ISTO' = 'ISTO';
   let promenaProcenat = 0;
@@ -183,6 +187,7 @@ app.get('/api/public/v1/kursna-lista', async (c: any) => {
   return Response.json({
     status: 'success',
     datum: danas,
+    osvezeno_u: new Date().toISOString(),
     valute: { 
       EUR: { kurs: eurDetails.kurs, trend: { smer: eurDetails.smer, promenaProcenat: eurDetails.promenaProcenat } }, 
       USD: { kurs: usdDetails.kurs, trend: { smer: usdDetails.smer, promenaProcenat: usdDetails.promenaProcenat } }, 

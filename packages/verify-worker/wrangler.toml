@@ -4,8 +4,9 @@ compatibility_date = "2026-05-27"
 workers_dev = true
 
 routes = [
-  { pattern = "dlbr.cloud/verify", zone_name = "dlbr.cloud" }
+  { pattern = "dlbr.cloud/verify/*", zone_name = "dlbr.cloud" }
 ]
+
 
 [[kv_namespaces]]
 binding = "COMPLIANCE_KV"

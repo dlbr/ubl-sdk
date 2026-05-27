@@ -1,0 +1,17 @@
+{
+  "year": 2023,
+  "calculationNumber": "Avans-OBJ",
+  "documentNumber": "Broj_avansa",
+  "vatPeriod": 8,
+  "documentDirection": 1,
+  "documentType": 386,
+  "relatedPartyIdentifier": "111111111",
+  "realEstateDescription10": "test",
+  "realEstateBaseAmount10": 100.0,
+  "realEstateCalculatedVat10": 10.0,
+  "realEstateDescription20": "test",
+  "realEstateBaseAmount20": 200.0,
+  "realEstateCalculatedVat20": 40.0,
+  "prepaymentDate": "2024-08-01",
+  "basisForPrepayment": "neki opis"
+}

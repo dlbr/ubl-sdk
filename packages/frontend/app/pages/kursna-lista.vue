@@ -1,11 +1,32 @@
 <script setup lang="ts">
 const { data: nbsPodaci, error } = await useFetch('/api/public/kursna-lista')
 
+const formatSrpskiDatum = (isoString: string | undefined) => {
+  if (!isoString) return ''
+  const d = new Date(isoString)
+  return d.toLocaleString('sr-RS', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).replace(',', ' u') + '.'
+}
+
+const formatSrpskiSamoDatum = (dateStr: string) => {
+  if (!dateStr) return ''
+  const [y, m, d] = dateStr.split('-')
+  return `${d}.${m}.${y}.`
+}
+
 const danasnjiDatum = nbsPodaci.value?.datum || new Date().toISOString().split('T')[0]
+const danasnjiDatumSr = formatSrpskiSamoDatum(danasnjiDatum)
+const osvezenoU = computed(() => formatSrpskiDatum(nbsPodaci.value?.osvezeno_u))
 const eurKurs = computed(() => nbsPodaci.value?.tiker?.find((t: any) => t.valuta === 'EUR')?.kurs || 117.2)
 
 useSeoMeta({
-  title: `Srednji Kurs Evra NBS Danas (${danasnjiDatum}) | Kursna Lista za eFakture`,
+  title: `Srednji Kurs Evra NBS Danas (${danasnjiDatumSr}) | Kursna Lista za eFakture`,
   description: `Zvanični srednji kurs Narodne banke Srbije za danas je ${eurKurs.value} RSD. Besplatan JSON API za eFakture (SEF) i automatsko devizno računovodstvo.`,
   keywords: 'srednji kurs evra, nbs kursna lista, kurs evra danas, sef devizni kurs, efakture kurs nbs, clan 10 pdv prenos obaveze',
   ogTitle: `Srednji Kurs Evra NBS Danas | Automatska Kursna Lista`,
@@ -18,7 +39,7 @@ useSeoMeta({
   ogImageAlt: 'Zvanični Srednji Kurs NBS — EUR, USD, CHF',
   twitterCard: 'summary_large_image',
   twitterTitle: `EUR = ${eurKurs.value} RSD | Kursna Lista NBS`,
-  twitterDescription: `Zvanični srednji kurs NBS za danas (${danasnjiDatum}). Besplatan JSON API za eFakture.`,
+  twitterDescription: `Zvanični srednji kurs NBS za danas (${danasnjiDatumSr}). Besplatan JSON API za eFakture.`,
   twitterImage: 'https://sef.dlbr.cloud/api/public/v1/kursna-lista/og.png',
 })
 
@@ -72,6 +93,7 @@ const snippets = computed(() => ({
   json: `{
   "status": "success",
   "datum": "${danasnjiDatum}",
+  "osvezeno_u": "${nbsPodaci.value?.osvezeno_u || new Date().toISOString()}",
   "tiker": [
     { "valuta": "EUR", "kurs": ${eurKurs.value.toFixed(4)}, "smer": "GORE", "promenaProcenat": 0.0000 },
     { "valuta": "USD", "kurs": 108.5000, "smer": "DOLE", "promenaProcenat": 0.0000 },
@@ -100,7 +122,7 @@ const copySnippet = async () => {
           Zvanična Kursna Lista NBS
         </h1>
         <p class="text-lg text-slate-400 max-w-xl mx-auto">
-          Podaci osveženi na dan <span class="text-emerald-400 font-mono">{{ danasnjiDatum }}</span>, automatski sinhronizovani sa Narodnom bankom Srbije.
+          Podaci osveženi na dan <span class="text-emerald-400 font-mono">{{ osvezenoU }}</span>, automatski sinhronizovani sa Narodnom bankom Srbije.
         </p>
       </header>
 

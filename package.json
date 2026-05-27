@@ -17,7 +17,8 @@
     "test:clean": "pnpm test && killall esbuild 2>/dev/null || true",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release:sync": "bash scripts/sync-ubl-sdk.sh && bash scripts/sync-ubl-sdk-providers.sh"
+    "release:sync": "bash scripts/sync-ubl-sdk.sh && bash scripts/sync-ubl-sdk-providers.sh",
+    "sync:json": "bash scripts/fetch-json-examples.sh"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
@@ -27,6 +28,7 @@
     "pdf-parse": "^2.4.5",
     "typescript": "^6.0.3",
     "valibot": "^1.4.0",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.7",
+    "wrangler": "^4.94.0"
   }
 }
