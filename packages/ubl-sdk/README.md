@@ -121,17 +121,18 @@ export class S3SchemaProvider implements SchemaProvider {
 
 ### Fleksibilnost u zavisnosti od okruženja
 
-Vaša aplikacija može dinamički da bira provajder u zavisnosti od okruženja (Production vs Local vs Cloud):
+Vaša aplikacija može dinamički da bira provajder u zavisnosti od okruženja (Production vs Local vs Cloud) koristeći **[@dlbr/ubl-sdk-providers](https://github.com/dlbr/ubl-sdk-providers)** paket:
 
 ```typescript
-import { MasterValidator, CloudflareKVSchemaProvider, FileSystemSchemaProvider } from '@dlbr/ubl-sdk';
+import { MasterValidator } from '@dlbr/ubl-sdk';
+import { CloudflareKVSchemaProvider, FileSystemSchemaProvider } from '@dlbr/ubl-sdk-providers';
 
 const provider = process.env.IS_CLOUDFLARE 
   ? new CloudflareKVSchemaProvider(env.COMPLIANCE_KV)
   : new FileSystemSchemaProvider('./dist-schemas');
 
 // XSD Validacija (Premium Feature)
-// await MasterValidator.validateAgainstXSD(xml, provider);
+await MasterValidator.validateAgainstXSD(xml, provider);
 ```
 
 ---
