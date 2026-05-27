@@ -171,6 +171,21 @@ export interface SmanjenjeViseFakturaData extends BaseInvoiceData {
   iznosZaSmanjenjePdv: number;
 }
 
+export interface B2BInvoice extends BaseInvoiceData {
+  mode: 'B2B';
+}
+
+export interface B2GInvoice extends BaseInvoiceData {
+  mode: 'B2G';
+  // B2G obavezna polja (prema UBL 2.1 profilu za Srbiju)
+  buyerReference: string;           // Broj ugovora/porudžbine
+  taxExemptionReasonCode?: string;  // Obavezno ako je PDV 0%
+  taxExemptionReason?: string;      // Obavezno ako je PDV 0%
+  contractDocumentReference?: string; // Preporučeno za javne nabavke
+}
+
+export type InvoiceData = B2BInvoice | B2GInvoice | any;
+
 export interface ValidationOptions {
   mode?: 'B2B' | 'B2G';
   strict?: boolean;

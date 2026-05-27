@@ -1,0 +1,12 @@
+name = "sef-verify-worker"
+main = "src/index.ts"
+compatibility_date = "2026-05-27"
+workers_dev = true
+
+routes = [
+  { pattern = "sef.dlbr.cloud/verify", zone_name = "dlbr.cloud" }
+]
+
+[[kv_namespaces]]
+binding = "COMPLIANCE_KV"
+id = "PUT_YOUR_KV_ID_HERE" # User will update this

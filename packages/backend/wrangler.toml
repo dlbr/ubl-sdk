@@ -36,6 +36,10 @@ bindings = [
 binding = "PORESKI_KV"
 id = "b688022ffcc247d4843b97d70b76b719"
 
+[[kv_namespaces]]
+binding = "COMPLIANCE_KV"
+id = "YOUR_COMPLIANCE_KV_ID"
+
 [[r2_buckets]]
 binding = "SEF_UBL_ARHIVA"
 bucket_name = "prod-sef-ubl-arhiva-10godina"
@@ -59,6 +63,10 @@ queue = "eotpremnice-reconciliation-queue"
 binding = "WEBHOOK_QUEUE"
 queue = "sef-webhook-delivery"
 
+[[queues.producers]]
+binding = "LEDGER_QUEUE"
+queue = "audit-ledger-queue"
+
 [[queues.consumers]]
 queue = "sef-compliance-queue"
 max_batch_size = 10
@@ -73,3 +81,11 @@ max_batch_timeout = 5
 queue = "sef-webhook-delivery"
 max_batch_size = 10
 max_batch_timeout = 5
+
+[[queues.consumers]]
+queue = "audit-ledger-queue"
+max_batch_size = 1
+max_batch_timeout = 0 # Sekvencijalno, odmah
+
+[triggers]
+crons = ["0 3 * * *"]

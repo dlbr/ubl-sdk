@@ -6,7 +6,7 @@ import { Router, type RouterContext } from './router';
 import { Redacted } from "@sef/shared/services/redacted";
 import { D1SyncBridge } from "@sef/shared/services/D1SyncBridge";
 import { handleSefErrorWithEdgeAi } from "./edge-ai-interceptor";
-import { CryptographicLedger } from "@sef/shared/services/CryptographicLedger";
+import { CryptographicLedger, sha256 } from "@sef/shared/services/CryptographicLedger";
 
 export class KlijentBaza extends DurableObject<Env> {
   private sql: SqlStorage;
@@ -59,9 +59,8 @@ export class KlijentBaza extends DurableObject<Env> {
         prethodni_hash TEXT NOT NULL,
         trenutni_hash TEXT NOT NULL,
         dokument_id TEXT NOT NULL,
-        xml_hash TEXT NOT NULL,
         dogadjaj TEXT NOT NULL,
-        detalji TEXT,
+        detalji TEXT NOT NULL,
         kreirano_u TEXT NOT NULL
       )
     `).run();
@@ -247,9 +246,9 @@ export class KlijentBaza extends DurableObject<Env> {
 
       const details = { tip: 'OTPREMNICA', broj: body.id };
       if (c.ctx && c.ctx.waitUntil) {
-        c.ctx.waitUntil(CryptographicLedger.appendEvent(c.env.REGISTAR_DB, body.id, JSON.stringify(body), "POSLAT", details).catch(console.error));
+        c.ctx.waitUntil(CryptographicLedger.appendEvent(c.env.REGISTAR_DB, body.id, "POSLAT", details).catch(console.error));
       } else {
-        await CryptographicLedger.appendEvent(c.env.REGISTAR_DB, body.id, JSON.stringify(body), "POSLAT", details);
+        await CryptographicLedger.appendEvent(c.env.REGISTAR_DB, body.id, "POSLAT", details);
       }
       if (body.lines && body.lines.length > 0) {
         const lines = body.lines.map((l: any) => ({
@@ -331,42 +330,34 @@ export class KlijentBaza extends DurableObject<Env> {
         this.sql.exec(`INSERT INTO fakture (internal_id, sef_id, broj_fakture, status, iznos) VALUES (?, ?, ?, ?, ?)`, internalId, 'SEF-ID', invoiceData.invoiceId || invoiceData.ID || invoiceData.broj || 'MOCK', 'Sent', 100);
         this.sql.exec(`INSERT INTO billing_ledger (id, tip_transakcije, iznos_kredita) VALUES (?, 'POTROŠNJA', -1)`, crypto.randomUUID());
 
-        const details = { broj: invoiceData.invoiceId || invoiceData.ID || invoiceData.broj || 'MOCK' };
+        const xmlHash = await sha256(xml);
+        const details = { 
+          broj: invoiceData.invoiceId || invoiceData.ID || invoiceData.broj || 'MOCK',
+          xmlHash: xmlHash,
+          status: 'SUCCESS'
+        };
+        
         if (ctx && ctx.waitUntil) {
-          ctx.waitUntil(CryptographicLedger.appendEvent(env.REGISTAR_DB, internalId, xml, "POSLAT", details).catch(console.error));
+          ctx.waitUntil(CryptographicLedger.appendEvent(env.REGISTAR_DB, internalId, "POSLAT", details).catch(console.error));
         } else {
-          await CryptographicLedger.appendEvent(env.REGISTAR_DB, internalId, xml, "POSLAT", details);
+          await CryptographicLedger.appendEvent(env.REGISTAR_DB, internalId, "POSLAT", details);
         }
 
         return Response.json({ success: true, internalId, sefId: 'SEF-ID', xml }, { status: 202 });
       } catch (e: any) {
-        const mockSefResponse = new Response(e.message, { status: 400 });
-        const internalId = `INV-${Date.now()}`;
+        const internalId = `ERR-${Date.now()}`;
         const brojDok = invoiceData.invoiceId || invoiceData.ID || invoiceData.broj || 'MOCK';
         
+        // Zapečati neuspeh u lanac (revizorska odbrana)
         if (ctx && ctx.waitUntil) {
-          ctx.waitUntil(
-            handleSefErrorWithEdgeAi(
-              mockSefResponse,
-              internalId,
-              brojDok,
-              "",
-              env,
-              ctx,
-              this.getPib()
-            )
-          );
-        } else {
-          handleSefErrorWithEdgeAi(
-            mockSefResponse,
-            internalId,
-            brojDok,
-            "",
-            env,
-            ctx,
-            this.getPib()
-          ).catch(console.error);
+          ctx.waitUntil(CryptographicLedger.appendEvent(env.REGISTAR_DB, internalId, "FAILED", { 
+            broj: brojDok,
+            error: e.message,
+            tip: 'COMPLIANCE_ERROR'
+          }).catch(console.error));
         }
+
+        const mockSefResponse = new Response(e.message, { status: 400 });
 
         return Response.json({ error: 'COMPLIANCE_ERROR', message: e.message }, { status: 400 });
       }

@@ -12,7 +12,10 @@ import {
   WebhookRelay,
   posaljiHotfixTelegramAlarm, 
   handleLogisticsQueue,
-  DOZVOLE_PLAN_OVA
+  DOZVOLE_PLAN_OVA,
+  sha256,
+  CryptographicLedger,
+  ComplianceExporter
 } from '@sef/shared';
 import ComplianceWatcher from "./compliance-watcher";
 // @ts-ignore – wrangler [[rules]] type="Data" resolves .ttf as ArrayBuffer
@@ -29,13 +32,18 @@ export interface Env {
   REGISTAR_DB: D1Database;
   SEF_UBL_ARHIVA: R2Bucket;
   PORESKI_KV: KVNamespace;
+  COMPLIANCE_KV?: KVNamespace;
   SEF_QUEUE: Queue<any>;
   OTPREMNICA_QUEUE: Queue<any>;
+  LEDGER_QUEUE: Queue<any>;
   EMAIL: { send: (msg: any) => Promise<void> };
   AI: any;
   NBS_USERNAME?: string;
   NBS_PASSWORD?: string;
   NBS_LICENCE_ID?: string;
+  INTERNAL_API_KEY?: string;
+  PDF_SERVICE_URL?: string;
+  PDF_SERVICE_KEY?: string;
 }
 
 export { KlijentBaza } from './KlijentBazaObject';
@@ -232,6 +240,38 @@ app.get('/api/public/v1/kursna-lista/historical', async (c: any) => {
       'Cache-Control': 'public, max-age=604800, immutable'
     }
   });
+});
+
+app.get('/api/compliance/v1/export/:id', internalOnly, async (c: any) => {
+  const invoiceId = c.result.id;
+  const pdfUrl = c.env.PDF_SERVICE_URL || 'https://pdf-service.dlbr.workers.dev/api/v1/generate';
+  const pdfKey = c.env.PDF_SERVICE_KEY || 'MOCK-KEY';
+
+  try {
+    const zipBuffer = await ComplianceExporter.generatePackage(
+      c.env.REGISTAR_DB,
+      invoiceId,
+      pdfUrl,
+      pdfKey,
+      {
+        companyName: "SEF Bridge Korisnik", // TODO: Izvući iz baze klijenta
+        verificationBaseUrl: "https://dlbr.cloud",
+        complianceKv: c.env.COMPLIANCE_KV
+      }
+    );
+
+    return new Response(zipBuffer, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="compliance_export_${invoiceId}.zip"`,
+        'Cache-Control': 'no-store'
+      }
+    });
+  } catch (err: any) {
+    console.error(`🚨 [EXPORT_FAIL] Faktura: ${invoiceId}, Greška:`, err);
+    return Response.json({ error: 'EXPORT_FAILED', message: err.message }, { status: 500 });
+  }
 });
 
 app.get('/api/health', async () => Response.json({ status: 'ONLINE' }));
@@ -490,7 +530,29 @@ export class SEFBackendRPC extends WorkerEntrypoint<Env> {
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext) { return app.fetch(req, env, ctx); },
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    console.log(`⏱️ [Heartbeat] Pokrećem revizorsku proveru integriteta...`);
+    const result = await CryptographicLedger.verifyChain(env.REGISTAR_DB);
+    
+    if (!result.success) {
+      const alarmMsg = `🚨 ALARM: Integritet audit lanca prekinut! Indeks: ${result.tamperedIndex}. Poruka: ${result.message}`;
+      console.error(alarmMsg);
+      await posaljiHotfixTelegramAlarm(alarmMsg, env);
+    } else {
+      console.log(`✅ [Heartbeat] Audit ledger integritet potvrđen.`);
+    }
+  },
   async queue(batch: MessageBatch<any>, env: Env) {
+    if (batch.queue === "audit-ledger-queue") {
+      for (const message of batch.messages) {
+        const { documentId, dogadjaj, detalji } = message.body;
+        console.log(`📝 [Queue] Zapisujem audit dogadjaj: ${dogadjaj} za ${documentId}`);
+        await CryptographicLedger.appendEvent(env.REGISTAR_DB, documentId, dogadjaj, detalji);
+        message.ack();
+      }
+      return;
+    }
+
     if (batch.queue === "sef-webhook-delivery") {
       for (const msg of batch.messages) {
         const config = await env.REGISTAR_DB.prepare("SELECT webhook_url, webhook_secret FROM klijentska_podesavanja WHERE pib = ?").bind(msg.body.pibKupca).first<{ webhook_url: string; webhook_secret: string }>();

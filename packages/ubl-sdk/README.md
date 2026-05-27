@@ -72,7 +72,7 @@ const invoiceData: Invoice = {
 };
 
 try {
-  // 1. Validacija (Gvozdeni Štit)
+  // 1. Validacija
   const cleanData = MasterValidator.validate(invoiceData);
 
   // 2. Generisanje UBL 2.1 XML-a

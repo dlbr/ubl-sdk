@@ -22,7 +22,7 @@ useSeoMeta({
   twitterImage: 'https://sef.dlbr.cloud/api/public/v1/kursna-lista/og.png',
 })
 
-// JSON-LD za Google Rich Snippets – statički objekt, ne zavisi od API odgovora
+// JSON-LD za Google Rich Snippets
 useHead({
   script: [
     {
@@ -41,7 +41,7 @@ useHead({
 
 const activeTab = ref<'curl' | 'js' | 'json' | 'historical'>('curl')
 const historicalDate = ref(new Date().toISOString().split('T')[0])
-const { data: historicalData, pending: historicalPending, refresh: fetchHistorical } = await useAsyncData(
+const { data: historicalData, pending: historicalPending } = await useAsyncData(
   'historical-rate',
   () => {
     if (activeTab.value !== 'historical') return Promise.resolve(null)
@@ -49,8 +49,20 @@ const { data: historicalData, pending: historicalPending, refresh: fetchHistoric
       params: { date: historicalDate.value }
     })
   },
-  { watch: [historicalDate] }
+  { watch: [historicalDate, activeTab] }
 )
+
+const apiUrl = 'https://sef.dlbr.cloud/api/public/kursna-lista'
+const copiedUrl = ref(false)
+const copiedCode = ref(false)
+
+const copyApiUrl = async () => {
+  try {
+    await navigator.clipboard.writeText(apiUrl)
+    copiedUrl.value = true
+    setTimeout(() => { copiedUrl.value = false }, 2000)
+  } catch (err) { console.error(err) }
+}
 
 const snippets = computed(() => ({
   curl: `curl -s ${apiUrl}`,
@@ -69,9 +81,67 @@ const snippets = computed(() => ({
   historical: `// Pretraga za datum: ${historicalDate.value}`
 }))
 
-// ... (keep copy functions)
+const copySnippet = async () => {
+  try {
+    await navigator.clipboard.writeText(snippets.value[activeTab.value])
+    copiedCode.value = true
+    setTimeout(() => { copiedCode.value = false }, 2000)
+  } catch (err) { console.error(err) }
+}
+</script>
 
-// UI updates inside the tabs div:
+<template>
+  <div class="min-h-screen bg-slate-900 text-white font-sans">
+    <KursnaListaMarquee v-if="nbsPodaci?.tiker" :tiker-podaci="nbsPodaci.tiker" />
+
+    <main class="max-w-4xl mx-auto px-4 py-12">
+      <header class="text-center mb-12">
+        <h1 class="text-4xl font-extrabold tracking-tight text-white sm:text-5xl mb-4">
+          Zvanična Kursna Lista NBS
+        </h1>
+        <p class="text-lg text-slate-400 max-w-xl mx-auto">
+          Podaci osveženi na dan <span class="text-emerald-400 font-mono">{{ danasnjiDatum }}</span>, automatski sinhronizovani sa Narodnom bankom Srbije.
+        </p>
+      </header>
+
+      <div v-if="error" class="bg-rose-950/50 border border-rose-800 text-rose-300 p-4 rounded-lg text-center font-medium">
+        ⚠️ Trenutno nije moguće osvežiti podatke sa NBS servera. Koristimo poslednje stabilne podatke.
+      </div>
+
+      <div v-else-if="nbsPodaci" class="space-y-8 mb-12">
+        <div class="text-center text-sm text-slate-400 border border-slate-800/80 bg-slate-950/60 rounded-xl py-3.5 px-6 max-w-2xl mx-auto flex items-center justify-center gap-2.5">
+          <span>💡</span>
+          <span>Kliknite na bilo koju valutu u gornjoj traci (marquee) da odmah kopirate njen srednji kurs.</span>
+        </div>
+
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                <span class="text-emerald-400">⚡</span>
+                Programerski NBS API (JSON)
+              </h2>
+              <p class="text-sm text-slate-400 max-w-2xl">
+                Potpuno besplatan, ultra brzi edge endpoint sa automatskim NBS kešom i pametnim fallback mehanizmom.
+              </p>
+            </div>
+            <button 
+              @click="copyApiUrl"
+              class="self-start md:self-center flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-xs border transition-all duration-300"
+              :class="copiedUrl ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'"
+            >
+              <span>{{ copiedUrl ? '✓ Kopirano' : '📋 Kopiraj API Link' }}</span>
+            </button>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800/80 rounded-xl p-4 font-mono text-xs md:text-sm flex items-center justify-between gap-4 overflow-x-auto">
+            <div class="flex items-center gap-2 min-w-max">
+              <span class="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-bold text-[10px] uppercase">GET</span>
+              <span class="text-slate-300">{{ apiUrl }}</span>
+            </div>
+          </div>
+
+          <div class="space-y-4">
             <div class="flex border-b border-slate-800 gap-6 text-sm font-medium">
               <button 
                 @click="activeTab = 'curl'"
@@ -99,7 +169,6 @@ const snippets = computed(() => ({
               </button>
             </div>
 
-            <!-- Kod snippet ili Pretraga -->
             <div v-if="activeTab !== 'historical'" class="relative group">
               <pre class="bg-slate-900/80 border border-slate-800/60 rounded-xl p-5 font-mono text-xs md:text-sm text-slate-300 overflow-x-auto leading-relaxed max-h-[300px]"><code>{{ snippets[activeTab] }}</code></pre>
               
@@ -132,10 +201,10 @@ const snippets = computed(() => ({
                 </div>
               </div>
             </div>
+          </div>
         </div>
       </div>
 
-      <!-- CTA Sekcija za B2B lidove -->
       <section class="bg-emerald-600 rounded-2xl p-8 text-center shadow-2xl">
         <h2 class="text-2xl font-bold text-white mb-4">Dosta vam je ručnog preračunavanja deviznih faktura?</h2>
         <p class="text-emerald-100 mb-6 text-lg">
@@ -146,7 +215,6 @@ const snippets = computed(() => ({
         </button>
       </section>
 
-      <!-- FAQ za SEO -->
       <section class="mt-16 border-t border-slate-800 pt-12">
         <h3 class="text-2xl font-bold mb-8">Često postavljana pitanja</h3>
         <div class="space-y-6">

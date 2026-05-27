@@ -1,4 +1,4 @@
-# SEF Bridge - Steel Fortress
+# SEF Bridge
 
 [![Monorepo Deploy](https://github.com/dlbr/sef/actions/workflows/pipeline.yml/badge.svg)](https://github.com/dlbr/sef/actions/workflows/pipeline.yml)
 

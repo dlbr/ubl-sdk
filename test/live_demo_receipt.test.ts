@@ -48,7 +48,7 @@ describe.runIf(runLive)('🚀 MFIN ePrijemnica Demo - Live Smoke Test', () => {
       lines: [
         { 
           id: '1', 
-          itemName: 'Verifikacioni paket - Iron Wall v4.42.0', 
+          itemName: 'Verifikacioni paket - Audit Proof v4.42.0', 
           receivedQuantity: 50, 
           unitCode: 'H87',
           despatchLineReference: { id: '1' }

@@ -23,8 +23,10 @@
     "@changesets/cli": "^2.31.0",
     "@cloudflare/vitest-pool-workers": "^0.16.9",
     "@cloudflare/workers-types": "^4.20260523.1",
+    "jszip": "^3.10.1",
     "pdf-parse": "^2.4.5",
     "typescript": "^6.0.3",
+    "valibot": "^1.4.0",
     "vitest": "^4.1.7"
   }
 }
