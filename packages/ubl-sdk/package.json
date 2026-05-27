@@ -1,6 +1,6 @@
 {
   "name": "@dlbr/ubl-sdk",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "type": "module",
   "description": "Ultra-brzi, Edge-native JSON-to-UBL 2.1 XML generator prilagođen specifikacijama srpskog SEF-a",
   "repository": {
