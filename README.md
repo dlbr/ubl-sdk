@@ -34,27 +34,55 @@ npm install @dlbr/ubl-sdk
 ## Primer upotrebe
 ```typescript
 import { MasterValidator, SefUblBuilder } from '@dlbr/ubl-sdk';
+import type { Invoice } from '@dlbr/ubl-sdk';
 
-const invoiceData = {
-  ID: "FKT-2026-0001",
-  broj: "FKT-2026-0001",
-  datumIzdavanja: "2026-05-26",
-  pibProdavca: "101134702",
-  pibKupca: "113398540",
-  // ... ostali podaci fakture
+const invoiceData: Invoice = {
+  id: "FKT-2026-0001",
+  issueDate: "2026-05-27",
+  dueDate: "2026-06-27",
+  typeCode: "380",
+  currency: "RSD",
+
+  seller: {
+    pib: "101134702",
+    name: "Prodavac d.o.o.",
+    address: "Bulevar Mihajla Pupina 6",
+    city: "Beograd",
+    zip: "11070",
+  },
+
+  buyer: {
+    pib: "113398540",
+    name: "Kupac a.d.",
+    address: "Knez Mihailova 10",
+    city: "Beograd",
+    zip: "11000",
+  },
+
+  lines: [
+    {
+      description: "Konsultantske usluge - maj 2026",
+      quantity: 1,
+      unitCode: "HUR",
+      unitPrice: 50000,
+      taxRate: 20,
+      taxCategory: "S20",
+    },
+  ],
 };
 
 try {
   // 1. Validacija (Gvozdeni Štit)
   const cleanData = MasterValidator.validate(invoiceData);
 
-  // 2. Generisanje (XML Fabrika)
+  // 2. Generisanje UBL 2.1 XML-a
   const xml = SefUblBuilder.build(cleanData);
   console.log(xml);
 } catch (error) {
   console.error("Validacija neuspešna:", error.message);
 }
 ```
+
 
 > [!TIP]
 > Kompletna TypeScript definicija (interface) za podatke fakture je izvezena i automatski dostupna. Vaš IDE će vam u realnom vremenu sugerisati sva obavezna i opciona polja tokom unosa.
