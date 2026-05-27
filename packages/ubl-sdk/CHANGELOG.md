@@ -1,5 +1,11 @@
 # @dlbr/ubl-sdk
 
+## 1.0.8
+
+### Patch Changes
+
+- 191568c: fix(ci): replace git subtree push with subtree split + force push for reliable sync
+
 ## 1.0.7
 
 ### Patch Changes
