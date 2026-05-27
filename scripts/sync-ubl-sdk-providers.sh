@@ -22,9 +22,28 @@ echo "Syncing files..."
 find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -not -name ".git" -not -name ".github" -exec rm -rf {} +
 
 # Kopiramo nove fajlove iz packages/ubl-sdk-providers/
-rsync -av --exclude='node_modules' --exclude='dist' --exclude='pnpm-lock.yaml' packages/ubl-sdk-providers/ "$TEMP_DIR/"
+rsync -av --exclude='.github' --exclude='node_modules' --exclude='dist' --exclude='pnpm-lock.yaml' packages/ubl-sdk-providers/ "$TEMP_DIR/"
+
+# Transformacija package.json: Menjamo "workspace:*" sa pravom verzijom core SDK-a
+CORE_VERSION=$(node -p "require('./packages/ubl-sdk/package.json').version")
+echo "Mapping @dlbr/ubl-sdk to version ^${CORE_VERSION} in standalone package.json"
+
+node -e "
+  const fs = require('fs');
+  const pkg = JSON.parse(fs.readFileSync('$TEMP_DIR/package.json', 'utf8'));
+
+  if (pkg.devDependencies && pkg.devDependencies['@dlbr/ubl-sdk']) {
+    pkg.devDependencies['@dlbr/ubl-sdk'] = '^${CORE_VERSION}';
+  }
+  if (pkg.dependencies && pkg.dependencies['@dlbr/ubl-sdk']) {
+    pkg.dependencies['@dlbr/ubl-sdk'] = '^${CORE_VERSION}';
+  }
+
+  fs.writeFileSync('$TEMP_DIR/package.json', JSON.stringify(pkg, null, 2));
+"
 
 cd "$TEMP_DIR"
+
 
 echo "Configuring git..."
 git config user.name "github-actions[bot]"
