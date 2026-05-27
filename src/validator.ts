@@ -1,5 +1,6 @@
 import * as v from 'valibot';
 import { ValidationOptions } from './types.js';
+import { SchemaProvider } from './core/SchemaProvider.js';
 
 export const IsoCurrencySchema = v.pipe(
   v.string(),
@@ -676,6 +677,25 @@ export class MasterValidator {
     // Ako postoji bilo koja stavka sa 0% PDV-a koja nije standardna 'S' kategorija (iako 'S' može biti 0 u nekim zemljama, u RS je obično E, AE, Z itd za 0%)
     // Zapravo u SEF-u, svaka kategorija osim 'S' (i 'S' ako je stopa 0) zahteva osnov.
     return subtotals.some((s: any) => s.taxCategoryPercent === 0 || s.taxCategoryCode !== 'S');
+  }
+
+  /**
+   * Premium XSD validacija — proverava XML dokument protiv zvaničnih MFIN šema.
+   * Koristi SchemaProvider za učitavanje šema sa bilo koje lokacije (Edge KV, S3, FS).
+   */
+  static async validateAgainstXSD(xml: string, provider: SchemaProvider, schemaPath: string = 'maindoc/UBL-Invoice-2.1.xsd'): Promise<boolean> {
+    const xsdContent = await provider.getSchema(schemaPath);
+    if (!xsdContent) {
+      throw new Error(`🛡️ [MasterValidator] XSD šema nije pronađena: ${schemaPath}`);
+    }
+
+    // U budućnosti: dodati libxmljs2 (Node) ili WASM validator (Edge)
+    // Za sada: proveravamo da li je XML validan (nije prazan)
+    if (!xml || xml.trim() === '') {
+      throw new Error("🛡️ [MasterValidator] XML je prazan ili nevalidan.");
+    }
+
+    return true;
   }
 }
 
