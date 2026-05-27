@@ -131,10 +131,12 @@ const provider = process.env.IS_CLOUDFLARE
   ? new CloudflareKVSchemaProvider(env.COMPLIANCE_KV)
   : new FileSystemSchemaProvider('./dist-schemas');
 
-// XSD Validacija (Premium Feature)
-// Prilikom validacije, neophodno je proslediti putanju do šeme
+// XSD Validacija (Kritična funkcionalnost za produkciju)
+// Preporučujemo validaciju XML-a pre slanja na SEF kako biste sprečili odbijanje faktura.
 await MasterValidator.validateAgainstXSD(xml, provider, 'maindoc/UBL-Invoice-2.1.xsd');
 ```
+
+> **Pro-tip:** Validacijom fakture pre slanja drastično smanjujete broj "Rejected" statusa od strane državnog sistema.
 
 
 ---
