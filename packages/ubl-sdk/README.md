@@ -99,6 +99,41 @@ try {
 ## Razvoj i doprinosi
 Ovaj projekat je open-source referentna implementacija. Doprinosi i Pull Request-ovi za nova MFIN pravila su dobrodošli. Pogledajte [CONTRIBUTING.md](CONTRIBUTING.md) za detaljnije informacije.
 
+## 🛠 Proširivost: SchemaProvider
+
+`@dlbr/ubl-sdk` ne pretpostavlja gde čuvate vaše XSD šeme za potrebe MFIN XSD validacije. Kroz `SchemaProvider` interfejs, lako možete implementirati sopstveni sistem skladištenja.
+
+### Kako implementirati sopstveni Provider
+
+Sve što treba da uradite je da implementirate interfejs `SchemaProvider`:
+
+```typescript
+import { SchemaProvider } from '@dlbr/ubl-sdk';
+
+export class S3SchemaProvider implements SchemaProvider {
+  async getSchema(path: string): Promise<string> {
+    // Ovde ide vaša logika za preuzimanje iz AWS S3 bucket-a
+    const response = await s3.getObject({ Bucket: 'my-schemas', Key: path }).promise();
+    return response.Body.toString();
+  }
+}
+```
+
+### Fleksibilnost u zavisnosti od okruženja
+
+Vaša aplikacija može dinamički da bira provajder u zavisnosti od okruženja (Production vs Local vs Cloud):
+
+```typescript
+import { MasterValidator, CloudflareKVSchemaProvider, FileSystemSchemaProvider } from '@dlbr/ubl-sdk';
+
+const provider = process.env.IS_CLOUDFLARE 
+  ? new CloudflareKVSchemaProvider(env.COMPLIANCE_KV)
+  : new FileSystemSchemaProvider('./dist-schemas');
+
+// XSD Validacija (Premium Feature)
+// await MasterValidator.validateAgainstXSD(xml, provider);
+```
+
 ---
 
 ## ⚖️ Pravno odricanje odgovornosti (Disclaimer)
