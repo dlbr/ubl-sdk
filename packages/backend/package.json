@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@dlbr/ubl-sdk": "workspace:*",
+    "@dlbr/ubl-sdk-providers": "workspace:*",
     "@resvg/resvg-wasm": "^2.6.2",
     "@sef/shared": "workspace:*",
     "itty-router": "^5.0.18",
@@ -20,6 +21,7 @@
     "@cloudflare/vitest-pool-workers": "^0.16.4",
     "@cloudflare/workers-types": "^4.20260523.1",
     "esbuild": "^0.25.0",
+    "msw": "^2.14.6",
     "vitest": "^4.1.6",
     "wrangler": "^4.92.0"
   }
