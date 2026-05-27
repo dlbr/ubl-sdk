@@ -24,6 +24,7 @@
     "@changesets/cli": "^2.31.0",
     "@cloudflare/vitest-pool-workers": "^0.16.9",
     "@cloudflare/workers-types": "^4.20260523.1",
+    "jq": "^1.7.2",
     "jszip": "^3.10.1",
     "pdf-parse": "^2.4.5",
     "typescript": "^6.0.3",

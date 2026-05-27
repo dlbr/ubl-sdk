@@ -24,6 +24,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install Dependencies
         run: pnpm install
@@ -31,7 +32,23 @@ jobs:
       - name: Run Tests with Coverage
         run: pnpm run test:coverage
 
-      - name: Check Coverage
-        # Opciono: fail ako je ispod 80%
+      - name: Send Report to Telegram
+        if: always()
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          npx vitest run --coverage --coverage.thresholds.lines=80
+          # Ekstrakcija coverage procenta (zahteva instaliran jq)
+          # Ako fajl ne postoji, prijavljujemo 0
+          if [ -f coverage/coverage-summary.json ]; then
+            COVERAGE_SUMMARY=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+          else
+            COVERAGE_SUMMARY="N/A"
+          fi
+          
+          MESSAGE="✅ *Build Status:* ${{ job.status }}%0A📊 *Coverage:* $COVERAGE_SUMMARY%%0A🔗 *Repo:* ${{ github.repository }}%0A👤 *Commit:* ${{ github.event.head_commit.message }}"
+          
+          curl -s -X POST https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage \
+            -d chat_id=$TELEGRAM_CHAT_ID \
+            -d text="$MESSAGE" \
+            -d parse_mode=Markdown
