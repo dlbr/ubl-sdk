@@ -160,6 +160,9 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0(typescript@5.9.3)
     devDependencies:
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
       esbuild:
         specifier: ^0.25.0
         version: 0.25.12
