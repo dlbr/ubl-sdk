@@ -19,7 +19,8 @@ export class SefPoreskiJsonBuilder {
   }
 
   static buildPojedinacnaEeoPayload(data: any) {
-    const [y, m] = data.poreskiPeriod.split('-').map(Number);
+    const period = data.poreskiPeriod || new Date().toISOString().slice(0, 7);
+    const [y, m] = period.split('-').map(Number);
     const isCancellation = data.isCancellation || false;
 
     const payload: any = {

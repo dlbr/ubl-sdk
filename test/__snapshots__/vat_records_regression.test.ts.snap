@@ -1,0 +1,243 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi Avansni_racun_OBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi Avansni_racun_osimOBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOP_period_OBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOP_period_osimOBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOP_sa_fakturom_SEF_OBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOP_sa_fakturom_SEF_OBJ_CR_1 bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOP_sa_fakturom_SEF_osimOBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOP_sa_fakturom_van_SEFa_OBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOP_sa_fakturom_van_SEFa_osimOBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOS_period_OBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOS_period_osimOBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOS_sa_avansom_SEF_OBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOS_sa_avansom_SEF_osimOBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOS_sa_avansom_SEF_osimOBJ_CR_1 bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOS_sa_avansom_van_SEFa_OBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOS_sa_avansom_van_SEFa_osimOBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOS_sa_fakturom_SEF_OBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOS_sa_fakturom_SEF_osimOBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi DOS_sa_fakturom_van_SEFa_osimOBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi Faktura_bez_povezanih_dokumenata_OBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi Faktura_bez_povezanih_dokumenata_OBJ_CR_1 bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
+
+exports[`VAT Records Snapshot Regression Suite > PoreskiJsonBuilder treba da obradi Faktura_bez_povezanih_dokumenata_osimOBJ_CR bez regresije 1`] = `
+{
+  "InternalInvoiceNumber": undefined,
+  "Month": 5,
+  "TaxRecords": [],
+  "Type": "IndividualInternalInvoice",
+  "Year": 2026,
+  "relatedVatRecords": [],
+}
+`;
