@@ -17,7 +17,7 @@
     "test:clean": "pnpm test && killall esbuild 2>/dev/null || true",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release:sync": "bash scripts/sync-ubl-sdk.sh"
+    "release:sync": "bash scripts/sync-ubl-sdk.sh && bash scripts/sync-ubl-sdk-providers.sh"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",

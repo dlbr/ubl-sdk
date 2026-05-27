@@ -34,7 +34,9 @@ jobs:
       - name: Setup SSH Agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.UBL_SDK_DEPLOY_KEY }}
+          ssh-private-key: |
+            ${{ secrets.UBL_SDK_DEPLOY_KEY }}
+            ${{ secrets.UBL_SDK_PROVIDERS_DEPLOY_KEY }}
 
       - name: Create Release Pull Request or Publish
         id: changesets
@@ -47,3 +49,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UBL_SDK_SYNC_TOKEN: ${{ secrets.UBL_SDK_SYNC_TOKEN }}
+          UBL_SDK_PROVIDERS_SYNC_TOKEN: ${{ secrets.UBL_SDK_PROVIDERS_SYNC_TOKEN }}
