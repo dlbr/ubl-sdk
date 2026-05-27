@@ -24,8 +24,10 @@ VERSION=$(node -p "require('./packages/ubl-sdk/package.json').version")
 TAG="v${VERSION}"
 echo "Version to publish: ${TAG}"
 
+GIT="git -c credential.helper='' -c http.https://github.com/.extraheader=''"
+
 # Provjeri da li tag već postoji na javnom repou
-if git -c credential.helper="" ls-remote --tags "$PUBLIC_REPO" "refs/tags/${TAG}" | grep -q "${TAG}"; then
+if $GIT ls-remote --tags "$PUBLIC_REPO" "refs/tags/${TAG}" | grep -q "${TAG}"; then
   echo "Tag ${TAG} already exists on public repo. Skipping."
   exit 0
 fi
@@ -36,9 +38,9 @@ SPLIT_BRANCH="ubl-sdk-sync-${VERSION}"
 git subtree split --prefix=packages/ubl-sdk -b "$SPLIT_BRANCH"
 
 # Force push čistog branch-a na main javnog repoa
-# -c credential.helper="" zaobilazi actions/checkout credential helper
+# -c credential.helper='' i http.extraheader='' zaobilaze actions/checkout auth
 echo "Force-pushing to dlbr/ubl-sdk main..."
-git -c credential.helper="" push "$PUBLIC_REPO" "${SPLIT_BRANCH}:main" --force
+$GIT push "$PUBLIC_REPO" "${SPLIT_BRANCH}:main" --force
 
 # Čišćenje lokalnog temp branch-a
 git branch -D "$SPLIT_BRANCH"
@@ -46,6 +48,6 @@ git branch -D "$SPLIT_BRANCH"
 # Kreiranje i push v* taga koji triggeruje publish.yml na javnom repou
 echo "Creating and pushing tag ${TAG}..."
 git tag "$TAG" || true
-git -c credential.helper="" push "$PUBLIC_REPO" "refs/tags/${TAG}"
+$GIT push "$PUBLIC_REPO" "refs/tags/${TAG}"
 
 echo "Sync complete! Published ${TAG} to dlbr/ubl-sdk."
