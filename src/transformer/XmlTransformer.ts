@@ -7,7 +7,7 @@ import { PAYMENT_MEANS } from '../constants.js';
 import type { ReceiptAdvice, ReceiptLine } from '../models/ReceiptAdvice.js';
 
 /**
- * XmlTransformer - Sklapa "Iron Wall" UBL 2.1 XML za srpski SEF i eOtpremnice.
+ * XmlTransformer - Sklapa UBL 2.1 XML za srpski SEF i eOtpremnice.
  */
 export class XmlTransformer {
   static transformReceipt(receipt: ReceiptAdvice): string {

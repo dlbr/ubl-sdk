@@ -615,6 +615,10 @@ export const SefInvoiceSchema = v.pipe(
 // This is the ONLY place where normalizeInput (full math) is called.
 // ─────────────────────────────────────────────────────────────────────────────
 export class MasterValidator {
+  /**
+   * Glavna ulazna tačka za validaciju.
+   * Koristi Discriminated Union (mode) za tipizaciju ako je InvoiceData unija.
+   */
   static validate(data: any, options: ValidationOptions = { mode: 'B2B' }) {
     if (!data) {
       throw new Error(`🛡️ [MasterValidator] FATAL: Nedostaju obavezna polja`);
@@ -630,13 +634,7 @@ export class MasterValidator {
 
     // Step 2.5: Enforce strict B2G rules if mode is B2G
     if (options.mode === 'B2G') {
-      const jbkjsVal = normalized.jbkjsB || normalized.customerJbkjs || normalized.jbkjs;
-      if (!jbkjsVal) {
-        throw new Error(`🛡️ [MasterValidator] B2G_VALIDATION_ERROR: JBKJS (Jedinstveni broj korisnika javnih sredstava) je obavezan za B2G (javni sektor) režim.`);
-      }
-      if (!normalized.buyerReference) {
-        throw new Error(`🛡️ [MasterValidator] B2G_VALIDATION_ERROR: BuyerReference (Broj ugovora/porudžbine) je obavezan za B2G (javni sektor) režim.`);
-      }
+      this.validateB2GCompliance(normalized);
     }
 
     // Step 3: Validate against the pure schema
@@ -646,6 +644,38 @@ export class MasterValidator {
       throw new Error(`🛡️ [MasterValidator] FATAL: Payload ne prati SEF standard: ${result.issues[0].message}`);
     }
     return result.output;
+  }
+
+  private static validateB2GCompliance(data: any) {
+    // 1. BuyerReference je svetinja u javnim nabavkama
+    const buyerRef = data.buyerReference || data.brojNarudzbenice || data.brojUgovora;
+    if (!buyerRef || String(buyerRef).trim().length < 5) {
+      throw new Error("B2G_COMPLIANCE_ERROR: 'BuyerReference' (Broj ugovora/porudžbine) je obavezan za B2G fakture (min 5 karaktera).");
+    }
+
+    // 2. PDV Kategorija i razlog oslobađanja
+    // Ako je poreska stopa 0%, moramo imati razlog.
+    if (this.isVatExempt(data)) {
+      const reasonCode = data.taxExemptionReasonCode || data.sifraOslobodjenja;
+      const reasonText = data.taxExemptionReason || data.zakonskiClan || data.notes?.[0];
+      
+      if (!reasonCode || !reasonText) {
+        throw new Error("B2G_COMPLIANCE_ERROR: Za poresko oslobađanje (0% PDV) obavezni su 'TaxExemptionReasonCode' i 'TaxExemptionReason'.");
+      }
+    }
+
+    // 3. JBKJS (Jedinstveni broj korisnika javnih sredstava)
+    const jbkjsVal = data.jbkjsB || data.customerJbkjs || data.jbkjs;
+    if (!jbkjsVal || !/^\d{5}$/.test(String(jbkjsVal))) {
+      throw new Error("B2G_VALIDATION_ERROR: 'jbkjs' kupca (javnog sektora) je obavezan i mora imati 5 cifara.");
+    }
+  }
+
+  private static isVatExempt(data: any): boolean {
+    const subtotals = data.taxSubtotals || (data.taxTotals && data.taxTotals[0]?.subtotals) || [];
+    // Ako postoji bilo koja stavka sa 0% PDV-a koja nije standardna 'S' kategorija (iako 'S' može biti 0 u nekim zemljama, u RS je obično E, AE, Z itd za 0%)
+    // Zapravo u SEF-u, svaka kategorija osim 'S' (i 'S' ako je stopa 0) zahteva osnov.
+    return subtotals.some((s: any) => s.taxCategoryPercent === 0 || s.taxCategoryCode !== 'S');
   }
 }
 

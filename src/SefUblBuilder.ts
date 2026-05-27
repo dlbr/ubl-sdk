@@ -12,7 +12,7 @@ export interface CreditNoteInput {
 }
 
 /**
- * SefUblBuilder — v6.0.0 (Gvozdeni Graditelj)
+ * SefUblBuilder — v6.0.0
  * Generiše SEF-compliant XML iz striktno validiranih podataka.
  */
 export class SefUblBuilder {

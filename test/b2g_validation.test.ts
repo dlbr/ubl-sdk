@@ -43,7 +43,7 @@ describe('🛡️ B2G (Business-to-Government) Compliance Validation', () => {
 
     expect(() => {
       MasterValidator.validate(invalidPayload, { mode: 'B2G' });
-    }).toThrowError(/B2G_VALIDATION_ERROR: BuyerReference/);
+    }).toThrowError(/BuyerReference/);
   });
 
   it('04. Should reject B2G payload missing JBKJS code', () => {
@@ -52,7 +52,7 @@ describe('🛡️ B2G (Business-to-Government) Compliance Validation', () => {
 
     expect(() => {
       MasterValidator.validate(invalidPayload, { mode: 'B2G' });
-    }).toThrowError(/B2G_VALIDATION_ERROR: JBKJS/);
+    }).toThrowError(/jbkjs/);
   });
 
   it('05. Should reject B2G payload with invalid JBKJS format (non-5 digit)', () => {
@@ -60,6 +60,6 @@ describe('🛡️ B2G (Business-to-Government) Compliance Validation', () => {
 
     expect(() => {
       MasterValidator.validate(invalidPayload, { mode: 'B2G' });
-    }).toThrowError(/JBKJS mora sadržati tačno 5 numeričkih karaktera/);
+    }).toThrowError(/5 cifara/);
   });
 });
