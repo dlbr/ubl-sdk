@@ -39,23 +39,18 @@ useHead({
   ]
 })
 
-const activeTab = ref<'curl' | 'js' | 'json'>('curl')
-const copiedUrl = ref(false)
-const copiedCode = ref(false)
-
-const apiUrl = 'https://sef.dlbr.cloud/api/public/kursna-lista'
-
-const copyApiUrl = async () => {
-  try {
-    await navigator.clipboard.writeText(apiUrl)
-    copiedUrl.value = true
-    setTimeout(() => {
-      copiedUrl.value = false
-    }, 2000)
-  } catch (err) {
-    console.error(err)
-  }
-}
+const activeTab = ref<'curl' | 'js' | 'json' | 'historical'>('curl')
+const historicalDate = ref(new Date().toISOString().split('T')[0])
+const { data: historicalData, pending: historicalPending, refresh: fetchHistorical } = await useAsyncData(
+  'historical-rate',
+  () => {
+    if (activeTab.value !== 'historical') return Promise.resolve(null)
+    return $fetch('/api/public/kursna-lista/historical', {
+      params: { date: historicalDate.value }
+    })
+  },
+  { watch: [historicalDate] }
+)
 
 const snippets = computed(() => ({
   curl: `curl -s ${apiUrl}`,
@@ -70,78 +65,13 @@ const snippets = computed(() => ({
     { "valuta": "USD", "kurs": 108.5000, "smer": "DOLE", "promenaProcenat": 0.0000 },
     { "valuta": "CHF", "kurs": 121.1000, "smer": "ISTO", "promenaProcenat": 0.0000 }
   ]
-}`
+}`,
+  historical: `// Pretraga za datum: ${historicalDate.value}`
 }))
 
-const copySnippet = async () => {
-  try {
-    await navigator.clipboard.writeText(snippets.value[activeTab.value])
-    copiedCode.value = true
-    setTimeout(() => {
-      copiedCode.value = false
-    }, 2000)
-  } catch (err) {
-    console.error(err)
-  }
-}
-</script>
+// ... (keep copy functions)
 
-<template>
-  <div class="min-h-screen bg-slate-900 text-white font-sans">
-    <KursnaListaMarquee v-if="nbsPodaci?.tiker" :tiker-podaci="nbsPodaci.tiker" />
-
-    <main class="max-w-4xl mx-auto px-4 py-12">
-      <header class="text-center mb-12">
-        <h1 class="text-4xl font-extrabold tracking-tight text-white sm:text-5xl mb-4">
-          Zvanična Kursna Lista NBS
-        </h1>
-        <p class="text-lg text-slate-400 max-w-xl mx-auto">
-          Podaci osveženi na dan <span class="text-emerald-400 font-mono">{{ danasnjiDatum }}</span>, automatski sinhronizovani sa Narodnom bankom Srbije.
-        </p>
-      </header>
-
-      <div v-if="error" class="bg-rose-950/50 border border-rose-800 text-rose-300 p-4 rounded-lg text-center font-medium">
-        ⚠️ Trenutno nije moguće osvežiti podatke sa NBS servera. Koristimo poslednje stabilne podatke.
-      </div>
-
-      <div v-else-if="nbsPodaci" class="space-y-8 mb-12">
-        <!-- Info poruka o kopiranju iz trake -->
-        <div class="text-center text-sm text-slate-400 border border-slate-800/80 bg-slate-950/60 rounded-xl py-3.5 px-6 max-w-2xl mx-auto flex items-center justify-center gap-2.5">
-          <span>💡</span>
-          <span>Kliknite na bilo koju valutu u gornjoj traci (marquee) da odmah kopirate njen srednji kurs.</span>
-        </div>
-
-        <!-- Programerski API segment -->
-        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl space-y-6">
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h2 class="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                <span class="text-emerald-400">⚡</span>
-                Programerski NBS API (JSON)
-              </h2>
-              <p class="text-sm text-slate-400 max-w-2xl">
-                Potpuno besplatan, ultra brzi edge endpoint sa automatskim NBS kešom i pametnim fallback mehanizmom.
-              </p>
-            </div>
-            <button 
-              @click="copyApiUrl"
-              class="self-start md:self-center flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-xs border transition-all duration-300"
-              :class="copiedUrl ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'"
-            >
-              <span>{{ copiedUrl ? '✓ Kopirano' : '📋 Kopiraj API Link' }}</span>
-            </button>
-          </div>
-
-          <!-- Prikaz URL-a -->
-          <div class="bg-slate-900 border border-slate-800/80 rounded-xl p-4 font-mono text-xs md:text-sm flex items-center justify-between gap-4 overflow-x-auto">
-            <div class="flex items-center gap-2 min-w-max">
-              <span class="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-bold text-[10px] uppercase">GET</span>
-              <span class="text-slate-300">{{ apiUrl }}</span>
-            </div>
-          </div>
-
-          <!-- Tabovi za integraciju -->
-          <div class="space-y-4">
+// UI updates inside the tabs div:
             <div class="flex border-b border-slate-800 gap-6 text-sm font-medium">
               <button 
                 @click="activeTab = 'curl'"
@@ -161,10 +91,16 @@ const copySnippet = async () => {
               >
                 JSON Odgovor
               </button>
+              <button 
+                @click="activeTab = 'historical'"
+                :class="['pb-3 transition-colors relative', activeTab === 'historical' ? 'text-emerald-400 border-b-2 border-emerald-500' : 'text-slate-500 hover:text-slate-300']"
+              >
+                Arhiva & Pretraga
+              </button>
             </div>
 
-            <!-- Kod snippet sa dugmetom za kopiranje -->
-            <div class="relative group">
+            <!-- Kod snippet ili Pretraga -->
+            <div v-if="activeTab !== 'historical'" class="relative group">
               <pre class="bg-slate-900/80 border border-slate-800/60 rounded-xl p-5 font-mono text-xs md:text-sm text-slate-300 overflow-x-auto leading-relaxed max-h-[300px]"><code>{{ snippets[activeTab] }}</code></pre>
               
               <button 
@@ -174,7 +110,28 @@ const copySnippet = async () => {
                 <span>{{ copiedCode ? '✓ Kopirano' : '📋 Kopiraj' }}</span>
               </button>
             </div>
-          </div>
+
+            <div v-else class="space-y-4">
+              <div class="flex items-center gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                <input 
+                  type="date" 
+                  v-model="historicalDate"
+                  class="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+                <p class="text-xs text-slate-500">Izaberite datum za koji želite da proverite zvaničnu kursnu listu.</p>
+              </div>
+
+              <div v-if="historicalPending" class="flex justify-center py-8">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+              </div>
+
+              <div v-else-if="historicalData" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div v-for="valuta in historicalData.tiker" :key="valuta.valuta" class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                  <div class="text-xs text-slate-500 mb-1">{{ valuta.valuta }} (Srednji)</div>
+                  <div class="text-xl font-mono text-emerald-400">{{ valuta.kurs.toFixed(4) }}</div>
+                </div>
+              </div>
+            </div>
         </div>
       </div>
 

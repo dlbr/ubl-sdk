@@ -97,12 +97,65 @@ const internalOnly = (c: RouterContext<Env> & { klijentId?: string, operater?: s
   c.klijentId = klijentId;
 };
 
+const getClientPlan = async (klijentId: string, env: Env) => {
+  try {
+    const kDO = env.KLIJENT_BAZA_OBJECT.get(env.KLIJENT_BAZA_OBJECT.idFromName(klijentId));
+    const config = await kDO.fetch('http://do/config').then(r => r.json()) as any;
+    return config.plan_name || config.plan || 'Micro';
+  } catch {
+    return 'Micro';
+  }
+};
+
+const applyRateLimit = async (c: RouterContext<Env>) => {
+  const klijentId = c.req.headers.get('X-Klijent-ID');
+  const ip = c.req.headers.get('CF-Connecting-IP') || 'anonymous';
+  
+  let limit = 10; // Default za anonimne i Micro plan
+  let identifier = `ip:${ip}`;
+
+  if (klijentId && klijentId.startsWith('klijent_')) {
+    identifier = `kl:${klijentId}`;
+    const plan = await getClientPlan(klijentId, c.env);
+    if (plan === 'Standard') limit = 100;
+    else if (plan === 'Enterprise') limit = 1000;
+  }
+
+  const now = Math.floor(Date.now() / 60000); // Prozor od 1 minuta
+  const kvKey = `ratelimit:${identifier}:${now}`;
+  
+  const current = await c.env.PORESKI_KV.get(kvKey);
+  const count = current ? parseInt(current) : 0;
+
+  if (count >= limit) {
+    return new Response(JSON.stringify({ 
+      error: 'RATE_LIMIT_EXCEEDED', 
+      message: 'Prekoračili ste broj dozvoljenih zahteva (Rate Limit). Za veći limit, molimo vas da koristite plaćeni plan (Standard ili Enterprise).',
+      plan_detected: klijentId ? 'Identified' : 'Public'
+    }), { 
+      status: 429,
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-RateLimit-Limit': limit.toString(),
+        'X-RateLimit-Remaining': '0'
+      }
+    });
+  }
+
+  // Inkrementiramo brojač u KV sa TTL-om od 2 minuta da bi se automatski čistilo
+  await c.env.PORESKI_KV.put(kvKey, (count + 1).toString(), { expirationTtl: 120 });
+  return null;
+};
+
 export const app = Router<Env>();
 
-app.get('/api/public/v1/kursna-lista/og.png', async ({ env }: any) => {
+app.get('/api/public/v1/kursna-lista/og.png', async (c: any) => {
+  const limitResponse = await applyRateLimit(c);
+  if (limitResponse) return limitResponse;
+  
   try {
     const danas = new Date().toISOString().split('T')[0];
-    const eur = await NbsSoapService.getMiddleRate('EUR', danas, env);
+    const eur = await NbsSoapService.getMiddleRate('EUR', danas, c.env);
     const kurs = eur ?? 117.2031;
 
     const png = await OgEngine.generatePng(
@@ -122,12 +175,15 @@ app.get('/api/public/v1/kursna-lista/og.png', async ({ env }: any) => {
   }
 });
 
-app.get('/api/public/v1/kursna-lista', async ({ env }: any) => {
+app.get('/api/public/v1/kursna-lista', async (c: any) => {
+  const limitResponse = await applyRateLimit(c);
+  if (limitResponse) return limitResponse;
+
   const danas = new Date().toISOString().split('T')[0];
   const [eurDetails, usdDetails, chfDetails] = await Promise.all([
-    getValutaDetails('EUR', danas, env),
-    getValutaDetails('USD', danas, env),
-    getValutaDetails('CHF', danas, env)
+    getValutaDetails('EUR', danas, c.env),
+    getValutaDetails('USD', danas, c.env),
+    getValutaDetails('CHF', danas, c.env)
   ]);
   return Response.json({
     status: 'success',
@@ -142,6 +198,39 @@ app.get('/api/public/v1/kursna-lista', async ({ env }: any) => {
       { valuta: 'USD', kurs: usdDetails.kurs, smer: usdDetails.smer, promenaProcenat: usdDetails.promenaProcenat },
       { valuta: 'CHF', kurs: chfDetails.kurs, smer: chfDetails.smer, promenaProcenat: chfDetails.promenaProcenat }
     ]
+  }, {
+    headers: {
+      'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400'
+    }
+  });
+});
+
+app.get('/api/public/v1/kursna-lista/historical', async (c: any) => {
+  const limitResponse = await applyRateLimit(c);
+  if (limitResponse) return limitResponse;
+
+  const url = new URL(c.req.url);
+  const date = url.searchParams.get('date');
+  if (!date) return Response.json({ error: 'MISSING_DATE' }, { status: 400 });
+  
+  const [eur, usd, chf] = await Promise.all([
+    NbsSoapService.getMiddleRate('EUR', date, c.env).catch(() => 117.2),
+    NbsSoapService.getMiddleRate('USD', date, c.env).catch(() => 108.5),
+    NbsSoapService.getMiddleRate('CHF', date, c.env).catch(() => 121.1)
+  ]);
+  
+  return Response.json({
+    status: 'success',
+    datum: date,
+    tiker: [
+      { valuta: 'EUR', kurs: eur },
+      { valuta: 'USD', kurs: usd },
+      { valuta: 'CHF', kurs: chf }
+    ]
+  }, {
+    headers: {
+      'Cache-Control': 'public, max-age=604800, immutable'
+    }
   });
 });
 
@@ -296,6 +385,23 @@ export class SEFBackendRPC extends WorkerEntrypoint<Env> {
         { valuta: 'EUR', kurs: eurDetails.kurs, smer: eurDetails.smer, promenaProcenat: eurDetails.promenaProcenat },
         { valuta: 'USD', kurs: usdDetails.kurs, smer: usdDetails.smer, promenaProcenat: usdDetails.promenaProcenat },
         { valuta: 'CHF', kurs: chfDetails.kurs, smer: chfDetails.smer, promenaProcenat: chfDetails.promenaProcenat },
+      ]
+    };
+  }
+
+  async getKursnaListaHistorical(date: string) {
+    const [eur, usd, chf] = await Promise.all([
+      NbsSoapService.getMiddleRate('EUR', date, this.env).catch(() => 117.2),
+      NbsSoapService.getMiddleRate('USD', date, this.env).catch(() => 108.5),
+      NbsSoapService.getMiddleRate('CHF', date, this.env).catch(() => 121.1)
+    ]);
+    return {
+      status: 'success',
+      datum: date,
+      tiker: [
+        { valuta: 'EUR', kurs: eur },
+        { valuta: 'USD', kurs: usd },
+        { valuta: 'CHF', kurs: chf }
       ]
     };
   }

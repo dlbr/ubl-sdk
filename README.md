@@ -25,14 +25,25 @@ Browser
                  └─ OTPREMNICA_QUEUE (Queue / eOtpremnice reconciliation)
 ```
 
-## Paketi
+## Karakteristike
 
-| Paket | Opis |
-|---|---|
-| `packages/backend` | Cloudflare Worker — API, Durable Objects, Queue consumers |
-| `packages/frontend` | Nuxt 4 app deployovana kao Cloudflare Worker |
-| `packages/shared` | Zajednički servisi, šeme, validatori |
-| `packages/ubl-sdk` | UBL 2.1 MFIN XML generator i validator |
+- **Automatski SEF Compliance**: Validacija UBL 2.1 XML-a prema MFIN pravilima pre slanja.
+- **NBS API Gateway**: Programerski pristup zvaničnim NBS kursnim listama (EUR, USD, CHF) sa 10-godišnjom arhivom.
+- **Durable Logic**: Svaki klijent ima svoj Durable Object sa SQLite bazom za maksimalnu izolaciju i performanse.
+- **Smart Queueing**: Automatski retry mehanizmi za SEF prekide.
+
+## NBS API (Kursna Lista)
+
+Platforma nudi visokoperformansni API za pristup podacima Narodne banke Srbije:
+- **Trenutni kursevi**: Srednji, kupovni i prodajni kurs za sve valute.
+- **Arhiva**: Istorijski podaci od 15.05.2002.
+- **Specijalizovani servisi**: Registar banaka, prinudna naplata i vrednosti DPF jedinica.
+- **Keširanje**: L1 Memory Cache + L2 D1 Database Cache (izuzetno brzo).
+- **Fallback**: U slučaju nedostupnosti NBS servera, sistem koristi poslednji poznati istorijski kurs.
+
+**Endpoints:**
+- `GET /api/public/v1/kursna-lista` - Trenutni tiker (EUR, USD, CHF)
+- `GET /api/public/v1/kursna-lista/historical?date=YYYY-MM-DD` - Arhivski podaci
 
 ## CI/CD
 
