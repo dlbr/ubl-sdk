@@ -19,7 +19,7 @@ git clone "$PUBLIC_REPO" "$TEMP_DIR"
 
 echo "Syncing files..."
 # Brišemo sve osim .git i .github iz klona kako bismo osigurali da obrisani fajlovi budu uklonjeni
-find "$TEMP_DIR" -maxdepth 1 -not -name "." -not -name ".." -not -name ".git" -not -name ".github" -exec rm -rf {} +
+find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -not -name ".git" -not -name ".github" -exec rm -rf {} +
 
 # Kopiramo nove fajlove iz packages/ubl-sdk/ osim .github/
 rsync -av --exclude='.github' --exclude='node_modules' --exclude='dist' packages/ubl-sdk/ "$TEMP_DIR/"
