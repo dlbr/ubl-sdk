@@ -15,20 +15,13 @@ export class TaxCalculator {
     const groups: Map<string, TaxGroup> = new Map();
 
     for (const line of lines) {
-      const rawValue = line.quantity * line.unitPrice;
-      
-      // FIX: Izbegavamo 'duplu negaciju'. 
-      // Za NEGATIVAN smer (CreditNote), uvek forsiramo negativnu osnovicu.
-      // Za POZITIVAN smer, poštujemo predznak linije (dozvoljava umanjenja u 380).
-      const taxable = direction === 'NEGATIVAN' ? -Math.abs(rawValue) : rawValue;
+      const taxable = line.quantity * line.unitPrice;
       
       // Force 0 tax for specific categories (N, E, etc.)
       const isZeroTax = ['N', 'E', 'Z', 'R', 'OE'].includes(line.taxCategory);
       const tax = isZeroTax ? 0 : taxable * (line.taxRate / 100);
       
-      // SEF Rule: Category N MUST have 0.00% tax rate in XML, regardless of what's passed
       const actualTaxRate = line.taxCategory === 'N' ? 0 : line.taxRate;
-
       const key = `${line.taxCategory}-${actualTaxRate}`;
 
       if (!groups.has(key)) {

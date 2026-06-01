@@ -2,7 +2,6 @@ export { default as Avansni_racun_OBJ_CR } from './Avansni_racun_OBJ - CR.json' 
 export { default as Avansni_racun_osimOBJ_CR } from './Avansni_racun_osimOBJ - CR.json' assert { type: 'json' };
 export { default as DOP_period_OBJ_CR } from './DOP_period_OBJ - CR.json' assert { type: 'json' };
 export { default as DOP_period_osimOBJ_CR } from './DOP_period_osimOBJ - CR.json' assert { type: 'json' };
-export { default as DOP_sa_fakturom_SEF_OBJ_CR_1 } from './DOP_sa_fakturom_SEF_OBJ - CR (1).json' assert { type: 'json' };
 export { default as DOP_sa_fakturom_SEF_OBJ_CR } from './DOP_sa_fakturom_SEF_OBJ - CR.json' assert { type: 'json' };
 export { default as DOP_sa_fakturom_SEF_osimOBJ_CR } from './DOP_sa_fakturom_SEF_osimOBJ - CR.json' assert { type: 'json' };
 export { default as DOP_sa_fakturom_van_SEFa_OBJ_CR } from './DOP_sa_fakturom_van_SEFa_OBJ - CR.json' assert { type: 'json' };
@@ -10,13 +9,11 @@ export { default as DOP_sa_fakturom_van_SEFa_osimOBJ_CR } from './DOP_sa_fakturo
 export { default as DOS_period_OBJ_CR } from './DOS_period_OBJ - CR.json' assert { type: 'json' };
 export { default as DOS_period_osimOBJ_CR } from './DOS_period_osimOBJ - CR.json' assert { type: 'json' };
 export { default as DOS_sa_avansom_SEF_OBJ_CR } from './DOS_sa_avansom_SEF_OBJ - CR.json' assert { type: 'json' };
-export { default as DOS_sa_avansom_SEF_osimOBJ_CR_1 } from './DOS_sa_avansom_SEF_osimOBJ - CR (1).json' assert { type: 'json' };
 export { default as DOS_sa_avansom_SEF_osimOBJ_CR } from './DOS_sa_avansom_SEF_osimOBJ - CR.json' assert { type: 'json' };
 export { default as DOS_sa_avansom_van_SEFa_OBJ_CR } from './DOS_sa_avansom_van_SEFa_OBJ - CR.json' assert { type: 'json' };
 export { default as DOS_sa_avansom_van_SEFa_osimOBJ_CR } from './DOS_sa_avansom_van_SEFa_osimOBJ - CR.json' assert { type: 'json' };
 export { default as DOS_sa_fakturom_SEF_OBJ_CR } from './DOS_sa_fakturom_SEF_OBJ - CR.json' assert { type: 'json' };
 export { default as DOS_sa_fakturom_SEF_osimOBJ_CR } from './DOS_sa_fakturom_SEF_osimOBJ - CR.json' assert { type: 'json' };
 export { default as DOS_sa_fakturom_van_SEFa_osimOBJ_CR } from './DOS_sa_fakturom_van_SEFa_osimOBJ - CR.json' assert { type: 'json' };
-export { default as Faktura_bez_povezanih_dokumenata_OBJ_CR_1 } from './Faktura_bez_povezanih_dokumenata_OBJ - CR (1).json' assert { type: 'json' };
 export { default as Faktura_bez_povezanih_dokumenata_OBJ_CR } from './Faktura_bez_povezanih_dokumenata_OBJ - CR.json' assert { type: 'json' };
 export { default as Faktura_bez_povezanih_dokumenata_osimOBJ_CR } from './Faktura_bez_povezanih_dokumenata_osimOBJ - CR.json' assert { type: 'json' };

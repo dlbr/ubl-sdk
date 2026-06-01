@@ -23,6 +23,7 @@ export interface InvoiceLine {
   taxRate: number;
   taxCategory: SefPoreskaKategorija;
   taxExemptionReason?: string;
+  taxExemptionReasonCode?: string;
 }
 
 export interface Invoice {

@@ -1,190 +1,40 @@
 import { SefPoreskaKategorija } from './models/Invoice.js';
+import { SefInvoiceInput } from './validator.js';
 
-export interface BaseInvoiceData {
-  broj: string;
-  pibProdavca: string;
-  pibKupca: string;
-  brojRacunaProdavca?: string;
-  nazivProdavca?: string;
-  nazivKupca?: string;
-  maticniBrojProdavca?: string;
-  maticniBrojKupca?: string;
-  adresaProdavca?: string;
-  gradProdavca?: string;
-  postanskiBrojProdavca?: string;
-  adresaKupca?: string;
-  gradKupca?: string;
-  postanskiBrojKupca?: string;
-  note?: string;
-  datumIzdavanja?: string;
-  datumDospeca?: string;
-  datumPrometa?: string;
-  valuta?: string;
-  poreskaKategorija?: SefPoreskaKategorija | string;
-  pdvStopa?: number;
-  smerDokumenta?: 'POZITIVAN' | 'NEGATIVAN';
-  tipDokumenta?: '380' | '386' | '381' | '383';
-  brojNarudzbenice?: string;
-  brojUgovora?: string;
+/**
+ * PartyInput — Shared between Supplier and Customer
+ */
+export interface PartyInput {
+  pib: string;
+  name: string;
+  address?: string;
+  city?: string;
+  zip?: string;
+  maticniBroj?: string;
   jbkjs?: string;
-  buyerReference?: string;
-  avansneReference?: {
-    brojAvansnogRacuna: string;
-    idSefAvansa: string;
-    iznosUmanjenja: number;
-  }[];
+  bankAccount?: string;
 }
 
-export interface StandardnaData extends BaseInvoiceData {
-  osnovica: number;
-  pdv: number;
-  pdvStopa?: number;
-  item_name?: string;
-  sifraOslobodjenja?: string;
-  zakonskiClan?: string;
+/**
+ * ItemLineInput — Shared between Invoice, Despatch, and Receipt
+ */
+export interface ItemLineInput {
+  id: string;
+  name: string;
+  quantity: number;
+  unitCode?: string;
+  priceAmount: number;
+  lineExtensionAmount: number;
+  taxCategoryCode?: string;
+  taxCategoryPercent?: number;
+  taxExemptionReason?: string;
+  taxExemptionReasonCode?: string;
+  // Logistics specific
+  deliveredQuantity?: number;
+  exciseCategory?: string;
 }
 
-export interface PojedinacnaEeoData {
-  poreskiPeriod: string; // Format: 'YYYY-MM'
-  internalInvoiceNumber?: string;
-  osnovicaOpsta: number;
-  pdvOpsta: number;
-  osnovicaPosebna: number;
-  pdvPosebna: number;
-  isCancellation?: boolean; // Za Poništavanje
-  relatedInternalNumber?: string; // Veza sa prethodnom evidencijom
-}
-
-export interface AvansData extends BaseInvoiceData {
-  osnovica: number;
-  pdv: number;
-}
-// etc... ensure everything starts with export keyword.
-
-
-export interface KonacniData extends BaseInvoiceData {
-  avansBroj: string;
-  avansDatum: string;
-  ukupnaOsnovica: number;
-  ukupniPdv: number;
-  odbitakAvansaSaPdv: number;
-}
-
-export interface StornoData extends BaseInvoiceData {
-  referentniRacun: string;
-  razlog: string;
-  iznosZaSmanjenjeOsnovice: number;
-  iznosZaSmanjenjePdv: number;
-}
-
-export interface PovecanjeData extends BaseInvoiceData {
-  referentniRacun: string;
-  datumReferentnog: string;
-  iznosZaPovecanjeOsnovice: number;
-  iznosZaPovecanjePdv: number;
-}
-
-export interface OslobodjenaData extends BaseInvoiceData {
-  iznos: number;
-  poreskaKategorija: string;
-  sifraOslobodjenja: string;
-  zakonskiClan?: string;
-}
-
-export interface ZbirniEeoData {
-  poreskiPeriod: string;
-  osnovicaOpsta: number;
-  pdvOpsta: number;
-  osnovicaPosebna: number;
-  pdvPosebna: number;
-  oslobodjenBezPrava?: number;
-}
-
-export interface EppData {
-  period: string;
-  nabavkeOdObveznikaPdv: number;
-  prethodniPorezOdObveznika: number;
-  importPdvCarina: number;
-  gradevinarstvoPorez?: number;
-}
-
-export interface JavnaNabavkaData extends BaseInvoiceData {
-  iznos: number;
-  brojUgovora: string;
-  jbkjs: string;
-}
-
-export interface PopustData extends BaseInvoiceData {
-  iznosPrePopusta: number;
-  popustIznos: number;
-}
-
-export interface PrilogData extends BaseInvoiceData {
-  osnovica: number;
-  pdv: number;
-  ukupno: number;
-  prilogIme: string;
-  prilogBase64: string;
-}
-
-export interface ValutaData extends BaseInvoiceData {
-  valuta: string;
-  kurs: number;
-  kursDatum: string;
-  osnovicaRSD: number;
-  pdvRSD: number;
-  ukupnoValuta: number;
-}
-
-export interface FiskalizacijaData extends BaseInvoiceData {
-  ukupno: number;
-  pfrBrojevi: string[];
-  brojRacunaProdavca?: string;
-}
-
-export interface KonacnaValutaData extends BaseInvoiceData {
-  avansBroj: string;
-  valuta: string;
-  kurs: number;
-  odbitakValuta: number;
-  zaUplatuValuta: number;
-}
-
-export interface SmanjenjeAvansaData extends BaseInvoiceData {
-  avansBroj: string;
-  avansDatum: string;
-  iznosSmanjenjaOsnovice: number;
-  iznosSmanjenjaPdv: number;
-}
-
-export interface SmanjenjeUPerioduData extends BaseInvoiceData {
-  periodOd: string;
-  periodDo: string;
-  opisKod?: string;
-  iznosZaSmanjenjeOsnovice: number;
-  iznosZaSmanjenjePdv: number;
-}
-
-export interface SmanjenjeViseFakturaData extends BaseInvoiceData {
-  fakture: Array<{ id: string; datum: string }>;
-  iznosZaSmanjenjeOsnovice: number;
-  iznosZaSmanjenjePdv: number;
-}
-
-export interface B2BInvoice extends BaseInvoiceData {
-  mode: 'B2B';
-}
-
-export interface B2GInvoice extends BaseInvoiceData {
-  mode: 'B2G';
-  // B2G obavezna polja (prema UBL 2.1 profilu za Srbiju)
-  buyerReference: string;           // Broj ugovora/porudžbine
-  taxExemptionReasonCode?: string;  // Obavezno ako je PDV 0%
-  taxExemptionReason?: string;      // Obavezno ako je PDV 0%
-  contractDocumentReference?: string; // Preporučeno za javne nabavke
-}
-
-export type InvoiceData = B2BInvoice | B2GInvoice | any;
+export type { SefInvoiceInput } from './validator.js';
 
 export interface ValidationOptions {
   mode?: 'B2B' | 'B2G';

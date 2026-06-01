@@ -1,0 +1,22 @@
+{
+  "year": 2023,
+  "calculationNumber": "Broj_evidencije_IR_strano_lice_DOS_sa_IR_strano_lice_SEF_OBJ",
+  "internalInvoiceNumber": "Broj_IR_strano_lice_DOS_SEF_OBJ",
+  "vatPeriod": 2,
+  "documentDirection": 0,
+  "internalInvoiceOption": 4,
+  "documentType": 400,
+  "relatedPartyIdentifier": "111111111",
+  "realEstateDescription20": "test",
+  "realEstateBaseAmount20": 500.0,
+  "realEstateCalculatedVat20": 100.0,
+  "realEstateDescription10": "test",
+  "realEstateBaseAmount10": 200.0,
+  "realEstateCalculatedVat10": 20.0,
+  "relatedInternalInvoiceOption": 1,
+  "relatedVatRecords": [
+    {
+      "internalInvoiceNumber": "Broj_IR_strano_lice_SEF_OBJ"
+    }
+  ]
+}

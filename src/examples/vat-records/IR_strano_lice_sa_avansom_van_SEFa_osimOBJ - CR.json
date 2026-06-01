@@ -1,0 +1,27 @@
+{
+  "year": 2023,
+  "calculationNumber": "Broj_evidencije_IR_strano_lice_sa_avansom_van_SEFa_osim_OBJ",
+  "internalInvoiceNumber": "Broj_IR_strano_lice_SEF_osim_OBJ",
+  "vatPeriod": 8,
+  "documentDirection": 0,
+  "documentType": 400,
+  "internalInvoiceOption": 1,
+  "relatedPartyIdentifier": "111111111",
+  "noRealEstateDescription10": "test",
+  "noRealEstateBaseAmount10": 10.0,
+  "noRealEstateCalculatedVat10": 1.0,
+  "noRealEstateDescription20": "test",
+  "noRealEstateBaseAmount20": 500.0,
+  "noRealEstateCalculatedVat20": 100.0,
+  "noChargeNoRealEstateDescription10": "test",
+  "noChargeNoRealEstateBaseAmount10": 400,
+  "noChargeNoRealEstateCalculatedVat10": 40,
+  "noChargeNoRealEstateDescription20": "test",
+  "noChargeNoRealEstateBaseAmount20": 50,
+  "noChargeNoRealEstateCalculatedVat20": 10,
+  "relatedInternalInvoiceOption": 2,
+  "RelatedVatRecordOutOfSystem": [
+    "broj_IR_avans_van_SEFa_osim_OBJ",
+    "broj_IR_avans_van_SEFa1_osim_OBJ"
+  ]
+}
