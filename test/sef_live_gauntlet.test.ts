@@ -11,7 +11,6 @@ describe('⛓️ SEF Live SDK Gauntlet — 17 Zakonskih Scenarija', () => {
 
   beforeAll(() => {
     if (!API_KEY) {
-      console.warn("⚠️ STAGING_SEF_API_KEY nije pronađen! Preskačem live testove, koristim Mock.");
       global.fetch = vi.fn().mockImplementation((url, options) => {
         const body = JSON.parse(options.body);
         return Promise.resolve(new Response(JSON.stringify({
@@ -149,11 +148,6 @@ describe('⛓️ SEF Live SDK Gauntlet — 17 Zakonskih Scenarija', () => {
         })
       });
 
-      if (response.status !== 201) {
-        const errorText = await response.text();
-        console.error(`🚨 [SEF ERROR] ${s.naslov}:`, errorText);
-      }
-
       expect(response.status).toBe(201);
       const sefResult = await response.json() as any;
       expect(sefResult.salesInvoiceId).toBeDefined();
@@ -162,7 +156,6 @@ describe('⛓️ SEF Live SDK Gauntlet — 17 Zakonskih Scenarija', () => {
       expect(parsed.invoiceTypeCode).toBe(s.ocekivano.tip || (payload as any).invoiceTypeCode);
       if (s.ocekivano.porez) expect(parsed.taxAmount).toBe(s.ocekivano.porez);
       
-      console.log(`✅ [SUCCESS] ${s.naslov} | SEF ID: ${sefResult.salesInvoiceId}`);
     });
   });
 });
