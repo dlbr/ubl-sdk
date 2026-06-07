@@ -43,8 +43,8 @@ export class XmlTransformer {
     </cac:InvoiceDocumentReference>
   </cac:BillingReference>` : '';
     
-    const delivery = (invoice.deliveryDate && invoice.typeCode !== '386')
-      ? `<cac:Delivery><cbc:ActualDeliveryDate>${invoice.deliveryDate}</cbc:ActualDeliveryDate></cac:Delivery>`
+    const delivery = (invoice.typeCode !== '386')
+      ? `<cac:Delivery><cbc:ActualDeliveryDate>${invoice.deliveryDate || invoice.issueDate}</cbc:ActualDeliveryDate></cac:Delivery>`
       : '';
     const payment = `
   <cac:PaymentMeans>
