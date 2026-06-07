@@ -9,8 +9,9 @@ export function normalizeInput(input: any): SefInvoiceInput {
   const result = safeParse(SefInvoiceInputSchema, input);
   
   if (!result.success) {
-    console.error('🛡️ [SDK] INVALID_UBL_INPUT_STRUCTURE:', JSON.stringify(result.issues, null, 2));
-    throw new Error('INVALID_UBL_INPUT_STRUCTURE');
+    const error = new Error('INVALID_UBL_INPUT_STRUCTURE');
+    (error as any).issues = result.issues;
+    throw error;
   }
 
   return result.output;
