@@ -8,13 +8,22 @@ export const IsoCurrencySchema = v.pipe(
 );
 
 export function validanPIB(pib: string): boolean {
-  if (!/^\d{9}$/.test(pib)) return false;
+  if (!/^\d{9}$/.test(pib)) {
+    console.error(`[PIB_VALIDATION] Failed regex for pib: "${pib}", type: ${typeof pib}`);
+    return false;
+  }
   let suma = 10;
   for (let i = 0; i < 8; i++) {
     suma = (suma + parseInt(pib[i], 10)) % 10;
     suma = (suma === 0 ? 10 : suma) * 2 % 11;
   }
-  return parseInt(pib[8], 10) === (11 - suma) % 10;
+  const calculated = (11 - suma) % 10;
+  const actual = parseInt(pib[8], 10);
+  const ok = actual === calculated;
+  if (!ok) {
+    console.error(`[PIB_VALIDATION] Failed checksum for pib: ${pib}. Actual: ${actual}, Calculated: ${calculated}`);
+  }
+  return ok;
 }
 
 export function validanMB(mb: string): boolean {
